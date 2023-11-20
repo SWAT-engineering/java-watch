@@ -24,3 +24,5 @@ In summary:
 | Linux | [inotify](https://man7.org/linux/man-pages/man7/inotify.7.html) | ✅ | ✅ | ❌ | generic error marker | only local changes, no error | note that the new [fanotify](https://man7.org/linux/man-pages/man7/fanotify.7.html) supports recursive watches, but only at mount points, not for arbitrary directories. |
 | macOS & BSD | [kqueue](https://man.freebsd.org/cgi/man.cgi?kqueue) | ? | ✅ | ❌ | can quickly run out of file descriptors | ? | implementing recursive directory watches this way will quickly run out of file descriptors |
 | macOS | [FSEvents](https://developer.apple.com/documentation/coreservices/file_system_events) | ✅ |✅ | ✅ | generic error marker | ? | Some report it works great, but openjdk stopped doing this direction of the implementation as it consistently failed a test with a lot of IO operations and register and unregisters of watches. Reporting that the API would just stop reporting any events |
+
+To avoid licensing conflicts we have not read the source code of any of these libraries/frameworks. The related work study is based purely on public documentation and discussions.
