@@ -16,9 +16,13 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 enum JDKPoller {
     INSTANCE;
 
+    private final Logger logger = LogManager.getLogger();
     private final WatchService service;
     private final Map<WatchKey, Consumer<List<WatchEvent<?>>>> watchers = new ConcurrentHashMap<>();
     private final Thread pollThread;
@@ -40,9 +44,17 @@ enum JDKPoller {
             try {
                 WatchKey hit;
                 if ((hit = service.poll(1, TimeUnit.MILLISECONDS)) != null) {
-                    var watchHandler = watchers.get(hit);
-                    if (watchHandler != null) {
-                        watchHandler.accept(hit.pollEvents());
+                    logger.trace("Got hit: {}", hit);
+                    try {
+                        var watchHandler = watchers.get(hit);
+                        if (watchHandler != null) {
+                            var events = hit.pollEvents();
+                            logger.trace("Found watcher for hit: {}, sending: {} (size: {})", watchHandler, events, events.size());
+                            watchHandler.accept(events);
+                        }
+                    }
+                    finally{
+                        hit.reset();
                     }
                 }
             } catch (InterruptedException e) {
@@ -52,11 +64,13 @@ enum JDKPoller {
     }
 
     public Closeable register(Path path, Consumer<List<WatchEvent<?>>> changes) throws IOException {
+        logger.debug("Register watch for: {}", path);
         var key = path.register(service, ENTRY_CREATE, ENTRY_MODIFY, ENTRY_MODIFY);
         watchers.put(key, changes);
         return new Closeable() {
             @Override
             public void close() throws IOException {
+                logger.debug("Closing watch for: {}", path);
                 key.cancel();
                 watchers.remove(key);
             }

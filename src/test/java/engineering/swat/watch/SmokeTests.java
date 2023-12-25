@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -42,8 +43,8 @@ public class SmokeTests {
     void watchSingleFile() throws IOException, InterruptedException {
         var changed = new AtomicBoolean(false);
         var target = testFiles.get(0);
-        var watchConfig = Watcher.singleDirectory(target)
-            .onChange(p -> {if (p.equals(target)) { changed.set(true); }})
+        var watchConfig = Watcher.singleDirectory(target.getParent())
+            .onModified(p -> {if (p.equals(target)) { changed.set(true); }})
             ;
 
         try (var activeWatch = watchConfig.start() ) {
