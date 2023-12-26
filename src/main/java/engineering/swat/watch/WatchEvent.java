@@ -2,6 +2,8 @@ package engineering.swat.watch;
 
 import java.nio.file.Path;
 
+import org.checkerframework.checker.nullness.qual.Nullable;
+
 public class WatchEvent {
 
     public enum Kind {
@@ -12,10 +14,10 @@ public class WatchEvent {
     private final Path rootPath;
     private final Path relativePath;
 
-    public WatchEvent(Kind kind, Path rootPath, Path relativePath) {
+    public WatchEvent(Kind kind, Path rootPath, @Nullable Path relativePath) {
         this.kind = kind;
         this.rootPath = rootPath;
-        this.relativePath = relativePath;
+        this.relativePath = relativePath == null ? Path.of("") : relativePath;
     }
 
     public Kind getKind() {

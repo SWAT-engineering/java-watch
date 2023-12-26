@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import java.nio.file.WatchEvent;
 import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
+import java.nio.file.WatchEvent.Kind;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -63,9 +64,10 @@ enum JDKPoller {
         }
     }
 
-    public Closeable register(Path path, Consumer<List<WatchEvent<?>>> changes) throws IOException {
+    public Closeable register(Path path, Consumer<List<WatchEvent<?>>> changes, Kind<?>[] kinds) throws IOException {
         logger.debug("Register watch for: {}", path);
-        var key = path.register(service, ENTRY_CREATE, ENTRY_MODIFY, ENTRY_MODIFY);
+        var key = path.register(service, kinds);
+        logger.trace("Got watch key: {}", key);
         watchers.put(key, changes);
         return new Closeable() {
             @Override

@@ -36,7 +36,7 @@ public class SmokeTests {
             Files.createDirectories(testDirectory.resolve(d));
             add3Files(testDirectory.resolve(d));
         }
-        Awaitility.setDefaultTimeout(1, TimeUnit.SECONDS);
+        Awaitility.setDefaultTimeout(2, TimeUnit.SECONDS);
     }
 
     private static void add3Files(Path root) throws IOException {

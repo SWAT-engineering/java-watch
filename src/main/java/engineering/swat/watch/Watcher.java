@@ -10,7 +10,9 @@ import java.util.function.Consumer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import engineering.swat.watch.WatchEvent.Kind;
 import engineering.swat.watch.impl.JDKDirectoryWatcher;
+import engineering.swat.watch.impl.JDKRecursiveDirectoryWatcher;
 
 public class Watcher {
     private final Logger logger = LogManager.getLogger();
@@ -80,12 +82,17 @@ public class Watcher {
 
     public Closeable start() throws IOException {
         switch (kind) {
-            case DIRECTORY:
+            case DIRECTORY: {
                 var result = new JDKDirectoryWatcher(path, executor, this::handleEvent);
-                result.start();
+                result.start(Kind.CREATED, Kind.MODIFIED, Kind.DELETED);
                 return result;
+            }
+            case RECURSIVE_DIRECTORY: {
+                var result = new JDKRecursiveDirectoryWatcher(path, executor, this::handleEvent);
+                result.start(Kind.CREATED, Kind.MODIFIED, Kind.DELETED);
+                return result;
+            }
             case FILE:
-            case RECURSIVE_DIRECTORY:
             default:
                 throw new IllegalArgumentException("Not supported yet");
         }
@@ -107,7 +114,7 @@ public class Watcher {
 
     private void callIfDefined(Consumer<Path> target, WatchEvent ev) {
         if (target != NO_OP) {
-            executor.execute(() -> target.accept(ev.calculateFullPath()));
+            target.accept(ev.calculateFullPath());
         }
     }
 }
