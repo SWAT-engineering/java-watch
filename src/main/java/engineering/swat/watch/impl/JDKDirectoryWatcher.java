@@ -1,15 +1,9 @@
 package engineering.swat.watch.impl;
 
-import static java.nio.file.StandardWatchEventKinds.ENTRY_CREATE;
-import static java.nio.file.StandardWatchEventKinds.ENTRY_DELETE;
-import static java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY;
-
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.StandardWatchEventKinds;
-import java.nio.file.WatchEvent.Kind;
-import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
@@ -34,31 +28,17 @@ public class JDKDirectoryWatcher implements Closeable {
         this.eventHandler = eventHandler;
     }
 
-    public void start(WatchEvent.Kind... eventKinds) throws IOException {
+    public void start() throws IOException {
         try {
             if (activeWatch != null) {
                 // TODO make sure there is no cross thread race possible here.
                 throw new IOException("Cannot start a watcher twice");
             }
-            var kinds = Arrays.stream(eventKinds).map(JDKDirectoryWatcher::convertKind)
-                .toArray(Kind[]::new);
 
-            activeWatch = JDKPoller.INSTANCE.register(directory, this::handleChanges, kinds);
+            activeWatch = JDKPoller.INSTANCE.register(directory, this::handleChanges);
             logger.debug("Started watch for: {}", directory);
         } catch (IOException e) {
             throw new IOException("Could not register directory watcher for: " + directory, e);
-        }
-    }
-
-    private static java.nio.file.WatchEvent.Kind<Path> convertKind(engineering.swat.watch.WatchEvent.Kind k) {
-        switch (k) {
-            case CREATED:
-                return ENTRY_CREATE;
-            case DELETED:
-                return ENTRY_DELETE;
-            case MODIFIED:
-                return ENTRY_MODIFY;
-            default: throw new IllegalArgumentException("Missing case for: " + k);
         }
     }
 

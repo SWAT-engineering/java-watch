@@ -3,17 +3,13 @@ package engineering.swat.watch.impl;
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.FileVisitResult;
-import java.nio.file.FileVisitor;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.ArrayList;
-import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executor;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 import org.apache.logging.log4j.LogManager;
@@ -35,54 +31,39 @@ public class JDKRecursiveDirectoryWatcher implements Closeable {
         this.eventHandler = eventHandler;
     }
 
-    public void start(WatchEvent.Kind... eventKinds) throws IOException {
+    public void start() throws IOException {
         try {
-            var hadCreate = contains(eventKinds, Kind.CREATED);
-            var hadModify = contains(eventKinds, Kind.MODIFIED);
-            var hadDelete = contains(eventKinds, Kind.DELETED);
-
-            var modifiedKinds = new Kind[hadModify ? 3 : 2];
-            modifiedKinds[0] = Kind.CREATED;
-            modifiedKinds[1] = Kind.DELETED;
-            if (hadModify) {
-                modifiedKinds[2] = Kind.MODIFIED;
-            }
-            logger.debug("Starting recursive watch for: {} watching {}", directory, modifiedKinds);
-            startRecursive(directory, wrappedHandler(hadCreate, hadModify, hadDelete, modifiedKinds), modifiedKinds);
+            logger.debug("Starting recursive watch for: {}", directory);
+            startRecursive(directory);
         } catch (IOException e) {
             throw new IOException("Could not register directory watcher for: " + directory, e);
         }
     }
 
-    private Consumer<WatchEvent> wrappedHandler(boolean hadCreate, boolean hadModify, boolean hadDelete, Kind[] kinds) {
-        return ev -> {
-            logger.trace("Unwrapping event: {}", ev);
-            switch (ev.getKind()) {
-                case CREATED:
-                    addNewDirectoryWatch(hadCreate, hadModify, hadDelete, kinds, ev);
-                    if (hadCreate) {
-                        eventHandler.accept(ev);
-                    }
-                    break;
-                case DELETED:
-                    handleDeleteDirectory(ev);
-                    if (hadDelete) {
-                        eventHandler.accept(ev);
-                    }
-                    break;
-                case MODIFIED:
-                    if (hadModify) {
-                        eventHandler.accept(ev);
-                    }
-                    break;
+    private void wrappedHandler(WatchEvent ev) {
+        logger.trace("Unwrapping event: {}", ev);
+        try {
+            if (ev.getKind() == Kind.CREATED) {
+                // between the event and the current state of the file system
+                // we might have some nested directories we missed
+                // so if we have a new directory, we have to go in and iterate over it
+                try {
+                    startRecursive(ev.calculateFullPath());
+                } catch (IOException e) {
+                    logger.error("Could not register new watch for: {} ({})", ev.calculateFullPath(), e);
+                }
             }
-        };
+            else if (ev.getKind() == Kind.DELETED) {
+                handleDeleteDirectory(ev.calculateFullPath());
+            }
+        } finally {
+            eventHandler.accept(ev);
+        }
     }
 
-    private void handleDeleteDirectory(WatchEvent ev) {
-        var removedPath = ev.calculateFullPath();
-        var existingWatch = activeWatches.get(removedPath);
+    private void handleDeleteDirectory(Path removedPath) {
         try {
+            var existingWatch = activeWatches.remove(removedPath);
             if (existingWatch != null) {
                 logger.debug("Clearing watch on removed directory: {}", removedPath);
                 existingWatch.close();
@@ -92,20 +73,8 @@ public class JDKRecursiveDirectoryWatcher implements Closeable {
         }
     }
 
-    private void addNewDirectoryWatch(boolean hadCreate, boolean hadModify, boolean hadDelete, Kind[] kinds, WatchEvent ev) {
-        var newPath = ev.calculateFullPath();
-        if (Files.isDirectory(newPath)) {
-            try {
-                logger.debug("New directory found, adding a watch for it: {}", newPath);
-                startRecursive(newPath, wrappedHandler(hadCreate, hadModify, hadDelete, kinds), kinds);
-            } catch (IOException ex) {
-                logger.error("Error adding watch for: {} {}", newPath, ex);
-            }
-        }
-    }
-
-    private void startRecursive(Path root, Consumer<WatchEvent> handler, Kind[] modifiedKinds) throws IOException {
-        Files.walkFileTree(root, new SimpleFileVisitor<Path>() {
+    private void startRecursive(Path dir) throws IOException {
+        Files.walkFileTree(dir, new SimpleFileVisitor<Path>() {
             @Override
             public FileVisitResult visitFileFailed(Path file, IOException exc) throws IOException {
                 logger.error("We could not visit {} to schedule recursive file watches: {}", file, exc);
@@ -114,17 +83,9 @@ public class JDKRecursiveDirectoryWatcher implements Closeable {
 
             @Override
             public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
-                var watcher = new JDKDirectoryWatcher(dir, exec, handler);
-                activeWatches.put(dir, watcher);
-                try {
-                    watcher.start(modifiedKinds);
-                    return FileVisitResult.CONTINUE;
-                } catch (IOException ex) {
-                    activeWatches.remove(dir);
-                    throw ex;
-                }
+                addNewDirectory(dir);
+                return FileVisitResult.CONTINUE;
             }
-
 
             @Override
             public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
@@ -136,16 +97,16 @@ public class JDKRecursiveDirectoryWatcher implements Closeable {
         });
     }
 
-
-
-
-    private boolean contains(Kind[] eventKinds, Kind needle) {
-        for (var k : eventKinds) {
-            if (k == needle) {
-                return true;
-            }
+    private void addNewDirectory(Path dir) throws IOException {
+        var watcher = new JDKDirectoryWatcher(dir, exec, this::wrappedHandler);
+        activeWatches.put(dir, watcher);
+        try {
+            watcher.start();
+        } catch (IOException ex) {
+            activeWatches.remove(dir);
+            logger.error("Could not register a watch for: {} ({})", dir, ex);
+            throw ex;
         }
-        return false;
     }
 
     @Override

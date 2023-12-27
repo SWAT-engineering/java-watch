@@ -10,7 +10,6 @@ import java.util.function.Consumer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import engineering.swat.watch.WatchEvent.Kind;
 import engineering.swat.watch.impl.JDKDirectoryWatcher;
 import engineering.swat.watch.impl.JDKRecursiveDirectoryWatcher;
 
@@ -84,12 +83,12 @@ public class Watcher {
         switch (kind) {
             case DIRECTORY: {
                 var result = new JDKDirectoryWatcher(path, executor, this::handleEvent);
-                result.start(Kind.CREATED, Kind.MODIFIED, Kind.DELETED);
+                result.start();
                 return result;
             }
             case RECURSIVE_DIRECTORY: {
                 var result = new JDKRecursiveDirectoryWatcher(path, executor, this::handleEvent);
-                result.start(Kind.CREATED, Kind.MODIFIED, Kind.DELETED);
+                result.start();
                 return result;
             }
             case FILE:
