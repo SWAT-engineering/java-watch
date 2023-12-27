@@ -35,7 +35,7 @@ public class JDKDirectoryWatcher implements Closeable {
                 throw new IOException("Cannot start a watcher twice");
             }
 
-            activeWatch = JDKPoller.INSTANCE.register(directory, this::handleChanges);
+            activeWatch = JDKPoller.register(directory, this::handleChanges);
             logger.debug("Started watch for: {}", directory);
         } catch (IOException e) {
             throw new IOException("Could not register directory watcher for: " + directory, e);

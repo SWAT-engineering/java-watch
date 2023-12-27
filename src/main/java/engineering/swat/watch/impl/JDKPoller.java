@@ -12,6 +12,7 @@ import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -19,51 +20,54 @@ import java.util.function.Consumer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-enum JDKPoller {
-    INSTANCE;
+class JDKPoller {
+    private JDKPoller() {}
 
-    private final Logger logger = LogManager.getLogger();
-    private final WatchService service;
-    private final Map<WatchKey, Consumer<List<WatchEvent<?>>>> watchers = new ConcurrentHashMap<>();
-    private final Thread pollThread;
+    private static final Logger logger = LogManager.getLogger();
+    private static final Map<WatchKey, Consumer<List<WatchEvent<?>>>> watchers = new ConcurrentHashMap<>();
+    private static final WatchService service;
 
-    private JDKPoller() {
+    static {
         try {
             service = FileSystems.getDefault().newWatchService();
         } catch (IOException e) {
             throw new RuntimeException("Could not start watcher", e);
         }
-        pollThread = new Thread(this::poller);
-        pollThread.setDaemon(true);
-        pollThread.setName("file-watcher poll events thread");
-        pollThread.start();
+        // kick off the poll loop
+        poll();
     }
 
-    private void poller() {
-        while (true) {
-            try {
-                WatchKey hit;
-                if ((hit = service.poll(1, TimeUnit.MILLISECONDS)) != null) {
-                    logger.trace("Got hit: {}", hit);
-                    try {
-                        var watchHandler = watchers.get(hit);
-                        if (watchHandler != null) {
-                            var events = hit.pollEvents();
-                            logger.trace("Found watcher for hit: {}, sending: {} (size: {})", watchHandler, events, events.size());
-                            watchHandler.accept(events);
-                        }
-                    }
-                    finally{
-                        hit.reset();
+    private static void poll() {
+        try {
+            WatchKey hit;
+            while ((hit = service.poll()) != null) {
+                logger.trace("Got hit: {}", hit);
+                try {
+                    var watchHandler = watchers.get(hit);
+                    if (watchHandler != null) {
+                        var events = hit.pollEvents();
+                        logger.trace("Found watcher for hit: {}, sending: {} (size: {})", watchHandler, events, events.size());
+                        watchHandler.accept(events);
                     }
                 }
-            } catch (InterruptedException e) {
-                return;
+                finally{
+                    hit.reset();
+                }
             }
+
+        }
+        finally {
+            // schedule next run
+            // note we don't want to have multiple polls running in parallel
+            // so that is why we only schedule the next one after we're done
+            // processing all messages
+            CompletableFuture
+                .delayedExecutor(1, TimeUnit.MILLISECONDS)
+                .execute(JDKPoller::poll);
         }
     }
 
-    public Closeable register(Path path, Consumer<List<WatchEvent<?>>> changes) throws IOException {
+    public static Closeable register(Path path, Consumer<List<WatchEvent<?>>> changes) throws IOException {
         logger.debug("Register watch for: {}", path);
         var key = path.register(service, ENTRY_CREATE, ENTRY_MODIFY, ENTRY_MODIFY);
         logger.trace("Got watch key: {}", key);
