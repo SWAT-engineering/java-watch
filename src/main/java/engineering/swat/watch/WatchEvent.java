@@ -36,4 +36,9 @@ public class WatchEvent {
         return rootPath.resolve(relativePath);
     }
 
+    @Override
+    public String toString() {
+        return String.format("WatchEvent[%s, %s, %s]", this.rootPath, this.kind, this.relativePath);
+    }
+
 }
