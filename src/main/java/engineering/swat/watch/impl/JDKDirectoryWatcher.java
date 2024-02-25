@@ -10,6 +10,7 @@ import java.util.function.Consumer;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.core.async.JCToolsBlockingQueueFactory.WaitStrategy;
 import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -59,10 +60,13 @@ public class JDKDirectoryWatcher implements Closeable {
         else if (ev.kind() == StandardWatchEventKinds.ENTRY_DELETE) {
             kind = WatchEvent.Kind.DELETED;
         }
+        else if (ev.kind() == StandardWatchEventKinds.OVERFLOW) {
+            kind = WatchEvent.Kind.OVERFLOW;
+        }
         else {
             throw new IllegalArgumentException("Unexpected watch event: " + ev);
         }
-        var path = (@Nullable Path)ev.context();
+        var path = kind == WatchEvent.Kind.OVERFLOW ? this.directory : (@Nullable Path)ev.context();
         logger.trace("Translated: {} to {} at {}", ev, kind, path);
         return new WatchEvent(kind, directory, path);
     }

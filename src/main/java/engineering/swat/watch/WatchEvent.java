@@ -7,7 +7,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 public class WatchEvent {
 
     public enum Kind {
-        CREATED, MODIFIED, DELETED
+        CREATED, MODIFIED, DELETED, OVERFLOW
     }
 
     private final Kind kind;

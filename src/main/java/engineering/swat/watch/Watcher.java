@@ -24,6 +24,7 @@ public class Watcher {
     private Consumer<Path> createHandler = NO_OP;
     private Consumer<Path> modifiedHandler = NO_OP;
     private Consumer<Path> deletedHandler = NO_OP;
+    private Consumer<Path> overflowHandler = NO_OP;
 
 
     private Watcher(WatcherKind kind, Path path) {
@@ -74,6 +75,11 @@ public class Watcher {
         return this;
     }
 
+    public Watcher onOverflow(Consumer<Path> overflowHandler) {
+        this.overflowHandler = overflowHandler;
+        return this;
+    }
+
     public Watcher withExecutor(Executor callbackHandler) {
         this.executor = callbackHandler;
         return this;
@@ -107,6 +113,9 @@ public class Watcher {
                 break;
             case MODIFIED:
                 callIfDefined(modifiedHandler, ev);
+                break;
+            case OVERFLOW:
+                callIfDefined(overflowHandler, ev);
                 break;
         }
     }
