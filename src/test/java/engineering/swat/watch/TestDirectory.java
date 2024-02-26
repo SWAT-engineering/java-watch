@@ -17,7 +17,7 @@ class TestDirectory implements Closeable {
 
 
     TestDirectory() throws IOException {
-        testDirectory = Files.createTempDirectory("smoke-test");
+        testDirectory = Files.createTempDirectory("java-watch-test");
         List<Path> testFiles = new ArrayList<>();
         add3Files(testFiles, testDirectory);
         for (var d: Arrays.asList("d1", "d2", "d3")) {
@@ -44,6 +44,7 @@ class TestDirectory implements Closeable {
     public Path getTestDirectory() {
         return testDirectory;
     }
+
     public List<Path> getTestFiles() {
         return testFiles;
     }

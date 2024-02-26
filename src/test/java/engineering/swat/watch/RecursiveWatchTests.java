@@ -1,5 +1,7 @@
 package engineering.swat.watch;
 
+import static org.awaitility.Awaitility.await;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -8,29 +10,32 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.awaitility.Awaitility;
-import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
-import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-
-import static org.awaitility.Awaitility.await;
 
 class RecursiveWatchTests {
 
-    static @MonotonicNonNull TestDirectory testDir;
+    private TestDirectory testDir;
 
-    @BeforeAll
-    static void setupEverything() throws IOException {
+    @BeforeEach
+    void setup() throws IOException {
         testDir = new TestDirectory();
-        Awaitility.setDefaultTimeout(2, TimeUnit.SECONDS);
     }
 
-    @AfterAll
-    static void cleanupDirectory()  throws IOException {
+    @AfterEach
+    void cleanup() throws IOException {
         if (testDir != null) {
             testDir.close();
         }
     }
+
+    @BeforeAll
+    static void setupEverything() throws IOException {
+        Awaitility.setDefaultTimeout(2, TimeUnit.SECONDS);
+    }
+
 
     @Test
     void newDirectoryWithFilesChangesDetected() throws IOException {

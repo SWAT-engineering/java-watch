@@ -21,6 +21,7 @@ public class Watcher {
 
     private static final Consumer<Path> NO_OP = p -> {};
 
+    // TODO: reconsider interface, not `Path` but `WatchEvent`.
     private Consumer<Path> createHandler = NO_OP;
     private Consumer<Path> modifiedHandler = NO_OP;
     private Consumer<Path> deletedHandler = NO_OP;
