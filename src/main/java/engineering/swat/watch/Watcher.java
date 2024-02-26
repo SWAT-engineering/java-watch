@@ -20,12 +20,13 @@ public class Watcher {
     private Executor executor = CompletableFuture::runAsync;
 
     private static final Consumer<Path> NO_OP = p -> {};
+    private static final Consumer<WatchEvent> NO_OP_WE = p -> {};
 
-    // TODO: reconsider interface, not `Path` but `WatchEvent`.
     private Consumer<Path> createHandler = NO_OP;
     private Consumer<Path> modifiedHandler = NO_OP;
     private Consumer<Path> deletedHandler = NO_OP;
     private Consumer<Path> overflowHandler = NO_OP;
+    private Consumer<WatchEvent> eventHandler = NO_OP_WE;
 
 
     private Watcher(WatcherKind kind, Path path) {
@@ -81,6 +82,11 @@ public class Watcher {
         return this;
     }
 
+    public Watcher onEvent(Consumer<WatchEvent> eventHandler) {
+        this.eventHandler = eventHandler;
+        return this;
+    }
+
     public Watcher withExecutor(Executor callbackHandler) {
         this.executor = callbackHandler;
         return this;
@@ -107,23 +113,18 @@ public class Watcher {
     private void handleEvent(WatchEvent ev) {
         switch (ev.getKind()) {
             case CREATED:
-                callIfDefined(createHandler, ev);
+                createHandler.accept(ev.calculateFullPath());
                 break;
             case DELETED:
-                callIfDefined(deletedHandler, ev);
+                deletedHandler.accept(ev.calculateFullPath());
                 break;
             case MODIFIED:
-                callIfDefined(modifiedHandler, ev);
+                modifiedHandler.accept(ev.calculateFullPath());
                 break;
             case OVERFLOW:
-                callIfDefined(overflowHandler, ev);
+                overflowHandler.accept(ev.calculateFullPath());
                 break;
         }
-    }
-
-    private void callIfDefined(Consumer<Path> target, WatchEvent ev) {
-        if (target != NO_OP) {
-            target.accept(ev.calculateFullPath());
-        }
+        eventHandler.accept(ev);
     }
 }

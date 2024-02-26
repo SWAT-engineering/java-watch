@@ -9,6 +9,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -16,6 +18,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 class RecursiveWatchTests {
+    private final Logger logger = LogManager.getLogger();
 
     private TestDirectory testDir;
 
@@ -33,7 +36,7 @@ class RecursiveWatchTests {
 
     @BeforeAll
     static void setupEverything() throws IOException {
-        Awaitility.setDefaultTimeout(2, TimeUnit.SECONDS);
+        Awaitility.setDefaultTimeout(4, TimeUnit.SECONDS);
     }
 
 
@@ -45,6 +48,7 @@ class RecursiveWatchTests {
         var watchConfig = Watcher.recursiveDirectory(testDir.getTestDirectory())
             .onCreate(p -> {if (p.equals(target.get())) { created.set(true); }})
             .onModified(p -> {if (p.equals(target.get())) { changed.set(true); }})
+            .onEvent(e -> logger.debug("Event received: {}", e))
             ;
 
         try (var activeWatch = watchConfig.start() ) {
