@@ -16,6 +16,7 @@ import java.util.function.Consumer;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import engineering.swat.watch.WatchEvent;
 import engineering.swat.watch.WatchEvent.Kind;
@@ -118,13 +119,25 @@ public class JDKRecursiveDirectoryWatcher implements Closeable {
 
     private void addNewDirectory(Path dir) throws IOException {
         var watcher = new JDKDirectoryWatcher(dir, exec, this::wrappedHandler);
-        activeWatches.put(dir, watcher);
+        var oldEntry = activeWatches.put(dir, watcher);
+        cleanupOld(dir, oldEntry);
         try {
             watcher.start();
         } catch (IOException ex) {
             activeWatches.remove(dir);
             logger.error("Could not register a watch for: {} ({})", dir, ex);
             throw ex;
+        }
+    }
+
+    private void cleanupOld(Path dir, @Nullable Closeable oldEntry) {
+        if (oldEntry != null) {
+            logger.error("Registered a watch for a directory that was already watched: {}", dir);
+            try {
+                oldEntry.close();
+            } catch (IOException ex) {
+                logger.error("Could not close old watch for: {} ({})", dir, ex);
+            }
         }
     }
 
