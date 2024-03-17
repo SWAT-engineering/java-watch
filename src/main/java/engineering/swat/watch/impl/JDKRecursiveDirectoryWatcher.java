@@ -11,7 +11,6 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
-import java.util.Stack;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executor;
@@ -49,40 +48,46 @@ public class JDKRecursiveDirectoryWatcher implements Closeable {
     private void wrappedHandler(WatchEvent ev) {
         logger.trace("Unwrapping event: {}", ev);
         try {
-            if (ev.getKind() == Kind.CREATED) {
-                // between the event and the current state of the file system
-                // we might have some nested directories we missed
-                // so if we have a new directory, we have to go in and iterate over it
-                // we also have to report all nested files & dirs as created paths
-                // but we don't want to burden ourselves with those events
-                try {
-                    var newEvents = registerForNewDirectory(ev.calculateFullPath());
-                    logger.trace("Reporting new nested directories & files: {}", newEvents);
-                    exec.execute(() -> newEvents.forEach(eventHandler));
-                } catch (IOException e) {
-                    logger.error("Could not register new watch for: {} ({})", ev.calculateFullPath(), e);
-                }
-            }
-            else if (ev.getKind() == Kind.DELETED) {
-                handleDeleteDirectory(ev.calculateFullPath());
-            }
-            else if (ev.getKind() == Kind.OVERFLOW) {
-                try {
-                    logger.debug("Overflow detected, rescanning to find missed entries in {}", directory);
-                    // we have to rescan everything, and at least make sure to add new entries to that recursive watcher
-                    var newEntries = syncAfterOverflow(directory);
-                    logger.trace("Reporting new nested directories & files: {}", newEntries);
-                    exec.execute(() -> newEntries.forEach(eventHandler));
-                } catch (IOException e) {
-                    logger.error("Could not register new watch for: {} ({})", ev.calculateFullPath(), e);
-                }
+            switch (ev.getKind()) {
+                case CREATED: handleCreate(ev); break;
+                case DELETED: handleDeleteDirectory(ev); break;
+                case OVERFLOW: handleOverflow(ev); break;
+                case MODIFIED: break;
             }
         } finally {
             eventHandler.accept(ev);
         }
     }
 
-    private void handleDeleteDirectory(Path removedPath) {
+    private void handleCreate(WatchEvent ev) {
+        // between the event and the current state of the file system
+        // we might have some nested directories we missed
+        // so if we have a new directory, we have to go in and iterate over it
+        // we also have to report all nested files & dirs as created paths
+        // but we don't want to burden ourselves with those events
+        try {
+            var newEvents = registerForNewDirectory(ev.calculateFullPath());
+            logger.trace("Reporting new nested directories & files: {}", newEvents);
+            exec.execute(() -> newEvents.forEach(eventHandler));
+        } catch (IOException e) {
+            logger.error("Could not register new watch for: {} ({})", ev.calculateFullPath(), e);
+        }
+    }
+
+    private void handleOverflow(WatchEvent ev) {
+        try {
+            logger.debug("Overflow detected, rescanning to find missed entries in {}", directory);
+            // we have to rescan everything, and at least make sure to add new entries to that recursive watcher
+            var newEntries = syncAfterOverflow(directory);
+            logger.trace("Reporting new nested directories & files: {}", newEntries);
+            exec.execute(() -> newEntries.forEach(eventHandler));
+        } catch (IOException e) {
+            logger.error("Could not register new watch for: {} ({})", ev.calculateFullPath(), e);
+        }
+    }
+
+    private void handleDeleteDirectory(WatchEvent ev) {
+        var removedPath = ev.calculateFullPath();
         try {
             var existingWatch = activeWatches.remove(removedPath);
             if (existingWatch != null) {
@@ -225,6 +230,12 @@ public class JDKRecursiveDirectoryWatcher implements Closeable {
                 logger.error("Could not close watch", ex);
                 if (firstFail == null) {
                     firstFail = ex;
+                }
+            }
+            catch (Exception ex) {
+                logger.error("Could not close watch", ex);
+                if (firstFail == null) {
+                    firstFail = new IOException("Unexpected exception when closing", ex);
                 }
             }
         }
