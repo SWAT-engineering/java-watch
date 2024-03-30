@@ -1,6 +1,7 @@
 package engineering.swat.watch;
 
 
+import static engineering.swat.watch.WatchEvent.Kind.*;
 import static org.awaitility.Awaitility.await;
 
 import java.io.IOException;
@@ -40,7 +41,7 @@ class SmokeTests {
         var changed = new AtomicBoolean(false);
         var target = testDir.getTestFiles().get(0);
         var watchConfig = Watcher.singleDirectory(testDir.getTestDirectory())
-            .onModified(p -> {if (p.equals(target)) { changed.set(true); }})
+            .onEvent(ev -> {if (ev.getKind() == MODIFIED && ev.calculateFullPath().equals(target)) { changed.set(true); }})
             ;
 
         try (var activeWatch = watchConfig.start() ) {
@@ -57,7 +58,7 @@ class SmokeTests {
             .findFirst()
             .orElseThrow();
         var watchConfig = Watcher.recursiveDirectory(testDir.getTestDirectory())
-            .onModified(p -> {if (p.equals(target)) { changed.set(true); }})
+            .onEvent(ev -> { if (ev.getKind() == MODIFIED && ev.calculateFullPath().equals(target)) { changed.set(true);}})
             ;
 
         try (var activeWatch = watchConfig.start() ) {

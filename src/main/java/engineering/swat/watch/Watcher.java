@@ -19,14 +19,7 @@ public class Watcher {
     private final Path path;
     private Executor executor = CompletableFuture::runAsync;
 
-    private static final Consumer<Path> NO_OP = p -> {};
-    private static final Consumer<WatchEvent> NO_OP_WE = p -> {};
-
-    private Consumer<Path> createHandler = NO_OP;
-    private Consumer<Path> modifiedHandler = NO_OP;
-    private Consumer<Path> deletedHandler = NO_OP;
-    private Consumer<Path> overflowHandler = NO_OP;
-    private Consumer<WatchEvent> eventHandler = NO_OP_WE;
+    private Consumer<WatchEvent> eventHandler = p -> {};
 
 
     private Watcher(WatcherKind kind, Path path) {
@@ -62,26 +55,6 @@ public class Watcher {
         return new Watcher(WatcherKind.RECURSIVE_DIRECTORY, path);
     }
 
-    public Watcher onCreate(Consumer<Path> createHandler) {
-        this.createHandler = createHandler;
-        return this;
-    }
-
-    public Watcher onModified(Consumer<Path> changeHandler) {
-        this.modifiedHandler = changeHandler;
-        return this;
-    }
-
-    public Watcher onDeleted(Consumer<Path> removeHandler) {
-        this.deletedHandler = removeHandler;
-        return this;
-    }
-
-    public Watcher onOverflow(Consumer<Path> overflowHandler) {
-        this.overflowHandler = overflowHandler;
-        return this;
-    }
-
     public Watcher onEvent(Consumer<WatchEvent> eventHandler) {
         this.eventHandler = eventHandler;
         return this;
@@ -95,12 +68,12 @@ public class Watcher {
     public Closeable start() throws IOException {
         switch (kind) {
             case DIRECTORY: {
-                var result = new JDKDirectoryWatcher(path, executor, this::handleEvent);
+                var result = new JDKDirectoryWatcher(path, executor, this.eventHandler);
                 result.start();
                 return result;
             }
             case RECURSIVE_DIRECTORY: {
-                var result = new JDKRecursiveDirectoryWatcher(path, executor, this::handleEvent);
+                var result = new JDKRecursiveDirectoryWatcher(path, executor, this.eventHandler);
                 result.start();
                 return result;
             }
@@ -110,21 +83,4 @@ public class Watcher {
         }
     }
 
-    private void handleEvent(WatchEvent ev) {
-        switch (ev.getKind()) {
-            case CREATED:
-                createHandler.accept(ev.calculateFullPath());
-                break;
-            case DELETED:
-                deletedHandler.accept(ev.calculateFullPath());
-                break;
-            case MODIFIED:
-                modifiedHandler.accept(ev.calculateFullPath());
-                break;
-            case OVERFLOW:
-                overflowHandler.accept(ev.calculateFullPath());
-                break;
-        }
-        eventHandler.accept(ev);
-    }
 }

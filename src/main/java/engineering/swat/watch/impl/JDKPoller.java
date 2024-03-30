@@ -69,6 +69,7 @@ class JDKPoller {
 
     public static Closeable register(Path path, Consumer<List<WatchEvent<?>>> changes) throws IOException {
         logger.debug("Register watch for: {}", path);
+        // TODO: consider upgrading the events the moment we actually get a request for all of it
         var key = path.register(service, ENTRY_CREATE, ENTRY_MODIFY, ENTRY_MODIFY);
         logger.trace("Got watch key: {}", key);
         watchers.put(key, changes);

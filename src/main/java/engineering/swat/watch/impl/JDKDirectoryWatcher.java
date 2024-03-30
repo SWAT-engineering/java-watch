@@ -30,12 +30,14 @@ public class JDKDirectoryWatcher implements Closeable {
 
     public void start() throws IOException {
         try {
-            if (activeWatch != null) {
-                // TODO make sure there is no cross thread race possible here.
-                throw new IOException("Cannot start a watcher twice");
+            synchronized(this) {
+                if (activeWatch != null) {
+                    throw new IOException("Cannot start a watcher twice");
+                }
+
+                activeWatch = JDKPoller.register(directory, this::handleChanges);
             }
 
-            activeWatch = JDKPoller.register(directory, this::handleChanges);
             logger.debug("Started watch for: {}", directory);
         } catch (IOException e) {
             throw new IOException("Could not register directory watcher for: " + directory, e);

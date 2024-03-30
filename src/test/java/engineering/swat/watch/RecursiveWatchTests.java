@@ -46,19 +46,52 @@ class RecursiveWatchTests {
         var created = new AtomicBoolean(false);
         var changed = new AtomicBoolean(false);
         var watchConfig = Watcher.recursiveDirectory(testDir.getTestDirectory())
-            .onCreate(p -> {if (p.equals(target.get())) { created.set(true); }})
-            .onModified(p -> {if (p.equals(target.get())) { changed.set(true); }})
-            .onEvent(e -> logger.debug("Event received: {}", e))
-            ;
+            .onEvent(ev -> {
+                    logger.debug("Event received: {}", ev);
+                    if (ev.calculateFullPath().equals(target.get())) {
+                        switch (ev.getKind()) {
+                            case CREATED:
+                                created.set(true);
+                                break;
+                            case MODIFIED:
+                                changed.set(true);
+                                break;
+                            default:
+                                break;
+                        }
+                    }
+            });
 
         try (var activeWatch = watchConfig.start() ) {
             var freshFile = Files.createTempDirectory(testDir.getTestDirectory(), "new-dir").resolve("test-file.txt");
             target.set(freshFile);
+            logger.debug("Interested in: {}", freshFile);
             Files.writeString(freshFile, "Hello world");
             await().alias("New files should have been seen").until(created::get);
             Files.writeString(freshFile, "Hello world 2");
             await().alias("Fresh file change have been detected").until(changed::get);
         }
+    }
+
+    @Test
+    void correctRelativePathIsReported() throws IOException {
+        Path relative = Path.of("a","b", "c", "d.txt");
+        var seen = new AtomicBoolean(false);
+        var watcher = Watcher.recursiveDirectory(testDir.getTestDirectory())
+            .onEvent(ev -> {
+                logger.debug("Seen event: {}", ev);
+                if (ev.getRelativePath().equals(relative)) {
+                    seen.set(true);
+                }
+            });
+
+        try (var w = watcher.start()) {
+            var targetFile = testDir.getTestDirectory().resolve(relative);
+            Files.createDirectories(targetFile.getParent());
+            Files.writeString(targetFile, "Hello World");
+            await().alias("Nested path is seen").until(seen::get);
+        }
+
     }
 
 }

@@ -15,6 +15,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -25,27 +26,27 @@ import engineering.swat.watch.WatchEvent.Kind;
 
 public class JDKRecursiveDirectoryWatcher implements Closeable {
     private final Logger logger = LogManager.getLogger();
-    private final Path directory;
+    private final Path root;
     private final Executor exec;
     private final Consumer<WatchEvent> eventHandler;
     private final ConcurrentMap<Path, Closeable> activeWatches = new ConcurrentHashMap<>();
 
     public JDKRecursiveDirectoryWatcher(Path directory, Executor exec, Consumer<WatchEvent> eventHandler) {
-        this.directory = directory;
+        this.root = directory;
         this.exec = exec;
         this.eventHandler = eventHandler;
     }
 
     public void start() throws IOException {
         try {
-            logger.debug("Starting recursive watch for: {}", directory);
-            registerInitialWatches(directory);
+            logger.debug("Starting recursive watch for: {}", root);
+            registerInitialWatches(root);
         } catch (IOException e) {
-            throw new IOException("Could not register directory watcher for: " + directory, e);
+            throw new IOException("Could not register directory watcher for: " + root, e);
         }
     }
 
-    private void wrappedHandler(WatchEvent ev) {
+    private void processEvents(WatchEvent ev) {
         logger.trace("Unwrapping event: {}", ev);
         try {
             switch (ev.getKind()) {
@@ -58,6 +59,7 @@ public class JDKRecursiveDirectoryWatcher implements Closeable {
             eventHandler.accept(ev);
         }
     }
+
 
     private void handleCreate(WatchEvent ev) {
         // between the event and the current state of the file system
@@ -76,9 +78,9 @@ public class JDKRecursiveDirectoryWatcher implements Closeable {
 
     private void handleOverflow(WatchEvent ev) {
         try {
-            logger.debug("Overflow detected, rescanning to find missed entries in {}", directory);
+            logger.debug("Overflow detected, rescanning to find missed entries in {}", root);
             // we have to rescan everything, and at least make sure to add new entries to that recursive watcher
-            var newEntries = syncAfterOverflow(directory);
+            var newEntries = syncAfterOverflow(ev.calculateFullPath());
             logger.trace("Reporting new nested directories & files: {}", newEntries);
             exec.execute(() -> newEntries.forEach(eventHandler));
         } catch (IOException e) {
@@ -101,10 +103,10 @@ public class JDKRecursiveDirectoryWatcher implements Closeable {
 
     /** Only register a watched for every sub directory */
     private class InitialDirectoryScan extends SimpleFileVisitor<Path> {
-        protected final Path root;
+        protected final Path subRoot;
 
         public InitialDirectoryScan(Path root) {
-            this.root = root;
+            this.subRoot = root;
         }
         @Override
         public FileVisitResult visitFileFailed(Path file, IOException exc) throws IOException {
@@ -125,8 +127,9 @@ public class JDKRecursiveDirectoryWatcher implements Closeable {
             }
             return FileVisitResult.CONTINUE;
         }
+
         private void addNewDirectory(Path dir) throws IOException {
-            var watcher = new JDKDirectoryWatcher(dir, exec, JDKRecursiveDirectoryWatcher.this::wrappedHandler);
+            var watcher = new JDKDirectoryWatcher(dir, exec, relocater(dir));
             var oldEntry = activeWatches.put(dir, watcher);
             cleanupOld(dir, oldEntry);
             try {
@@ -136,6 +139,15 @@ public class JDKRecursiveDirectoryWatcher implements Closeable {
                 logger.error("Could not register a watch for: {} ({})", dir, ex);
                 throw ex;
             }
+        }
+
+        /** Make sure that the events are relative to the actual root of the recursive watcher */
+        private Consumer<WatchEvent> relocater(Path subRoot) {
+            final Path newRelative = root.relativize(subRoot);
+            return ev -> {
+                var rewritten = new WatchEvent(ev.getKind(), root, newRelative.resolve(ev.getRelativePath()));
+                processEvents(rewritten);
+            };
         }
 
         private void cleanupOld(Path dir, @Nullable Closeable oldEntry) {
@@ -153,14 +165,14 @@ public class JDKRecursiveDirectoryWatcher implements Closeable {
     /** register watch for new sub-dir, but also simulate event for every file & subdir found */
     private class NewDirectoryScan extends InitialDirectoryScan {
         protected final List<WatchEvent> events;
-        public NewDirectoryScan(Path root, List<WatchEvent> events) {
-            super(root);
+        public NewDirectoryScan(Path subRoot, List<WatchEvent> events) {
+            super(subRoot);
             this.events = events;
         }
 
         @Override
         public FileVisitResult preVisitDirectory(Path subdir, BasicFileAttributes attrs) throws IOException {
-            if (!subdir.equals(root)) {
+            if (!subdir.equals(subRoot)) {
                 events.add(new WatchEvent(WatchEvent.Kind.CREATED, root, root.relativize(subdir)));
             }
             return super.preVisitDirectory(subdir, attrs);
@@ -176,8 +188,8 @@ public class JDKRecursiveDirectoryWatcher implements Closeable {
     /** detect directories that aren't tracked yet, and generate events only for new entries */
     private class OverflowSyncScan extends NewDirectoryScan {
         private final Deque<Boolean> isNewDirectory = new ArrayDeque<>();
-        public OverflowSyncScan(Path root, List<WatchEvent> events) {
-            super(root, events);
+        public OverflowSyncScan(Path subRoot, List<WatchEvent> events) {
+            super(subRoot, events);
         }
         @Override
         public FileVisitResult preVisitDirectory(Path subdir, BasicFileAttributes attrs) throws IOException {
