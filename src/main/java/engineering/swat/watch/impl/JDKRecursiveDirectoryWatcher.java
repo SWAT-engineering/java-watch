@@ -16,14 +16,12 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
-import java.util.function.Function;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import engineering.swat.watch.WatchEvent;
-import engineering.swat.watch.WatchEvent.Kind;
 
 public class JDKRecursiveDirectoryWatcher implements Closeable {
     private final Logger logger = LogManager.getLogger();
