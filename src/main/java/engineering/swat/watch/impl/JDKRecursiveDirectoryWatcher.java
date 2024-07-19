@@ -73,9 +73,15 @@ public class JDKRecursiveDirectoryWatcher implements Closeable {
         // we also have to report all nested files & dirs as created paths
         // but we don't want to burden ourselves with those events
         try {
-            var newEvents = registerForNewDirectory(ev.calculateFullPath());
-            logger.trace("Reporting new nested directories & files: {}", newEvents);
-            return newEvents;
+            var fullPath = ev.calculateFullPath();
+            if (!activeWatches.containsKey(fullPath)) {
+                var newEvents = registerForNewDirectory(ev.calculateFullPath());
+                logger.trace("Reporting new nested directories & files: {}", newEvents);
+                return newEvents;
+            }
+            else {
+                return Collections.emptyList();
+            }
         } catch (IOException e) {
             logger.error("Could not register new watch for: {} ({})", ev.calculateFullPath(), e);
             return Collections.emptyList();
