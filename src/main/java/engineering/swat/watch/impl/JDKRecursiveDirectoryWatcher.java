@@ -88,7 +88,7 @@ public class JDKRecursiveDirectoryWatcher implements Closeable {
 
     private List<WatchEvent> handleOverflow(WatchEvent ev) {
         try {
-            logger.debug("Overflow detected, rescanning to find missed entries in {}", root);
+            logger.info("Overflow detected, rescanning to find missed entries in {}", root);
             // we have to rescan everything, and at least make sure to add new entries to that recursive watcher
             var newEntries = syncAfterOverflow(ev.calculateFullPath());
             logger.trace("Reporting new nested directories & files: {}", newEntries);

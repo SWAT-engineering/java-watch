@@ -22,6 +22,9 @@ public class JDKDirectoryWatcher implements Closeable {
     private final Consumer<WatchEvent> eventHandler;
     private volatile @MonotonicNonNull Closeable activeWatch;
 
+    private static final BundledSubscription<Path, List<java.nio.file.WatchEvent<?>>>
+        BUNDLED_JDK_WATCHERS = new BundledSubscription<>(JDKPoller::register);
+
     public JDKDirectoryWatcher(Path directory, Executor exec, Consumer<WatchEvent> eventHandler) {
         this.directory = directory;
         this.exec = exec;
@@ -35,7 +38,7 @@ public class JDKDirectoryWatcher implements Closeable {
                     throw new IOException("Cannot start a watcher twice");
                 }
 
-                activeWatch = JDKPoller.register(directory, this::handleChanges);
+                activeWatch = BUNDLED_JDK_WATCHERS.subscribe(directory, this::handleChanges);
             }
 
             logger.debug("Started watch for: {}", directory);

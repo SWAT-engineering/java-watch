@@ -119,12 +119,21 @@ class TortureTests {
 
             logger.info("Waiting for the events processing to settle down");
             int lastEventCount = events.get();
+            int stableCount = 0;
             do {
                 Thread.sleep(STOP_AFTER.toMillis() * 2);
                 int currentEventCounts = events.get();
                 if (currentEventCounts == lastEventCount) {
-                    logger.info("Stable after: {} events", currentEventCounts);
-                    break;
+                    if (stableCount == 2) {
+                        logger.info("Stable after: {} events", currentEventCounts);
+                        break;
+                    }
+                    else {
+                        stableCount++;
+                    }
+                }
+                else {
+                    stableCount = 0;
                 }
                 lastEventCount = currentEventCounts;
             } while (true);
