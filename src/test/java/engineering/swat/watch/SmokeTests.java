@@ -67,5 +67,26 @@ class SmokeTests {
         }
     }
 
+    @Test
+    void watchSingleFile() throws IOException {
+        var changed = new AtomicBoolean(false);
+        var target = testDir.getTestFiles().stream()
+            .filter(p -> p.getParent().equals(testDir.getTestDirectory()))
+            .findFirst()
+            .orElseThrow();
+
+        var watchConfig = Watcher.singleFile(target)
+            .onEvent(ev -> {
+                if (ev.calculateFullPath().equals(target)) {
+                    changed.set(true);
+                }
+            });
+
+        try (var watch = watchConfig.start()) {
+            Files.writeString(target, "Hello world");
+            await().alias("Single file change").until(changed::get);
+        }
+    }
+
 
 }

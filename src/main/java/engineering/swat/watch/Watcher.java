@@ -11,6 +11,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import engineering.swat.watch.impl.JDKDirectoryWatcher;
+import engineering.swat.watch.impl.JDKFileWatcher;
 import engineering.swat.watch.impl.JDKRecursiveDirectoryWatcher;
 
 public class Watcher {
@@ -77,7 +78,12 @@ public class Watcher {
                 result.start();
                 return result;
             }
-            case FILE:
+            case FILE: {
+                var result = new JDKFileWatcher(path, executor, this.eventHandler);
+                result.start();
+                return result;
+            }
+
             default:
                 throw new IllegalArgumentException("Not supported yet");
         }
