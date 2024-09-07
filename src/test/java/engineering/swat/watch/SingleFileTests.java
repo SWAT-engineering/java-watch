@@ -31,7 +31,7 @@ public class SingleFileTests {
 
     @BeforeAll
     static void setupEverything() {
-        Awaitility.setDefaultTimeout(2, TimeUnit.SECONDS);
+        Awaitility.setDefaultTimeout(3, TimeUnit.SECONDS);
     }
 
     @Test
@@ -57,6 +57,7 @@ public class SingleFileTests {
             Thread.sleep(1000);
             Files.writeString(target, "Hello world");
             await("Single file does trigger")
+                .during(Duration.ofSeconds(2))
                 .failFast("No others should be notified", others::get)
                 .untilTrue(seen);
         }
