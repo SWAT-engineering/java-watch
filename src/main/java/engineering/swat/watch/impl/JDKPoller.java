@@ -17,6 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
+import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -49,6 +50,10 @@ class JDKPoller {
                         logger.trace("Found watcher for hit: {}, sending: {} (size: {})", watchHandler, events, events.size());
                         watchHandler.accept(events);
                     }
+                }
+                catch (Throwable t) {
+                    logger.catching(Level.INFO, t);
+                    // one exception shouldn't stop all the processing
                 }
                 finally{
                     hit.reset();
