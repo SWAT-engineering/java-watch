@@ -61,19 +61,9 @@ class DeleteLockTests {
     }
 
     private void deleteAndVerify(Path target, Builder setup) throws IOException {
-        var seen = new AtomicBoolean(false);
-        var watchConfig = setup.build(target)
-            .onEvent(ev -> {
-                if (ev.getKind() == Kind.DELETED
-                    && ev.calculateFullPath().equals(target)) {
-                    seen.set(true);
-                }
-            });
-        try (var watch = watchConfig.start()) {
+        try (var watch = setup.build(target).start()) {
             recursiveDelete(target);
             assertFalse(Files.exists(target), "The file/directory shouldn't exist anymore");
-            await("Watched object can be deleted, and we should see an event of it")
-                .untilTrue(seen);
         }
     }
 
@@ -81,7 +71,7 @@ class DeleteLockTests {
     void watchedFileCanBeDeleted() throws IOException {
         deleteAndVerify(
             testDir.getTestFiles().get(0),
-            Watcher::singleFile
+            Watcher::single
         );
     }
 

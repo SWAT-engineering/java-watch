@@ -17,6 +17,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import engineering.swat.watch.WatchEvent.Kind;
+
 class RecursiveWatchTests {
     private final Logger logger = LogManager.getLogger();
 
@@ -92,6 +94,27 @@ class RecursiveWatchTests {
             await().alias("Nested path is seen").until(seen::get);
         }
 
+    }
+
+    @Test
+    void deleteOfFileInDirectoryShouldBeVisible() throws IOException, InterruptedException {
+        var target = testDir.getTestFiles()
+            .stream()
+            .filter(p -> !p.getParent().equals(testDir.getTestDirectory()))
+            .findAny()
+            .orElseThrow();
+        var seen = new AtomicBoolean(false);
+        var watchConfig = Watcher.singleDirectory(target.getParent())
+            .onEvent(ev -> {
+                if (ev.getKind() == Kind.DELETED && ev.calculateFullPath().equals(target)) {
+                    seen.set(true);
+                }
+            });
+        try (var watch = watchConfig.start()) {
+            Files.delete(target);
+            await("File deletion should generate delete event")
+                .untilTrue(seen);
+        }
     }
 
 }

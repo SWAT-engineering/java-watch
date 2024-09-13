@@ -4,7 +4,9 @@ import static org.awaitility.Awaitility.await;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.attribute.FileTime;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -39,7 +41,7 @@ public class SingleFileTests {
         var target = testDir.getTestFiles().get(0);
         var seen = new AtomicBoolean(false);
         var others = new AtomicBoolean(false);
-        var watchConfig = Watcher.singleFile(target)
+        var watchConfig = Watcher.single(target)
             .onEvent(ev -> {
                 if (ev.calculateFullPath().equals(target)) {
                     seen.set(true);
@@ -56,6 +58,35 @@ public class SingleFileTests {
             }
             Thread.sleep(1000);
             Files.writeString(target, "Hello world");
+            await("Single file does trigger")
+                .during(Duration.ofSeconds(2))
+                .failFast("No others should be notified", others::get)
+                .untilTrue(seen);
+        }
+    }
+
+    @Test
+    void singleFileThatMonitorsOnlyADirectory() throws IOException, InterruptedException {
+        var target = testDir.getTestDirectory();
+        var seen = new AtomicBoolean(false);
+        var others = new AtomicBoolean(false);
+        var watchConfig = Watcher.single(target)
+            .onEvent(ev -> {
+                if (ev.calculateFullPath().equals(target)) {
+                    seen.set(true);
+                }
+                else {
+                    others.set(true);
+                }
+            });
+        try (var watch = watchConfig.start()) {
+            for (var f : testDir.getTestFiles()) {
+                if (!f.equals(target)) {
+                    Files.writeString(f, "Hello");
+                }
+            }
+            Thread.sleep(1000);
+            Files.setLastModifiedTime(target, FileTime.from(Instant.now()));
             await("Single file does trigger")
                 .during(Duration.ofSeconds(2))
                 .failFast("No others should be notified", others::get)

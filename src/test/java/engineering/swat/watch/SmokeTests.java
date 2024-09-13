@@ -75,7 +75,7 @@ class SmokeTests {
             .findFirst()
             .orElseThrow();
 
-        var watchConfig = Watcher.singleFile(target)
+        var watchConfig = Watcher.single(target)
             .onEvent(ev -> {
                 if (ev.calculateFullPath().equals(target)) {
                     changed.set(true);
