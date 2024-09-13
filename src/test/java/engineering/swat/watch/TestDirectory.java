@@ -34,11 +34,13 @@ class TestDirectory implements Closeable {
     }
 
     @Override
-    public void close() throws IOException {
-        Files.walk(testDirectory)
-            .sorted(Comparator.reverseOrder())
-            .map(Path::toFile)
-            .forEach(File::delete);
+    public void close() {
+        try {
+            Files.walk(testDirectory)
+                .sorted(Comparator.reverseOrder())
+                .map(Path::toFile)
+                .forEach(File::delete);
+        } catch (IOException _ignored) { }
     }
 
     public Path getTestDirectory() {

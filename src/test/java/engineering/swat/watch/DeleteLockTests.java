@@ -61,7 +61,7 @@ class DeleteLockTests {
     }
 
     private void deleteAndVerify(Path target, Builder setup) throws IOException {
-        try (var watch = setup.build(target).start()) {
+        try (var watch = setup.build(target).onEvent(ev -> {}).start()) {
             recursiveDelete(target);
             assertFalse(Files.exists(target), "The file/directory shouldn't exist anymore");
         }
