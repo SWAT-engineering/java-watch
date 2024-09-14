@@ -30,6 +30,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import engineering.swat.watch.WatchEvent.Kind;
+
 class TortureTests {
 
     private final Logger logger = LogManager.getLogger();
@@ -100,11 +102,18 @@ class TortureTests {
 
         final var events = new AtomicInteger(0);
         var seenPaths = ConcurrentHashMap.<Path>newKeySet();
+        var seenDeletes = ConcurrentHashMap.<Path>newKeySet();
         var watchConfig = Watcher.recursiveDirectory(testDir.getTestDirectory())
             .withExecutor(pool)
             .onEvent(ev -> {
                 events.getAndIncrement();
-                seenPaths.add(ev.calculateFullPath());
+                Path fullPath = ev.calculateFullPath();
+                if (ev.getKind() == Kind.DELETED) {
+                    seenDeletes.add(fullPath);
+                }
+                else {
+                    seenPaths.add(fullPath);
+                }
             });
 
         try (var activeWatch = watchConfig.start() ) {
@@ -116,6 +125,7 @@ class TortureTests {
             stopRunning.release(THREADS);
             assertTrue(done.tryAcquire(THREADS, STOP_AFTER.toMillis(), TimeUnit.MILLISECONDS), "The runners should have stopped running");
             logger.info("Generated: {} files",  pathWritten.size());
+            testDir.deleteAllFiles();
 
             logger.info("Waiting for the events processing to settle down");
             int lastEventCount = events.get();
@@ -150,7 +160,8 @@ class TortureTests {
         logger.info("Comparing events and files seen");
         // now make sure that the two sets are the same
         for (var f : pathWritten) {
-            assertTrue(seenPaths.contains(f), "We should have seen all paths");
+            assertTrue(seenPaths.contains(f), () -> "Missing event for: " + f);
+            assertTrue(seenDeletes.contains(f), () -> "Missing delete for: " + f);
         }
     }
 }

@@ -33,13 +33,18 @@ class TestDirectory implements Closeable {
         }
     }
 
+    public void deleteAllFiles() throws IOException {
+        try (var files = Files.walk(testDirectory)) {
+            files.sorted(Comparator.reverseOrder())
+                .map(Path::toFile)
+                .forEach(File::delete);
+        }
+    }
+
     @Override
     public void close() {
         try {
-            Files.walk(testDirectory)
-                .sorted(Comparator.reverseOrder())
-                .map(Path::toFile)
-                .forEach(File::delete);
+            deleteAllFiles();
         } catch (IOException _ignored) { }
     }
 
