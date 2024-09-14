@@ -125,28 +125,15 @@ class TortureTests {
             stopRunning.release(THREADS);
             assertTrue(done.tryAcquire(THREADS, STOP_AFTER.toMillis(), TimeUnit.MILLISECONDS), "The runners should have stopped running");
             logger.info("Generated: {} files",  pathWritten.size());
-            testDir.deleteAllFiles();
 
             logger.info("Waiting for the events processing to settle down");
-            int lastEventCount = events.get();
-            int stableCount = 0;
-            do {
-                Thread.sleep(STOP_AFTER.toMillis() * 2);
-                int currentEventCounts = events.get();
-                if (currentEventCounts == lastEventCount) {
-                    if (stableCount == 2) {
-                        logger.info("Stable after: {} events", currentEventCounts);
-                        break;
-                    }
-                    else {
-                        stableCount++;
-                    }
-                }
-                else {
-                    stableCount = 0;
-                }
-                lastEventCount = currentEventCounts;
-            } while (true);
+            waitForStable(events);
+
+            logger.info("Now deleting everything");
+            testDir.deleteAllFiles();
+            logger.info("Waiting for the events processing to settle down");
+            Thread.sleep(STOP_AFTER.toMillis());
+            waitForStable(events);
         }
         finally {
             stopRunning.release(THREADS);
@@ -163,5 +150,27 @@ class TortureTests {
             assertTrue(seenPaths.contains(f), () -> "Missing event for: " + f);
             assertTrue(seenDeletes.contains(f), () -> "Missing delete for: " + f);
         }
+    }
+
+    private void waitForStable(final AtomicInteger events) throws InterruptedException {
+        int lastEventCount = events.get();
+        int stableCount = 0;
+        do {
+            Thread.sleep(STOP_AFTER.toMillis() * 2);
+            int currentEventCounts = events.get();
+            if (currentEventCounts == lastEventCount) {
+                if (stableCount == 2) {
+                    logger.info("Stable after: {} events", currentEventCounts);
+                    break;
+                }
+                else {
+                    stableCount++;
+                }
+            }
+            else {
+                stableCount = 0;
+            }
+            lastEventCount = currentEventCounts;
+        } while (true);
     }
 }
