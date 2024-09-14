@@ -33,7 +33,7 @@ public class SingleDirectoryTests {
 
     @BeforeAll
     static void setupEverything() {
-        Awaitility.setDefaultTimeout(3, TimeUnit.SECONDS);
+        Awaitility.setDefaultTimeout(TestHelper.NORMAL_WAIT);
     }
 
     @Test

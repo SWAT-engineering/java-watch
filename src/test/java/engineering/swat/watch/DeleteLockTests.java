@@ -38,7 +38,7 @@ class DeleteLockTests {
 
     @BeforeAll
     static void setupEverything() {
-        Awaitility.setDefaultTimeout(Duration.ofSeconds(3));
+        Awaitility.setDefaultTimeout(TestHelper.NORMAL_WAIT);
     }
 
 

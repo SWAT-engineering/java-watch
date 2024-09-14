@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Random;
@@ -42,7 +41,6 @@ class TortureTests {
         }
     }
 
-    private final static Duration STOP_AFTER = Duration.ofSeconds(4);
     private final static int THREADS = 4;
     private final static int BURST_SIZE = 1000;
     @Test
@@ -57,7 +55,7 @@ class TortureTests {
             var r = new Random(j);
             jobs.add(() -> {
                 try {
-                    var end = LocalTime.now().plus(STOP_AFTER);
+                    var end = LocalTime.now().plus(TestHelper.NORMAL_WAIT);
                     while (!stopRunning.tryAcquire(100, TimeUnit.MICROSECONDS)) {
                         if (LocalTime.now().isAfter(end)) {
                             break;
@@ -78,7 +76,7 @@ class TortureTests {
                     return null;
                 } catch (InterruptedException e) {
                     return null;
-				}
+                }
                 finally {
                     done.release();
                 }
@@ -107,10 +105,10 @@ class TortureTests {
             logger.info("Starting {} jobs", THREADS);
             pool.invokeAll(jobs);
             // now we generate a whole bunch of events
-            Thread.sleep(STOP_AFTER.toMillis());
+            Thread.sleep(TestHelper.NORMAL_WAIT.toMillis());
             logger.info("Stopping jobs");
             stopRunning.release(THREADS);
-            assertTrue(done.tryAcquire(THREADS, STOP_AFTER.toMillis(), TimeUnit.MILLISECONDS), "The runners should have stopped running");
+            assertTrue(done.tryAcquire(THREADS, TestHelper.NORMAL_WAIT.toMillis(), TimeUnit.MILLISECONDS), "The runners should have stopped running");
             logger.info("Generated: {} files",  pathWritten.size());
 
             logger.info("Waiting for the events processing to settle down");
@@ -119,7 +117,7 @@ class TortureTests {
             logger.info("Now deleting everything");
             testDir.deleteAllFiles();
             logger.info("Waiting for the events processing to settle down");
-            Thread.sleep(STOP_AFTER.toMillis());
+            Thread.sleep(TestHelper.NORMAL_WAIT.toMillis());
             waitForStable(events);
         }
         finally {
@@ -143,10 +141,10 @@ class TortureTests {
         int lastEventCount = events.get();
         int stableCount = 0;
         do {
-            Thread.sleep(STOP_AFTER.toMillis() * 2);
+            Thread.sleep(TestHelper.SHORT_WAIT.toMillis());
             int currentEventCounts = events.get();
             if (currentEventCounts == lastEventCount) {
-                if (stableCount == 2) {
+                if (stableCount == 10) {
                     logger.info("Stable after: {} events", currentEventCounts);
                     break;
                 }

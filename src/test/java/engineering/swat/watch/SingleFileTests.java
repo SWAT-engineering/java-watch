@@ -5,9 +5,7 @@ import static org.awaitility.Awaitility.await;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.attribute.FileTime;
-import java.time.Duration;
 import java.time.Instant;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.awaitility.Awaitility;
@@ -33,7 +31,7 @@ public class SingleFileTests {
 
     @BeforeAll
     static void setupEverything() {
-        Awaitility.setDefaultTimeout(3, TimeUnit.SECONDS);
+        Awaitility.setDefaultTimeout(TestHelper.NORMAL_WAIT);
     }
 
     @Test
@@ -56,10 +54,10 @@ public class SingleFileTests {
                     Files.writeString(f, "Hello");
                 }
             }
-            Thread.sleep(1000);
+            Thread.sleep(TestHelper.SHORT_WAIT.toMillis());
             Files.writeString(target, "Hello world");
             await("Single file does trigger")
-                .during(Duration.ofSeconds(2))
+                .during(TestHelper.NORMAL_WAIT)
                 .failFast("No others should be notified", others::get)
                 .untilTrue(seen);
         }
@@ -85,10 +83,10 @@ public class SingleFileTests {
                     Files.writeString(f, "Hello");
                 }
             }
-            Thread.sleep(1000);
+            Thread.sleep(TestHelper.SHORT_WAIT.toMillis());
             Files.setLastModifiedTime(target, FileTime.from(Instant.now()));
-            await("Single file does trigger")
-                .during(Duration.ofSeconds(2))
+            await("Single directory does trigger")
+                .during(TestHelper.NORMAL_WAIT)
                 .failFast("No others should be notified", others::get)
                 .untilTrue(seen);
         }

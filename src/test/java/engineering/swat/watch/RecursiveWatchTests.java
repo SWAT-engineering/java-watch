@@ -38,7 +38,7 @@ class RecursiveWatchTests {
 
     @BeforeAll
     static void setupEverything() throws IOException {
-        Awaitility.setDefaultTimeout(4, TimeUnit.SECONDS);
+        Awaitility.setDefaultTimeout(TestHelper.NORMAL_WAIT);
     }
 
 
