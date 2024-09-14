@@ -13,7 +13,7 @@ import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 import engineering.swat.watch.WatchEvent;
 
 /**
- * It's not possible to monitor a single file, so we have to find a directory watcher, and connect to that
+ * It's not possible to monitor a single file (or directory), so we have to find a directory watcher, and connect to that
  */
 public class JDKFileWatcher implements Closeable {
     private final Logger logger = LogManager.getLogger();
