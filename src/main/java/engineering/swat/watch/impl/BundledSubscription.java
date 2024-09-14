@@ -9,8 +9,9 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
 import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
+import org.checkerframework.checker.nullness.qual.NonNull;
 
-public class BundledSubscription<A, R> implements ISubscribable<A,R> {
+public class BundledSubscription<A extends @NonNull Object, R extends @NonNull Object> implements ISubscribable<A,R> {
     private final ISubscribable<A, R> around;
     private final Map<A, Subscription<R>> subscriptions = new ConcurrentHashMap<>();
 
@@ -84,7 +85,9 @@ public class BundledSubscription<A, R> implements ISubscribable<A,R> {
                     subscriptions.put(target, finalActive);
                 }
                 else {
-                    finalActive.closer.close();
+                    if (finalActive.closer != null) {
+                        finalActive.closer.close();
+                    }
                 }
             }
         };

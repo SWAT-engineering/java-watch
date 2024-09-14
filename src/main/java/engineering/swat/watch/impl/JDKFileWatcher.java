@@ -25,7 +25,11 @@ public class JDKFileWatcher implements Closeable {
 
     public JDKFileWatcher(Path file, Executor exec, Consumer<WatchEvent> eventHandler) {
         this.file = file;
-        this.fileName = file.getFileName();
+        Path filename= file.getFileName();
+        if (filename == null) {
+            throw new IllegalArgumentException("Cannot pass in a root path");
+        }
+        this.fileName = filename;
         this.exec = exec;
         this.eventHandler = eventHandler;
     }
@@ -37,6 +41,10 @@ public class JDKFileWatcher implements Closeable {
                     throw new IOException("Cannot start an already started watch");
                 }
                 var dir = file.getParent();
+                if (dir == null) {
+                    throw new IllegalArgumentException("cannot watch a single entry that is on the root");
+
+                }
                 assert !dir.equals(file);
                 var parentWatch = new JDKDirectoryWatcher(dir, exec, this::filter);
                 activeWatch = parentWatch;
