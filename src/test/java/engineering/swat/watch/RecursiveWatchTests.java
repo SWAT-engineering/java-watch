@@ -69,9 +69,9 @@ class RecursiveWatchTests {
             target.set(freshFile);
             logger.debug("Interested in: {}", freshFile);
             Files.writeString(freshFile, "Hello world");
-            await().alias("New files should have been seen").until(created::get);
+            await("New files should have been seen").untilTrue(created);
             Files.writeString(freshFile, "Hello world 2");
-            await().alias("Fresh file change have been detected").until(changed::get);
+            await("Fresh file change have been detected").untilTrue(changed);
         }
     }
 
@@ -91,7 +91,7 @@ class RecursiveWatchTests {
             var targetFile = testDir.getTestDirectory().resolve(relative);
             Files.createDirectories(targetFile.getParent());
             Files.writeString(targetFile, "Hello World");
-            await().alias("Nested path is seen").until(seen::get);
+            await("Nested path is seen").untilTrue(seen);
         }
 
     }

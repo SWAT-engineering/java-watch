@@ -1,8 +1,5 @@
 package engineering.swat.watch;
 
-import static engineering.swat.watch.WatchEvent.Kind.OVERFLOW;
-import static org.awaitility.Awaitility.await;
-import static org.junit.jupiter.api.Assertions.assertIterableEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -13,20 +10,15 @@ import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Random;
 import java.util.concurrent.Callable;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -50,14 +42,9 @@ class TortureTests {
         }
     }
 
-    @BeforeAll
-    static void setupEverything() throws IOException {
-        Awaitility.setDefaultTimeout(4, TimeUnit.SECONDS);
-    }
-
+    private final static Duration STOP_AFTER = Duration.ofSeconds(4);
     private final static int THREADS = 4;
     private final static int BURST_SIZE = 1000;
-    private final static Duration STOP_AFTER = Duration.ofSeconds(4);
     @Test
     void pressureOnFSShouldNotMissAnything() throws InterruptedException, IOException {
         final var root = testDir.getTestDirectory();

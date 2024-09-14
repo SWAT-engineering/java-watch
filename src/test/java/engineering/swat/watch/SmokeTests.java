@@ -46,7 +46,7 @@ class SmokeTests {
 
         try (var activeWatch = watchConfig.start() ) {
             Files.writeString(target, "Hello world");
-            await().alias("Target file change").until(changed::get);
+            await("Target file change").untilTrue(changed);
         }
     }
 
@@ -63,7 +63,7 @@ class SmokeTests {
 
         try (var activeWatch = watchConfig.start() ) {
             Files.writeString(target, "Hello world");
-            await().alias("Nested file change").until(changed::get);
+            await("Nested file change").untilTrue(changed);
         }
     }
 
@@ -84,7 +84,7 @@ class SmokeTests {
 
         try (var watch = watchConfig.start()) {
             Files.writeString(target, "Hello world");
-            await().alias("Single file change").until(changed::get);
+            await("Single file change").untilTrue(changed);
         }
     }
 
