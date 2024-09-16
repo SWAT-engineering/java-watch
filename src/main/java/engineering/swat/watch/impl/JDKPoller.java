@@ -15,6 +15,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
@@ -28,6 +31,12 @@ class JDKPoller {
     private static final Logger logger = LogManager.getLogger();
     private static final Map<WatchKey, Consumer<List<WatchEvent<?>>>> watchers = new ConcurrentHashMap<>();
     private static final WatchService service;
+    private static final int nCores = Runtime.getRuntime().availableProcessors();
+    /**
+     * We have to be a bit careful with registering too many paths in parallel
+     * Linux can be thrown into a deadlock if you try to start 1000 threads and then do a register at the same time.
+     */
+    private static final ExecutorService registerPool = Executors.newFixedThreadPool(nCores);
 
     static {
         try {
@@ -73,19 +82,40 @@ class JDKPoller {
         }
     }
 
+
     public static Closeable register(Path path, Consumer<List<WatchEvent<?>>> changes) throws IOException {
         logger.debug("Register watch for: {}", path);
+
+        try {
         // TODO: consider upgrading the events the moment we actually get a request for all of it
-        var key = path.register(service, ENTRY_CREATE, ENTRY_MODIFY, ENTRY_MODIFY, ENTRY_DELETE);
-        logger.trace("Got watch key: {}", key);
-        watchers.put(key, changes);
-        return new Closeable() {
-            @Override
-            public void close() throws IOException {
-                logger.debug("Closing watch for: {}", path);
-                key.cancel();
-                watchers.remove(key);
+            return CompletableFuture.supplyAsync(() -> {
+                    try {
+                        var key = path.register(service, ENTRY_CREATE, ENTRY_MODIFY, ENTRY_MODIFY, ENTRY_DELETE);
+                        logger.trace("Got watch key: {}", key);
+                        watchers.put(key, changes);
+                        return key;
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                }, registerPool)
+                .thenApplyAsync(key -> new Closeable() {
+                    @Override
+                    public void close() throws IOException {
+                        logger.debug("Closing watch for: {}", path);
+                        key.cancel();
+                        watchers.remove(key);
+                    }
+                })
+                .get();
+        } catch (ExecutionException e) {
+            if (e.getCause() instanceof IOException) {
+                throw (IOException)e.getCause();
             }
-        };
+            throw new IOException("Could not register path", e.getCause());
+        } catch (InterruptedException e) {
+            // the pool was closing, forward it
+            Thread.currentThread().interrupt();
+            throw new IOException("The registration was canceled");
+        }
     }
 }

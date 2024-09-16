@@ -143,7 +143,7 @@ public class JDKRecursiveDirectoryWatcher implements Closeable {
             var watcher = activeWatches.computeIfAbsent(dir, d -> new JDKDirectoryWatcher(d, exec, relocater(dir)));
             try {
                 if (!watcher.safeStart()) {
-                    logger.info("We lost the race on starting a nested logger, that shouldn't be a problem, but its a very busy, so we might have lost a few events: {}", dir);
+                    logger.debug("We lost the race on starting a nested watcher, that shouldn't be a problem, but its a very busy, so we might have lost a few events in {}", dir);
                 }
             } catch (IOException ex) {
                 activeWatches.remove(dir);
