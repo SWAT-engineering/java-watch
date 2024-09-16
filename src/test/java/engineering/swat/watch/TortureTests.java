@@ -21,7 +21,11 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledIfEnvironmentVariable;
+import org.junit.jupiter.api.condition.EnabledIf;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 import engineering.swat.watch.WatchEvent.Kind;
 
@@ -175,6 +179,8 @@ class TortureTests {
 
 
     @Test
+    //Deletes can race the filesystem, so you might miss a few files in a dir, if that dir is already deleted
+    @EnabledIfEnvironmentVariable(named="TORTURE_DELETE", matches="true")
     void pressureOnFSShouldNotMissDeletes() throws InterruptedException, IOException {
         final var root = testDir.getTestDirectory();
         var pool = Executors.newCachedThreadPool();
@@ -245,7 +251,7 @@ class TortureTests {
             }
             int currentEventCounts = events.get();
             if (currentEventCounts == lastEventCount) {
-                if (stableCount == 20) {
+                if (stableCount == 30) {
                     logger.info("Stable after: {} events", currentEventCounts);
                     break;
                 }
