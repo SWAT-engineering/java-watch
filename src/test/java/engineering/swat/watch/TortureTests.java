@@ -115,7 +115,6 @@ class TortureTests {
         final var events = new AtomicInteger(0);
         final var happened = new Semaphore(0);
         var seenCreates = ConcurrentHashMap.<Path>newKeySet();
-        var seenWrites = ConcurrentHashMap.<Path>newKeySet();
         var watchConfig = Watcher.recursiveDirectory(testDir.getTestDirectory())
             .withExecutor(pool)
             .onEvent(ev -> {
@@ -127,7 +126,7 @@ class TortureTests {
                         seenCreates.add(fullPath);
                         break;
                     case MODIFIED:
-                        seenWrites.add(fullPath);
+                        // platform specific if this comes by or not
                         break;
                     default:
                         logger.error("Unexpected event: {}", ev);
@@ -162,11 +161,14 @@ class TortureTests {
         // but wait till all scheduled tasks have been completed
         pool.awaitTermination(10, TimeUnit.SECONDS);
 
-        logger.info("Comparing events and files seen");
+        var totalFileCreated = seenCreates.stream()
+            .filter(p -> !Files.isDirectory(p))
+            .count();
+
+        logger.info("Comparing events ({} events for {} files) and files (total {}) created", events.get(), totalFileCreated, pathsWritten.size());
         // now make sure that the two sets are the same
         for (var f : pathsWritten) {
             assertTrue(seenCreates.contains(f), () -> "Missing create event for: " + f);
-            assertTrue(seenWrites.contains(f), () -> "Missing modify event for: " + f);
         }
     }
 
