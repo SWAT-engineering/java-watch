@@ -86,12 +86,14 @@ class TortureTests {
         var pool = Executors.newCachedThreadPool();
 
         final var events = new AtomicInteger(0);
+        final var happened = new Semaphore(0);
         var seenPaths = ConcurrentHashMap.<Path>newKeySet();
         var seenDeletes = ConcurrentHashMap.<Path>newKeySet();
         var watchConfig = Watcher.recursiveDirectory(testDir.getTestDirectory())
             .withExecutor(pool)
             .onEvent(ev -> {
                 events.getAndIncrement();
+                happened.release();
                 Path fullPath = ev.calculateFullPath();
                 if (ev.getKind() == Kind.DELETED) {
                     seenDeletes.add(fullPath);
@@ -112,13 +114,13 @@ class TortureTests {
             logger.info("Generated: {} files",  pathWritten.size());
 
             logger.info("Waiting for the events processing to settle down");
-            waitForStable(events);
+            waitForStable(events, happened);
 
             logger.info("Now deleting everything");
             testDir.deleteAllFiles();
             logger.info("Waiting for the events processing to settle down");
             Thread.sleep(TestHelper.NORMAL_WAIT.toMillis());
-            waitForStable(events);
+            waitForStable(events, happened);
         }
         finally {
             stopRunning.release(THREADS);
@@ -137,14 +139,16 @@ class TortureTests {
         }
     }
 
-    private void waitForStable(final AtomicInteger events) throws InterruptedException {
+    private void waitForStable(final AtomicInteger events, final Semaphore happened) throws InterruptedException {
         int lastEventCount = events.get();
         int stableCount = 0;
         do {
-            Thread.sleep(TestHelper.SHORT_WAIT.toMillis());
+            while (happened.tryAcquire(TestHelper.SHORT_WAIT.toMillis() / 4, TimeUnit.MILLISECONDS)) {
+                happened.drainPermits();
+            }
             int currentEventCounts = events.get();
             if (currentEventCounts == lastEventCount) {
-                if (stableCount == 10) {
+                if (stableCount == 20) {
                     logger.info("Stable after: {} events", currentEventCounts);
                     break;
                 }
