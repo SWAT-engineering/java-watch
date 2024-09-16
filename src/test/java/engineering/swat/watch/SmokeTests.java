@@ -33,7 +33,7 @@ class SmokeTests {
 
     @BeforeAll
     static void setupEverything() {
-        Awaitility.setDefaultTimeout(2, TimeUnit.SECONDS);
+        Awaitility.setDefaultTimeout(TestHelper.NORMAL_WAIT);
     }
 
     @Test
