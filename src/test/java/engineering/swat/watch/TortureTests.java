@@ -149,7 +149,7 @@ class TortureTests {
             pathsWritten = io.stop();
             logger.info("Generated: {} files",  pathsWritten.size());
 
-            logger.info("Waiting for the events processing to settle down");
+            logger.info("Waiting for the events processing to stabilize");
             waitForStable(events, happened);
 
         }
@@ -165,11 +165,7 @@ class TortureTests {
         // but wait till all scheduled tasks have been completed
         // pool.awaitTermination(10, TimeUnit.SECONDS);
 
-        var totalFileCreated = seenCreates.stream()
-            .filter(p -> !Files.isDirectory(p))
-            .count();
-
-        logger.info("Comparing events ({} events for {} files) and files (total {}) created", events.get(), totalFileCreated, pathsWritten.size());
+        logger.info("Comparing events ({} events for {} paths) and files (total {}) created", events.get(), seenCreates.size(), pathsWritten.size());
         // now make sure that the two sets are the same
         for (var f : pathsWritten) {
             assertTrue(seenCreates.contains(f), () -> "Missing create event for: " + f);
@@ -217,7 +213,7 @@ class TortureTests {
             try (var activeWatch = watchConfig.start() ) {
                 logger.info("Deleting files now", THREADS);
                 testDir.deleteAllFiles();
-                logger.info("Waiting for the events processing to settle down");
+                logger.info("Waiting for the events processing to stabilize");
                 waitForStable(events, happened);
             }
         }
