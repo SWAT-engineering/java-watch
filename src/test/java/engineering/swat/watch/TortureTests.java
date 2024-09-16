@@ -155,9 +155,11 @@ class TortureTests {
         }
         finally {
             try {
+                logger.info("stopping IOGenerator");
                 io.stop();
             }
             catch (Throwable _ignored) {}
+            logger.info("Shutting down pool");
             // shutdown the pool (so no new events are registered)
             pool.shutdown();
         }
@@ -165,7 +167,9 @@ class TortureTests {
         // but wait till all scheduled tasks have been completed
         // pool.awaitTermination(10, TimeUnit.SECONDS);
 
+        logger.info("Calculating sizes");
         logger.info("Comparing events ({} events for {} paths) and files (total {}) created", events.get(), seenCreates.size(), pathsWritten.size());
+        logger.info("Comparing paths");
         // now make sure that the two sets are the same
         for (var f : pathsWritten) {
             assertTrue(seenCreates.contains(f), () -> "Missing create event for: " + f);
