@@ -127,7 +127,6 @@ public class JDKRecursiveDirectoryWatcher implements Closeable {
 
         @Override
         public FileVisitResult preVisitDirectory(Path subdir, BasicFileAttributes attrs) throws IOException {
-            addNewDirectory(subdir);
             return FileVisitResult.CONTINUE;
         }
 
@@ -136,6 +135,7 @@ public class JDKRecursiveDirectoryWatcher implements Closeable {
             if (exc != null) {
                 logger.error("Error during directory iteration: {} = {}", subdir, exc);
             }
+            addNewDirectory(subdir);
             return FileVisitResult.CONTINUE;
         }
 
