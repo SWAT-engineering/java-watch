@@ -176,6 +176,7 @@ public class JDKRecursiveDirectoryWatcher implements Closeable {
     /** register watch for new sub-dir, but also simulate event for every file & subdir found */
     private class NewDirectoryScan extends InitialDirectoryScan {
         protected final List<WatchEvent> events;
+        private boolean hasFiles = false;
         public NewDirectoryScan(Path subRoot, List<WatchEvent> events) {
             super(subRoot);
             this.events = events;
@@ -186,12 +187,26 @@ public class JDKRecursiveDirectoryWatcher implements Closeable {
             if (!subdir.equals(subRoot)) {
                 events.add(new WatchEvent(WatchEvent.Kind.CREATED, root, root.relativize(subdir)));
             }
+            hasFiles = false;
             return super.preVisitDirectory(subdir, attrs);
         }
 
         @Override
+        public FileVisitResult postVisitDirectory(Path subdir, IOException exc) throws IOException {
+            if (hasFiles) {
+                events.add(new WatchEvent(WatchEvent.Kind.MODIFIED, root, root.relativize(subdir)));
+            }
+            return super.postVisitDirectory(subdir, exc);
+        }
+
+        @Override
         public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-            events.add(new WatchEvent(WatchEvent.Kind.CREATED, root, root.relativize(file)));
+            hasFiles = true;
+            var relative = root.relativize(file);
+            events.add(new WatchEvent(WatchEvent.Kind.CREATED, root, relative));
+            if (attrs.size() > 0) {
+                events.add(new WatchEvent(WatchEvent.Kind.MODIFIED, root, relative));
+            }
             return FileVisitResult.CONTINUE;
         }
     }
