@@ -1,15 +1,17 @@
 package engineering.swat.watch;
 
+import static org.awaitility.Awaitility.doNotCatchUncaughtExceptionsByDefault;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalTime;
-import java.util.ArrayList;
 import java.util.Random;
-import java.util.concurrent.Callable;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
@@ -41,21 +43,27 @@ class TortureTests {
         }
     }
 
-    private final static int THREADS = 4;
-    private final static int BURST_SIZE = 1000;
-    @Test
-    void pressureOnFSShouldNotMissAnything() throws InterruptedException, IOException {
-        final var root = testDir.getTestDirectory();
-        final var pathWritten = ConcurrentHashMap.<Path>newKeySet();
-        final var stopRunning = new Semaphore(0);
-        final var done = new Semaphore(0);
-        final var jobs = new ArrayList<Callable<Void>>();
+    private final class IOGenerator {
+        private final Set<Path> pathsWritten = ConcurrentHashMap.<Path>newKeySet();
+        private final Semaphore startRunning = new Semaphore(0);
+        private final Semaphore stopRunning = new Semaphore(0);
+        private final Semaphore done = new Semaphore(0);
+        private final int jobs;
 
-        for (int j = 0; j < THREADS; j++) {
-            var r = new Random(j);
-            jobs.add(() -> {
+        IOGenerator(int jobs, Path root, Executor exec) {
+            this.jobs = jobs;
+            for (int j = 0; j < jobs; j++) {
+                startJob(root.resolve("run" + j), new Random(j), exec);
+            }
+        }
+
+        private final static int BURST_SIZE = 1000;
+
+        private void startJob(final Path root, Random r, Executor exec) {
+            exec.execute(() -> {
                 try {
-                    var end = LocalTime.now().plus(TestHelper.NORMAL_WAIT);
+                    startRunning.acquire();
+                    var end = LocalTime.now().plus(TestHelper.NORMAL_WAIT.multipliedBy(2));
                     while (!stopRunning.tryAcquire(100, TimeUnit.MICROSECONDS)) {
                         if (LocalTime.now().isAfter(end)) {
                             break;
@@ -63,19 +71,18 @@ class TortureTests {
                         try {
                             // burst a bunch of creates creates and then sleep a bit
                             for (int i = 0; i< BURST_SIZE; i++) {
-                                var file = root.resolve("l1" + r.nextInt(1000))
-                                    .resolve("l2" + r.nextInt() + ".txt");
+                                var file = root.resolve("l1-" + r.nextInt(1000))
+                                    .resolve("l2-" + r.nextInt(1000))
+                                    .resolve("l3-" + r.nextInt() + ".txt");
                                 Files.createDirectories(file.getParent());
                                 Files.writeString(file, "Hello world");
-                                pathWritten.add(file);
+                                pathsWritten.add(file);
                             }
                         } catch (IOException e) {
                         }
                         Thread.yield();
                     }
-                    return null;
                 } catch (InterruptedException e) {
-                    return null;
                 }
                 finally {
                     done.release();
@@ -83,47 +90,71 @@ class TortureTests {
             });
         }
 
+        void start() {
+            startRunning.release(jobs);
+        }
+
+        Set<Path> stop() throws InterruptedException {
+            startRunning.release(jobs);
+            stopRunning.release(jobs);
+            assertTrue(done.tryAcquire(jobs, TestHelper.NORMAL_WAIT.toMillis(), TimeUnit.MILLISECONDS), "IO workers should stop in a reasonable time");
+            return pathsWritten;
+        }
+    }
+
+    private static final int THREADS = 4;
+
+    @Test
+    void pressureOnFSShouldNotMissNewFilesAnything() throws InterruptedException, IOException {
+        final var root = testDir.getTestDirectory();
         var pool = Executors.newCachedThreadPool();
+
+        var io = new IOGenerator(THREADS, root, pool);
+
 
         final var events = new AtomicInteger(0);
         final var happened = new Semaphore(0);
-        var seenPaths = ConcurrentHashMap.<Path>newKeySet();
-        var seenDeletes = ConcurrentHashMap.<Path>newKeySet();
+        var seenCreates = ConcurrentHashMap.<Path>newKeySet();
+        var seenWrites = ConcurrentHashMap.<Path>newKeySet();
         var watchConfig = Watcher.recursiveDirectory(testDir.getTestDirectory())
             .withExecutor(pool)
             .onEvent(ev -> {
                 events.getAndIncrement();
                 happened.release();
-                Path fullPath = ev.calculateFullPath();
-                if (ev.getKind() == Kind.DELETED) {
-                    seenDeletes.add(fullPath);
-                }
-                else {
-                    seenPaths.add(fullPath);
+                var fullPath = ev.calculateFullPath();
+                switch (ev.getKind()) {
+                    case CREATED:
+                        seenCreates.add(fullPath);
+                        break;
+                    case MODIFIED:
+                        seenWrites.add(fullPath);
+                        break;
+                    default:
+                        logger.error("Unexpected event: {}", ev);
+                        break;
                 }
             });
 
+        Set<Path> pathsWritten;
+
         try (var activeWatch = watchConfig.start() ) {
             logger.info("Starting {} jobs", THREADS);
-            pool.invokeAll(jobs);
+            io.start();
             // now we generate a whole bunch of events
             Thread.sleep(TestHelper.NORMAL_WAIT.toMillis());
             logger.info("Stopping jobs");
-            stopRunning.release(THREADS);
-            assertTrue(done.tryAcquire(THREADS, TestHelper.NORMAL_WAIT.toMillis(), TimeUnit.MILLISECONDS), "The runners should have stopped running");
-            logger.info("Generated: {} files",  pathWritten.size());
+            pathsWritten = io.stop();
+            logger.info("Generated: {} files",  pathsWritten.size());
 
             logger.info("Waiting for the events processing to settle down");
             waitForStable(events, happened);
 
-            logger.info("Now deleting everything");
-            testDir.deleteAllFiles();
-            logger.info("Waiting for the events processing to settle down");
-            Thread.sleep(TestHelper.NORMAL_WAIT.toMillis());
-            waitForStable(events, happened);
         }
         finally {
-            stopRunning.release(THREADS);
+            try {
+                io.stop();
+            }
+            catch (Throwable _ignored) {}
             // shutdown the pool (so no new events are registered)
             pool.shutdown();
         }
@@ -133,11 +164,75 @@ class TortureTests {
 
         logger.info("Comparing events and files seen");
         // now make sure that the two sets are the same
-        for (var f : pathWritten) {
-            assertTrue(seenPaths.contains(f), () -> "Missing event for: " + f);
-            assertTrue(seenDeletes.contains(f), () -> "Missing delete for: " + f);
+        for (var f : pathsWritten) {
+            assertTrue(seenCreates.contains(f), () -> "Missing create event for: " + f);
+            assertTrue(seenWrites.contains(f), () -> "Missing modify event for: " + f);
         }
     }
+
+
+
+    @Test
+    void pressureOnFSShouldNotMissDeletes() throws InterruptedException, IOException {
+        final var root = testDir.getTestDirectory();
+        var pool = Executors.newCachedThreadPool();
+
+        Set<Path> pathsWritten;
+        var seenDeletes = ConcurrentHashMap.<Path>newKeySet();
+        var io = new IOGenerator(THREADS, root, pool);
+        try {
+            io.start();
+            Thread.sleep(TestHelper.NORMAL_WAIT.toMillis());
+            pathsWritten = io.stop();
+
+            final var events = new AtomicInteger(0);
+            final var happened = new Semaphore(0);
+            var watchConfig = Watcher.recursiveDirectory(testDir.getTestDirectory())
+                .withExecutor(pool)
+                .onEvent(ev -> {
+                    events.getAndIncrement();
+                    happened.release();
+                    var fullPath = ev.calculateFullPath();
+                    switch (ev.getKind()) {
+                        case DELETED:
+                            seenDeletes.add(fullPath);
+                            break;
+                        case MODIFIED:
+                            // happens on dir level, as the files are getting removed
+                            break;
+                        default:
+                            logger.error("Unexpected event: {}", ev);
+                            break;
+                    }
+                });
+
+            try (var activeWatch = watchConfig.start() ) {
+                logger.info("Deleting files now", THREADS);
+                testDir.deleteAllFiles();
+                logger.info("Waiting for the events processing to settle down");
+                waitForStable(events, happened);
+            }
+        }
+        finally {
+            try {
+                io.stop();
+            }
+            catch (Throwable _ignored) {}
+            // shutdown the pool (so no new events are registered)
+            pool.shutdown();
+        }
+
+        // but wait till all scheduled tasks have been completed
+        pool.awaitTermination(10, TimeUnit.SECONDS);
+
+        logger.info("Comparing events and files seen");
+        // now make sure that the two sets are the same
+        for (var f : pathsWritten) {
+            assertTrue(seenDeletes.contains(f), () -> "Missing delete event for: " + f);
+        }
+    }
+
+
 
     private void waitForStable(final AtomicInteger events, final Semaphore happened) throws InterruptedException {
         int lastEventCount = events.get();
