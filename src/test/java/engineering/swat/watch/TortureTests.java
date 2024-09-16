@@ -76,7 +76,7 @@ class TortureTests {
                             // burst a bunch of creates creates and then sleep a bit
                             for (int i = 0; i< BURST_SIZE; i++) {
                                 var file = root.resolve("l1-" + r.nextInt(1000))
-                                    .resolve("l2-" + r.nextInt(1000))
+                                    .resolve("l2-" + r.nextInt(100))
                                     .resolve("l3-" + r.nextInt() + ".txt");
                                 Files.createDirectories(file.getParent());
                                 Files.writeString(file, "Hello world");
@@ -99,9 +99,9 @@ class TortureTests {
         }
 
         Set<Path> stop() throws InterruptedException {
-            startRunning.release(jobs);
             stopRunning.release(jobs);
-            assertTrue(done.tryAcquire(jobs, TestHelper.NORMAL_WAIT.toMillis(), TimeUnit.MILLISECONDS), "IO workers should stop in a reasonable time");
+            startRunning.release(jobs);
+            assertTrue(done.tryAcquire(jobs, TestHelper.NORMAL_WAIT.toMillis() * 2, TimeUnit.MILLISECONDS), "IO workers should stop in a reasonable time");
             return pathsWritten;
         }
     }

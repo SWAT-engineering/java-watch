@@ -3,8 +3,8 @@ package engineering.swat.watch.impl;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
@@ -13,7 +13,7 @@ import org.checkerframework.checker.nullness.qual.NonNull;
 
 public class BundledSubscription<A extends @NonNull Object, R extends @NonNull Object> implements ISubscribable<A,R> {
     private final ISubscribable<A, R> around;
-    private final Map<A, Subscription<R>> subscriptions = new ConcurrentHashMap<>();
+    private final ConcurrentMap<A, Subscription<R>> subscriptions = new ConcurrentHashMap<>();
 
     public BundledSubscription(ISubscribable<A, R> around) {
         this.around = around;
