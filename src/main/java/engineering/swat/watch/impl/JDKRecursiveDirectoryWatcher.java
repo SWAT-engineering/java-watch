@@ -28,7 +28,7 @@ public class JDKRecursiveDirectoryWatcher implements Closeable {
     private final Path root;
     private final Executor exec;
     private final Consumer<WatchEvent> eventHandler;
-    private final ConcurrentMap<Path, Closeable> activeWatches = new ConcurrentHashMap<>();
+    private final ConcurrentMap<Path, JDKDirectoryWatcher> activeWatches = new ConcurrentHashMap<>();
 
     public JDKRecursiveDirectoryWatcher(Path directory, Executor exec, Consumer<WatchEvent> eventHandler) {
         this.root = directory;
@@ -127,6 +127,7 @@ public class JDKRecursiveDirectoryWatcher implements Closeable {
 
         @Override
         public FileVisitResult preVisitDirectory(Path subdir, BasicFileAttributes attrs) throws IOException {
+            addNewDirectory(subdir);
             return FileVisitResult.CONTINUE;
         }
 
@@ -135,16 +136,15 @@ public class JDKRecursiveDirectoryWatcher implements Closeable {
             if (exc != null) {
                 logger.error("Error during directory iteration: {} = {}", subdir, exc);
             }
-            addNewDirectory(subdir);
             return FileVisitResult.CONTINUE;
         }
 
         private void addNewDirectory(Path dir) throws IOException {
-            var watcher = new JDKDirectoryWatcher(dir, exec, relocater(dir));
-            var oldEntry = activeWatches.put(dir, watcher);
-            cleanupOld(dir, oldEntry);
+            var watcher = activeWatches.computeIfAbsent(dir, d -> new JDKDirectoryWatcher(d, exec, relocater(dir)));
             try {
-                watcher.start();
+                if (!watcher.safeStart()) {
+                    logger.info("We lost the race on starting a nested logger, that shouldn't be a problem, but its a very busy, so we might have lost a few events: {}", dir);
+                }
             } catch (IOException ex) {
                 activeWatches.remove(dir);
                 logger.error("Could not register a watch for: {} ({})", dir, ex);
@@ -159,17 +159,6 @@ public class JDKRecursiveDirectoryWatcher implements Closeable {
                 var rewritten = new WatchEvent(ev.getKind(), root, newRelative.resolve(ev.getRelativePath()));
                 processEvents(rewritten);
             };
-        }
-
-        private void cleanupOld(Path dir, @Nullable Closeable oldEntry) {
-            if (oldEntry != null) {
-                logger.error("Registered a watch for a directory that was already watched: {}", dir);
-                try {
-                    oldEntry.close();
-                } catch (IOException ex) {
-                    logger.error("Could not close old watch for: {} ({})", dir, ex);
-                }
-            }
         }
     }
 

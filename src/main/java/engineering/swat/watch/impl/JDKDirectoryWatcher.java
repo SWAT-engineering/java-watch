@@ -31,16 +31,19 @@ public class JDKDirectoryWatcher implements Closeable {
         this.eventHandler = eventHandler;
     }
 
+    synchronized boolean safeStart() throws IOException {
+        if (activeWatch != null) {
+            return false;
+        }
+        activeWatch = BUNDLED_JDK_WATCHERS.subscribe(directory, this::handleChanges);
+        return true;
+    }
+
     public void start() throws IOException {
         try {
-            synchronized(this) {
-                if (activeWatch != null) {
-                    throw new IOException("Cannot start a watcher twice");
-                }
-
-                activeWatch = BUNDLED_JDK_WATCHERS.subscribe(directory, this::handleChanges);
+            if (!safeStart()) {
+                throw new IOException("Cannot start a watcher twice");
             }
-
             logger.debug("Started watch for: {}", directory);
         } catch (IOException e) {
             throw new IOException("Could not register directory watcher for: " + directory, e);
