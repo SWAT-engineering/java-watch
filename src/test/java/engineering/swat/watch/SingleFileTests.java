@@ -57,7 +57,7 @@ public class SingleFileTests {
             Thread.sleep(TestHelper.SHORT_WAIT.toMillis());
             Files.writeString(target, "Hello world");
             await("Single file does trigger")
-                .during(TestHelper.NORMAL_WAIT)
+                .pollDelay(TestHelper.NORMAL_WAIT.minusMillis(10))
                 .failFast("No others should be notified", others::get)
                 .untilTrue(seen);
         }
@@ -86,7 +86,7 @@ public class SingleFileTests {
             Thread.sleep(TestHelper.SHORT_WAIT.toMillis());
             Files.setLastModifiedTime(target, FileTime.from(Instant.now()));
             await("Single directory does trigger")
-                .during(TestHelper.NORMAL_WAIT)
+                .pollDelay(TestHelper.NORMAL_WAIT.minusMillis(10))
                 .failFast("No others should be notified", others::get)
                 .untilTrue(seen);
         }
