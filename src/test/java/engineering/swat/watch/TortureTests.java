@@ -153,6 +153,11 @@ class TortureTests {
             waitForStable(events, happened);
 
         }
+        catch (Exception ex) {
+            logger.catching(ex);
+            throw ex;
+
+        }
         finally {
             try {
                 logger.info("stopping IOGenerator");
