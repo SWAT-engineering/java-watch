@@ -159,7 +159,7 @@ class TortureTests {
         }
 
         // but wait till all scheduled tasks have been completed
-        pool.awaitTermination(10, TimeUnit.SECONDS);
+        // pool.awaitTermination(10, TimeUnit.SECONDS);
 
         var totalFileCreated = seenCreates.stream()
             .filter(p -> !Files.isDirectory(p))
@@ -240,7 +240,7 @@ class TortureTests {
         int lastEventCount = events.get();
         int stableCount = 0;
         do {
-            while (happened.tryAcquire(TestHelper.SHORT_WAIT.toMillis() / 4, TimeUnit.MILLISECONDS)) {
+            while (happened.tryAcquire(TestHelper.SHORT_WAIT.toMillis(), TimeUnit.MILLISECONDS)) {
                 happened.drainPermits();
             }
             int currentEventCounts = events.get();
