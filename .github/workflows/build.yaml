@@ -28,6 +28,8 @@ jobs:
 
       - name: test
         run: mvn -B clean test
+        env:
+          DELAY_FACTOR: 3
 
   checker-framework:
     runs-on: ubuntu-latest
