@@ -9,9 +9,13 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executor;
@@ -165,19 +169,31 @@ public class JDKRecursiveDirectoryWatcher implements Closeable {
     /** register watch for new sub-dir, but also simulate event for every file & subdir found */
     private class NewDirectoryScan extends InitialDirectoryScan {
         protected final List<WatchEvent> events;
+        protected final Set<Path> seenFiles;
+        protected final Set<Path> seenDirs;
         private boolean hasFiles = false;
-        public NewDirectoryScan(Path subRoot, List<WatchEvent> events) {
+        public NewDirectoryScan(Path subRoot, List<WatchEvent> events, Set<Path> seenFiles, Set<Path> seenDirs) {
             super(subRoot);
             this.events = events;
+            this.seenFiles = seenFiles;
+            this.seenDirs = seenDirs;
         }
 
         @Override
         public FileVisitResult preVisitDirectory(Path subdir, BasicFileAttributes attrs) throws IOException {
-            if (!subdir.equals(subRoot)) {
-                events.add(new WatchEvent(WatchEvent.Kind.CREATED, root, root.relativize(subdir)));
+            try {
+                hasFiles = false;
+                if (!seenDirs.contains(subdir)) {
+                    if (!subdir.equals(subRoot)) {
+                        events.add(new WatchEvent(WatchEvent.Kind.CREATED, root, root.relativize(subdir)));
+                    }
+                    return super.preVisitDirectory(subdir, attrs);
+                }
+                // our children might have newer results
+                return FileVisitResult.CONTINUE;
+            } finally {
+                seenDirs.add(subdir);
             }
-            hasFiles = false;
-            return super.preVisitDirectory(subdir, attrs);
         }
 
         @Override
@@ -190,11 +206,14 @@ public class JDKRecursiveDirectoryWatcher implements Closeable {
 
         @Override
         public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-            hasFiles = true;
-            var relative = root.relativize(file);
-            events.add(new WatchEvent(WatchEvent.Kind.CREATED, root, relative));
-            if (attrs.size() > 0) {
-                events.add(new WatchEvent(WatchEvent.Kind.MODIFIED, root, relative));
+            if (!seenFiles.contains(file)) {
+                hasFiles = true;
+
+                var relative = root.relativize(file);
+                events.add(new WatchEvent(WatchEvent.Kind.CREATED, root, relative));
+                if (attrs.size() > 0) {
+                    events.add(new WatchEvent(WatchEvent.Kind.MODIFIED, root, relative));
+                }
             }
             return FileVisitResult.CONTINUE;
         }
@@ -203,8 +222,8 @@ public class JDKRecursiveDirectoryWatcher implements Closeable {
     /** detect directories that aren't tracked yet, and generate events only for new entries */
     private class OverflowSyncScan extends NewDirectoryScan {
         private final Deque<Boolean> isNewDirectory = new ArrayDeque<>();
-        public OverflowSyncScan(Path subRoot, List<WatchEvent> events) {
-            super(subRoot, events);
+        public OverflowSyncScan(Path subRoot, List<WatchEvent> events, Set<Path> seenFiles, Set<Path> seenDirs) {
+            super(subRoot, events, seenFiles, seenDirs);
         }
         @Override
         public FileVisitResult preVisitDirectory(Path subdir, BasicFileAttributes attrs) throws IOException {
@@ -222,7 +241,7 @@ public class JDKRecursiveDirectoryWatcher implements Closeable {
         }
         @Override
         public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-            if (isNewDirectory.peekLast() == Boolean.TRUE) {
+            if (isNewDirectory.peekLast() == Boolean.TRUE || !seenFiles.contains(file)) {
                 return super.visitFile(file, attrs);
             }
             return FileVisitResult.CONTINUE;
@@ -233,16 +252,110 @@ public class JDKRecursiveDirectoryWatcher implements Closeable {
         Files.walkFileTree(dir, new InitialDirectoryScan(dir));
     }
 
+    private class FastPutOnly implements Set<Path> {
+        private final Set<Path> wrapped;
+
+        FastPutOnly(Set<Path> wrapped) {
+            this.wrapped = wrapped;
+        }
+
+        @Override
+        public int size() {
+            throw new IllegalStateException("Not supported");
+        }
+
+        @Override
+        public boolean isEmpty() {
+            throw new IllegalStateException("Not supported");
+        }
+
+        @Override
+        public boolean contains(Object o) {
+            return false;
+        }
+
+        @Override
+        public Iterator<Path> iterator() {
+            throw new IllegalStateException("Not supported");
+        }
+
+        @Override
+        public Object[] toArray() {
+            throw new IllegalStateException("Not supported");
+        }
+
+        @Override
+        public <T> T[] toArray(T[] a) {
+            throw new IllegalStateException("Not supported");
+        }
+
+        @Override
+        public boolean add(Path e) {
+            return wrapped.add(e);
+        }
+
+        @Override
+        public boolean remove(Object o) {
+            throw new IllegalStateException("Not supported");
+        }
+
+        @Override
+        public boolean containsAll(Collection<?> c) {
+            throw new IllegalStateException("Not supported");
+        }
+
+        @Override
+        public boolean addAll(Collection<? extends Path> c) {
+            throw new IllegalStateException("Not supported");
+        }
+
+        @Override
+        public boolean retainAll(Collection<?> c) {
+            throw new IllegalStateException("Not supported");
+        }
+
+        @Override
+        public boolean removeAll(Collection<?> c) {
+            throw new IllegalStateException("Not supported");
+        }
+
+        @Override
+        public void clear() {
+            throw new IllegalStateException("Not supported");
+        }
+
+    }
+
     private List<WatchEvent> registerForNewDirectory(Path dir) throws IOException {
         var events = new ArrayList<WatchEvent>();
-        Files.walkFileTree(dir, new NewDirectoryScan(dir, events));
+        var seen = new HashSet<Path>();
+        var seenFiles = new HashSet<Path>();
+        var seenDirectories = new HashSet<Path>();
+        Files.walkFileTree(dir, new NewDirectoryScan(dir, events, new FastPutOnly(seenFiles), new FastPutOnly(seenDirectories)));
+        detectedMissingEntries(dir, events, seenFiles, seenDirectories);
         return events;
     }
 
+
     private List<WatchEvent> syncAfterOverflow(Path dir) throws IOException {
         var events = new ArrayList<WatchEvent>();
-        Files.walkFileTree(dir, new OverflowSyncScan(dir, events));
+        var seenFiles = new HashSet<Path>();
+        var seenDirectories = new HashSet<Path>();
+        Files.walkFileTree(dir, new OverflowSyncScan(dir, events, new FastPutOnly(seenFiles), new FastPutOnly(seenDirectories)));
+        detectedMissingEntries(dir, events, seenFiles, seenDirectories);
         return events;
+    }
+
+    private void detectedMissingEntries(Path dir, ArrayList<WatchEvent> events, HashSet<Path> seenFiles, HashSet<Path> seenDirectories) throws IOException {
+        // why a second round? well there is a race, between iterating the directory (and sending events)
+        // and when the watches are active. so after we know all the new watches have been registered
+        // we do a second scan and make sure to find paths that weren't visible the first time
+        // and emulate events for them (and register new watches)
+        int directoryCount = seenDirectories.size() - 1;
+        while (directoryCount != seenDirectories.size()) {
+            Files.walkFileTree(dir, new OverflowSyncScan(dir, events, seenFiles, seenDirectories));
+            directoryCount = seenDirectories.size();
+        }
     }
 
 
