@@ -87,26 +87,25 @@ class JDKPoller {
         logger.debug("Register watch for: {}", path);
 
         try {
-        // TODO: consider upgrading the events the moment we actually get a request for all of it
             return CompletableFuture.supplyAsync(() -> {
                     try {
-                        var key = path.register(service, ENTRY_CREATE, ENTRY_MODIFY, ENTRY_MODIFY, ENTRY_DELETE);
-                        logger.trace("Got watch key: {}", key);
-                        watchers.put(key, changes);
-                        return key;
+                        return path.register(service, ENTRY_CREATE, ENTRY_MODIFY, ENTRY_MODIFY, ENTRY_DELETE);
                     } catch (IOException e) {
                         throw new RuntimeException(e);
                     }
-                }, registerPool)
-                .thenApplyAsync(key -> new Closeable() {
-                    @Override
-                    public void close() throws IOException {
-                        logger.debug("Closing watch for: {}", path);
-                        key.cancel();
-                        watchers.remove(key);
-                    }
+                }, registerPool) // read registerPool why we have to add a limiter here
+                .thenApplyAsync(key -> {
+                    watchers.put(key, changes);
+                    return new Closeable() {
+                        @Override
+                        public void close() throws IOException {
+                            logger.debug("Closing watch for: {}", path);
+                            key.cancel();
+                            watchers.remove(key);
+                        }
+                    };
                 })
-                .get();
+                .get(); // we have to do a get here, to make sure the `register` function blocks
         } catch (ExecutionException e) {
             if (e.getCause() instanceof IOException) {
                 throw (IOException)e.getCause();
