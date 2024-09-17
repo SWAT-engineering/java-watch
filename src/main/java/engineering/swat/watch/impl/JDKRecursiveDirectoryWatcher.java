@@ -9,11 +9,9 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -23,7 +21,6 @@ import java.util.function.Consumer;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 import engineering.swat.watch.WatchEvent;
 
@@ -252,86 +249,11 @@ public class JDKRecursiveDirectoryWatcher implements Closeable {
         Files.walkFileTree(dir, new InitialDirectoryScan(dir));
     }
 
-    private class FastPutOnly implements Set<Path> {
-        private final Set<Path> wrapped;
-
-        FastPutOnly(Set<Path> wrapped) {
-            this.wrapped = wrapped;
-        }
-
-        @Override
-        public int size() {
-            throw new IllegalStateException("Not supported");
-        }
-
-        @Override
-        public boolean isEmpty() {
-            throw new IllegalStateException("Not supported");
-        }
-
-        @Override
-        public boolean contains(Object o) {
-            return false;
-        }
-
-        @Override
-        public Iterator<Path> iterator() {
-            throw new IllegalStateException("Not supported");
-        }
-
-        @Override
-        public Object[] toArray() {
-            throw new IllegalStateException("Not supported");
-        }
-
-        @Override
-        public <T> T[] toArray(T[] a) {
-            throw new IllegalStateException("Not supported");
-        }
-
-        @Override
-        public boolean add(Path e) {
-            return wrapped.add(e);
-        }
-
-        @Override
-        public boolean remove(Object o) {
-            throw new IllegalStateException("Not supported");
-        }
-
-        @Override
-        public boolean containsAll(Collection<?> c) {
-            throw new IllegalStateException("Not supported");
-        }
-
-        @Override
-        public boolean addAll(Collection<? extends Path> c) {
-            throw new IllegalStateException("Not supported");
-        }
-
-        @Override
-        public boolean retainAll(Collection<?> c) {
-            throw new IllegalStateException("Not supported");
-        }
-
-        @Override
-        public boolean removeAll(Collection<?> c) {
-            throw new IllegalStateException("Not supported");
-        }
-
-        @Override
-        public void clear() {
-            throw new IllegalStateException("Not supported");
-        }
-
-    }
-
     private List<WatchEvent> registerForNewDirectory(Path dir) throws IOException {
         var events = new ArrayList<WatchEvent>();
-        var seen = new HashSet<Path>();
         var seenFiles = new HashSet<Path>();
         var seenDirectories = new HashSet<Path>();
-        Files.walkFileTree(dir, new NewDirectoryScan(dir, events, new FastPutOnly(seenFiles), new FastPutOnly(seenDirectories)));
+        Files.walkFileTree(dir, new NewDirectoryScan(dir, events, seenFiles, seenDirectories));
         detectedMissingEntries(dir, events, seenFiles, seenDirectories);
         return events;
     }
@@ -341,7 +263,7 @@ public class JDKRecursiveDirectoryWatcher implements Closeable {
         var events = new ArrayList<WatchEvent>();
         var seenFiles = new HashSet<Path>();
         var seenDirectories = new HashSet<Path>();
-        Files.walkFileTree(dir, new OverflowSyncScan(dir, events, new FastPutOnly(seenFiles), new FastPutOnly(seenDirectories)));
+        Files.walkFileTree(dir, new OverflowSyncScan(dir, events, seenFiles, seenDirectories));
         detectedMissingEntries(dir, events, seenFiles, seenDirectories);
         return events;
     }
