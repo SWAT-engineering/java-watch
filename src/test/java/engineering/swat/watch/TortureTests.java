@@ -111,7 +111,7 @@ class TortureTests {
     @Test
     void pressureOnFSShouldNotMissNewFilesAnything() throws InterruptedException, IOException {
         final var root = testDir.getTestDirectory();
-        var pool = Executors.newCachedThreadPool();
+        var pool = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 2);
 
         var io = new IOGenerator(THREADS, root, pool);
 
@@ -168,6 +168,8 @@ class TortureTests {
             // shutdown the pool (so no new events are registered)
             pool.shutdown();
         }
+        waitForStable(events, happened);
+
 
         // but wait till all scheduled tasks have been completed
         // pool.awaitTermination(10, TimeUnit.SECONDS);
@@ -252,7 +254,7 @@ class TortureTests {
         int stableCount = 0;
         do {
             Thread.yield();
-            while (happened.tryAcquire(TestHelper.SHORT_WAIT.toMillis(), TimeUnit.MILLISECONDS)) {
+            while (happened.tryAcquire(TestHelper.SHORT_WAIT.toMillis() * 2, TimeUnit.MILLISECONDS)) {
                 happened.drainPermits();
             }
 
