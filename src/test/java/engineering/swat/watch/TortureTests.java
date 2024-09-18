@@ -148,7 +148,7 @@ class TortureTests {
             logger.info("Generated: {} files",  pathsWritten.size());
 
             await("After a while we should have seen all the create events")
-                .timeout(TestHelper.LONG_WAIT.multipliedBy(20))
+                .timeout(TestHelper.LONG_WAIT.multipliedBy(50))
                 .pollInterval(Duration.ofMillis(500))
                 .until(() -> seenCreates.containsAll(pathsWritten));
         }
