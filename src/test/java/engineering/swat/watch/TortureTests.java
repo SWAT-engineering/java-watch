@@ -251,6 +251,7 @@ class TortureTests {
         int lastEventCount = events.get();
         int stableCount = 0;
         do {
+            Thread.yield();
             while (happened.tryAcquire(TestHelper.SHORT_WAIT.toMillis(), TimeUnit.MILLISECONDS)) {
                 happened.drainPermits();
             }
@@ -263,7 +264,7 @@ class TortureTests {
                 lastEventCount = currentEventCounts;
                 stableCount = 0;
             }
-        } while (stableCount < 60);
+        } while (stableCount < 120);
         logger.info("Stable after: {} events", lastEventCount);
     }
 }
