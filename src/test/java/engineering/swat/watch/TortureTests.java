@@ -254,20 +254,16 @@ class TortureTests {
             while (happened.tryAcquire(TestHelper.SHORT_WAIT.toMillis(), TimeUnit.MILLISECONDS)) {
                 happened.drainPermits();
             }
+
             int currentEventCounts = events.get();
             if (currentEventCounts == lastEventCount) {
-                if (stableCount == 30) {
-                    logger.info("Stable after: {} events", currentEventCounts);
-                    break;
-                }
-                else {
-                    stableCount++;
-                }
+                stableCount++;
             }
             else {
+                lastEventCount = currentEventCounts;
                 stableCount = 0;
             }
-            lastEventCount = currentEventCounts;
-        } while (true);
+        } while (stableCount < 60);
+        logger.info("Stable after: {} events", lastEventCount);
     }
 }
