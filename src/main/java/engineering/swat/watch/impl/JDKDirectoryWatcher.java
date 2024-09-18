@@ -51,9 +51,16 @@ public class JDKDirectoryWatcher implements Closeable {
     }
 
     private void handleChanges(List<java.nio.file.WatchEvent<?>> events) {
-        exec.execute(() ->
-            events.forEach(ev -> eventHandler.accept(translate(ev)))
-        );
+        exec.execute(() -> {
+            for (var ev : events) {
+                try {
+                    eventHandler.accept(translate(ev));
+                }
+                catch (Throwable ignored) {
+                    logger.error("Ignoring downstream exception:", ignored);
+                }
+            }
+        });
     }
 
     private WatchEvent translate(java.nio.file.WatchEvent<?> ev) {

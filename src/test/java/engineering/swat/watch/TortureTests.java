@@ -264,7 +264,7 @@ class TortureTests {
                 lastEventCount = currentEventCounts;
                 stableCount = 0;
             }
-        } while (stableCount < 120);
+        } while (stableCount < 60);
         logger.info("Stable after: {} events", lastEventCount);
     }
 }

@@ -14,10 +14,13 @@ import java.util.Deque;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
+
+import javax.management.RuntimeErrorException;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -47,57 +50,55 @@ public class JDKRecursiveDirectoryWatcher implements Closeable {
     }
 
     private void processEvents(WatchEvent ev) {
+        logger.trace("Forwarding event: {}", ev);
+        eventHandler.accept(ev);
         logger.trace("Unwrapping event: {}", ev);
-        List<WatchEvent> extraEvents = null;
         try {
             switch (ev.getKind()) {
-                case CREATED: extraEvents = handleCreate(ev); break;
+                case CREATED: handleCreate(ev); break;
                 case DELETED: handleDeleteDirectory(ev); break;
-                case OVERFLOW: extraEvents = handleOverflow(ev); break;
+                case OVERFLOW: handleOverflow(ev); break;
                 case MODIFIED: break;
             }
         } finally {
-            eventHandler.accept(ev);
-            if (extraEvents != null) {
-                extraEvents.forEach(eventHandler);
-            }
         }
     }
 
+    private void publishExtraEvents(List<WatchEvent> ev) {
+        logger.trace("Reporting new nested directories & files: {}", ev);
+        ev.forEach(eventHandler);
+    }
 
-    private List<WatchEvent> handleCreate(WatchEvent ev) {
+
+    private void handleCreate(WatchEvent ev) {
         // between the event and the current state of the file system
         // we might have some nested directories we missed
         // so if we have a new directory, we have to go in and iterate over it
         // we also have to report all nested files & dirs as created paths
         // but we don't want to burden ourselves with those events
-        try {
-            var fullPath = ev.calculateFullPath();
-            if (!activeWatches.containsKey(fullPath)) {
-                var newEvents = registerForNewDirectory(ev.calculateFullPath());
-                logger.trace("Reporting new nested directories & files: {}", newEvents);
-                return newEvents;
-            }
-            else {
-                return Collections.emptyList();
-            }
-        } catch (IOException e) {
-            logger.error("Could not register new watch for: {} ({})", ev.calculateFullPath(), e);
-            return Collections.emptyList();
+        var fullPath = ev.calculateFullPath();
+        if (!activeWatches.containsKey(fullPath)) {
+            CompletableFuture
+                .completedFuture(fullPath)
+                .thenApplyAsync(this::registerForNewDirectory, exec)
+                .thenAcceptAsync(this::publishExtraEvents, exec)
+                .exceptionally(ex -> {
+                    logger.error("Could not locate new sub directories for: {}", ev.calculateFullPath(), ex);
+                    return null;
+                });
         }
     }
 
-    private List<WatchEvent> handleOverflow(WatchEvent ev) {
-        try {
-            logger.info("Overflow detected, rescanning to find missed entries in {}", root);
-            // we have to rescan everything, and at least make sure to add new entries to that recursive watcher
-            var newEntries = syncAfterOverflow(ev.calculateFullPath());
-            logger.trace("Reporting new nested directories & files: {}", newEntries);
-            return newEntries;
-        } catch (IOException e) {
-            logger.error("Could not register new watch for: {} ({})", ev.calculateFullPath(), e);
-            return Collections.emptyList();
-        }
+    private void handleOverflow(WatchEvent ev) {
+        logger.info("Overflow detected, rescanning to find missed entries in {}", root);
+        CompletableFuture
+            .completedFuture(ev.calculateFullPath())
+            .thenApplyAsync(this::syncAfterOverflow, exec)
+            .thenAcceptAsync(this::publishExtraEvents, exec)
+            .exceptionally(ex -> {
+                logger.error("Could not register new watch for: {} ({})", ev.calculateFullPath(), ex);
+                return null;
+            });
     }
 
     private void handleDeleteDirectory(WatchEvent ev) {
@@ -249,23 +250,31 @@ public class JDKRecursiveDirectoryWatcher implements Closeable {
         Files.walkFileTree(dir, new InitialDirectoryScan(dir));
     }
 
-    private List<WatchEvent> registerForNewDirectory(Path dir) throws IOException {
+    private List<WatchEvent> registerForNewDirectory(Path dir) {
         var events = new ArrayList<WatchEvent>();
         var seenFiles = new HashSet<Path>();
         var seenDirectories = new HashSet<Path>();
-        Files.walkFileTree(dir, new NewDirectoryScan(dir, events, seenFiles, seenDirectories));
-        detectedMissingEntries(dir, events, seenFiles, seenDirectories);
-        return events;
+        try {
+            Files.walkFileTree(dir, new NewDirectoryScan(dir, events, seenFiles, seenDirectories));
+            detectedMissingEntries(dir, events, seenFiles, seenDirectories);
+            return events;
+        } catch (IOException ex) {
+            throw new RuntimeException(ex);
+        }
     }
 
 
-    private List<WatchEvent> syncAfterOverflow(Path dir) throws IOException {
+    private List<WatchEvent> syncAfterOverflow(Path dir) {
         var events = new ArrayList<WatchEvent>();
         var seenFiles = new HashSet<Path>();
         var seenDirectories = new HashSet<Path>();
-        Files.walkFileTree(dir, new OverflowSyncScan(dir, events, seenFiles, seenDirectories));
-        detectedMissingEntries(dir, events, seenFiles, seenDirectories);
-        return events;
+        try {
+            Files.walkFileTree(dir, new OverflowSyncScan(dir, events, seenFiles, seenDirectories));
+            detectedMissingEntries(dir, events, seenFiles, seenDirectories);
+            return events;
+        } catch (IOException ex) {
+            throw new RuntimeException(ex);
+        }
     }
 
     private void detectedMissingEntries(Path dir, ArrayList<WatchEvent> events, HashSet<Path> seenFiles, HashSet<Path> seenDirectories) throws IOException {
