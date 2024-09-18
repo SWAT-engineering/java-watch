@@ -1,11 +1,13 @@
 package engineering.swat.watch;
 
 import static org.awaitility.Awaitility.doNotCatchUncaughtExceptionsByDefault;
+import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.LocalTime;
 import java.util.Random;
 import java.util.Set;
@@ -116,14 +118,10 @@ class TortureTests {
         var io = new IOGenerator(THREADS, root, pool);
 
 
-        final var events = new AtomicInteger(0);
-        final var happened = new Semaphore(0);
         var seenCreates = ConcurrentHashMap.<Path>newKeySet();
         var watchConfig = Watcher.recursiveDirectory(testDir.getTestDirectory())
             .withExecutor(pool)
             .onEvent(ev -> {
-                events.getAndIncrement();
-                happened.release();
                 var fullPath = ev.calculateFullPath();
                 switch (ev.getKind()) {
                     case CREATED:
@@ -149,9 +147,10 @@ class TortureTests {
             pathsWritten = io.stop();
             logger.info("Generated: {} files",  pathsWritten.size());
 
-            logger.info("Waiting for the events processing to stabilize");
-            waitForStable(events, happened);
-
+            await("After a while we should have seen all the create events")
+                .timeout(TestHelper.LONG_WAIT.multipliedBy(4))
+                .pollInterval(Duration.ofMillis(500))
+                .until(() -> seenCreates.containsAll(pathsWritten));
         }
         catch (Exception ex) {
             logger.catching(ex);
@@ -167,19 +166,6 @@ class TortureTests {
             logger.info("Shutting down pool");
             // shutdown the pool (so no new events are registered)
             pool.shutdown();
-        }
-        waitForStable(events, happened);
-
-
-        // but wait till all scheduled tasks have been completed
-        // pool.awaitTermination(10, TimeUnit.SECONDS);
-
-        logger.info("Calculating sizes");
-        logger.info("Comparing events ({} events for {} paths) and files (total {}) created", events.get(), seenCreates.size(), pathsWritten.size());
-        logger.info("Comparing paths");
-        // now make sure that the two sets are the same
-        for (var f : pathsWritten) {
-            assertTrue(seenCreates.contains(f), () -> "Missing create event for: " + f);
         }
     }
 
