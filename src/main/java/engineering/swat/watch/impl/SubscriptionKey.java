@@ -3,6 +3,8 @@ package engineering.swat.watch.impl;
 import java.nio.file.Path;
 import java.util.Objects;
 
+import org.checkerframework.checker.nullness.qual.Nullable;
+
 public class SubscriptionKey {
     private final Path path;
     private final boolean recursive;
@@ -21,7 +23,7 @@ public class SubscriptionKey {
     }
 
     @Override
-    public boolean equals(Object obj) {
+    public boolean equals(@Nullable Object obj) {
         if (obj instanceof SubscriptionKey) {
             var other = (SubscriptionKey)obj;
             return (other.recursive == recursive)
