@@ -113,7 +113,7 @@ class TortureTests {
     @Test
     void pressureOnFSShouldNotMissNewFilesAnything() throws InterruptedException, IOException {
         final var root = testDir.getTestDirectory();
-        var pool = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 2);
+        var pool = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 4);
 
         var io = new IOGenerator(THREADS, root, pool);
 
