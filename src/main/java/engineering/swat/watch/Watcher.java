@@ -24,7 +24,7 @@ import engineering.swat.watch.impl.JDKRecursiveDirectoryWatcher;
  */
 public class Watcher {
     private final Logger logger = LogManager.getLogger();
-    private final WatcherKind kind;
+    private final WatchScope scope;
     private final Path path;
     private Executor executor = CompletableFuture::runAsync;
 
@@ -32,63 +32,39 @@ public class Watcher {
     private Consumer<WatchEvent> eventHandler = NULL_HANDLER;
 
 
-    private Watcher(WatcherKind kind, Path path) {
-        this.kind = kind;
+    private Watcher(WatchScope scope, Path path) {
+        this.scope = scope;
         this.path = path;
-        logger.info("Constructor logger for: {} at {} level", path, kind);
-    }
-
-    private enum WatcherKind {
-        FILE,
-        DIRECTORY,
-        RECURSIVE_DIRECTORY
+        logger.info("Constructor logger for: {} at {} level", path, scope);
     }
 
     /**
-     * Request a watcher for a single path (file or directory).
-     * If it's a file, depending on the platform this will watch the whole directory and filter the results, or only watch a single file.
-     * @param path a single path entry, either a file or a directory
-     * @return a watcher that only fires events related to the requested path
-     * @throws IOException in case the path is not absolute
+     * Watch a path for updates, optionally also get events for its children/descendants
+     * @param path which absolute path to monitor, can be a file or a directory, but has to be absolute
+     * @param scope for directories you can also choose to monitor it's direct children or all it's descendants
+     * @throws IllegalArgumentException in case a path is not supported (in relation to the scope)
      */
-    public static Watcher single(Path path) throws IOException {
+    public static Watcher watch(Path path, WatchScope scope) {
         if (!path.isAbsolute()) {
-            throw new IOException("We can only watch absolute paths");
+            throw new IllegalArgumentException("We can only watch absolute paths");
         }
-        return new Watcher(WatcherKind.FILE, path);
-    }
+        switch (scope) {
+            case INCLUDING_CHILDREN: // intended fallthrough
+            case INCLUDING_ALL_DESCENDANTS:
+                if (!Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
+                    throw new IllegalArgumentException("Only directories are supported for this scope");
+                }
+                break;
+            case SINGLE:
+                if (Files.isSymbolicLink(path)) {
+                    throw new IllegalArgumentException("Symlinks are not supported");
+                }
+                break;
+            default:
+                throw new IllegalArgumentException("Unsupported scope: " + scope);
 
-    /**
-     * Request a watcher for a directory, getting events for its direct children.
-     * @param path a directory to monitor for changes
-     * @return a watcher that fires events for any of the direct children (and its self).
-     * @throws IOException in cas the path is not absolute or it's not an directory
-     */
-    public static Watcher singleDirectory(Path path) throws IOException {
-        if (!path.isAbsolute()) {
-            throw new IOException("We can only watch absolute paths");
         }
-        if (!Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IOException("Only directories are supported");
-        }
-        return new Watcher(WatcherKind.DIRECTORY, path);
-    }
-
-    /**
-     * Request a watcher for a directory, getting events for all of its children. Even those added after the watch started.
-     * On some platforms, this can be quite expansive, so be sure you want this.
-     * @param path a directory to monitor for changes
-     * @return a watcher that fires events for any of its children (and its self).
-     * @throws IOException in case the path is not absolute or it's not an directory
-     */
-    public static Watcher recursiveDirectory(Path path) throws IOException {
-        if (!path.isAbsolute()) {
-            throw new IOException("We can only watch absolute paths");
-        }
-        if (!Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
-            throw new IOException("Only directories are supported");
-        }
-        return new Watcher(WatcherKind.RECURSIVE_DIRECTORY, path);
+        return new Watcher(scope, path);
     }
 
     /**
@@ -124,18 +100,26 @@ public class Watcher {
         if (this.eventHandler == NULL_HANDLER) {
             throw new IllegalStateException("There is no onEvent handler defined");
         }
-        switch (kind) {
-            case DIRECTORY: {
-                var result = new JDKDirectoryWatcher(path, executor, this.eventHandler);
+        switch (scope) {
+            case INCLUDING_CHILDREN: {
+                var result = new JDKDirectoryWatcher(path, executor, this.eventHandler, false);
                 result.start();
                 return result;
             }
-            case RECURSIVE_DIRECTORY: {
-                var result = new JDKRecursiveDirectoryWatcher(path, executor, this.eventHandler);
-                result.start();
-                return result;
+            case INCLUDING_ALL_DESCENDANTS: {
+                try {
+                    var result = new JDKDirectoryWatcher(path, executor, this.eventHandler, true);
+                    result.start();
+                    return result;
+                } catch (Throwable ex) {
+                    // no native support, use the simulation
+                    logger.info("Not possible to register the native watcher for {}", path, ex);
+                    var result = new JDKRecursiveDirectoryWatcher(path, executor, this.eventHandler);
+                    result.start();
+                    return result;
+                }
             }
-            case FILE: {
+            case SINGLE: {
                 var result = new JDKFileWatcher(path, executor, this.eventHandler);
                 result.start();
                 return result;

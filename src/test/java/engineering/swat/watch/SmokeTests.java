@@ -40,7 +40,7 @@ class SmokeTests {
     void watchDirectory() throws IOException, InterruptedException {
         var changed = new AtomicBoolean(false);
         var target = testDir.getTestFiles().get(0);
-        var watchConfig = Watcher.singleDirectory(testDir.getTestDirectory())
+        var watchConfig = Watcher.watch(testDir.getTestDirectory(), WatchScope.INCLUDING_CHILDREN)
             .onEvent(ev -> {if (ev.getKind() == MODIFIED && ev.calculateFullPath().equals(target)) { changed.set(true); }})
             ;
 
@@ -57,7 +57,7 @@ class SmokeTests {
             .filter(p -> !p.getParent().equals(testDir.getTestDirectory()))
             .findFirst()
             .orElseThrow();
-        var watchConfig = Watcher.recursiveDirectory(testDir.getTestDirectory())
+        var watchConfig = Watcher.watch(testDir.getTestDirectory(), WatchScope.INCLUDING_ALL_DESCENDANTS)
             .onEvent(ev -> { if (ev.getKind() == MODIFIED && ev.calculateFullPath().equals(target)) { changed.set(true);}})
             ;
 
@@ -75,7 +75,7 @@ class SmokeTests {
             .findFirst()
             .orElseThrow();
 
-        var watchConfig = Watcher.single(target)
+        var watchConfig = Watcher.watch(target, WatchScope.SINGLE)
             .onEvent(ev -> {
                 if (ev.calculateFullPath().equals(target)) {
                     changed.set(true);

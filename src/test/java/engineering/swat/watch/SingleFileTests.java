@@ -39,7 +39,7 @@ public class SingleFileTests {
         var target = testDir.getTestFiles().get(0);
         var seen = new AtomicBoolean(false);
         var others = new AtomicBoolean(false);
-        var watchConfig = Watcher.single(target)
+        var watchConfig = Watcher.watch(target, WatchScope.SINGLE)
             .onEvent(ev -> {
                 if (ev.calculateFullPath().equals(target)) {
                     seen.set(true);
@@ -68,7 +68,7 @@ public class SingleFileTests {
         var target = testDir.getTestDirectory();
         var seen = new AtomicBoolean(false);
         var others = new AtomicBoolean(false);
-        var watchConfig = Watcher.single(target)
+        var watchConfig = Watcher.watch(target, WatchScope.SINGLE)
             .onEvent(ev -> {
                 if (ev.calculateFullPath().equals(target)) {
                     seen.set(true);

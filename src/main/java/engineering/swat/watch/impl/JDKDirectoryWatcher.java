@@ -21,21 +21,28 @@ public class JDKDirectoryWatcher implements Closeable {
     private final Executor exec;
     private final Consumer<WatchEvent> eventHandler;
     private volatile @MonotonicNonNull Closeable activeWatch;
+    private final boolean nativeRecursive;
 
-    private static final BundledSubscription<Path, List<java.nio.file.WatchEvent<?>>>
+    private static final BundledSubscription<SubscriptionKey, List<java.nio.file.WatchEvent<?>>>
         BUNDLED_JDK_WATCHERS = new BundledSubscription<>(JDKPoller::register);
 
     public JDKDirectoryWatcher(Path directory, Executor exec, Consumer<WatchEvent> eventHandler) {
+        this(directory, exec, eventHandler, false);
+    }
+
+    public JDKDirectoryWatcher(Path directory, Executor exec, Consumer<WatchEvent> eventHandler, boolean nativeRecursive) {
         this.directory = directory;
         this.exec = exec;
         this.eventHandler = eventHandler;
+        this.nativeRecursive = nativeRecursive;
     }
+
 
     synchronized boolean safeStart() throws IOException {
         if (activeWatch != null) {
             return false;
         }
-        activeWatch = BUNDLED_JDK_WATCHERS.subscribe(directory, this::handleChanges);
+        activeWatch = BUNDLED_JDK_WATCHERS.subscribe(new SubscriptionKey(directory, nativeRecursive), this::handleChanges);
         return true;
     }
 

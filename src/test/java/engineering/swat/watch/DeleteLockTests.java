@@ -42,11 +42,6 @@ class DeleteLockTests {
         void run(Path target) throws IOException;
     }
 
-    @FunctionalInterface
-    private interface Builder {
-        Watcher build(Path target) throws IOException;
-    }
-
     private static void recursiveDelete(Path target) throws IOException {
         try (var paths = Files.walk(target)) {
             paths.sorted(Comparator.reverseOrder())
@@ -55,8 +50,8 @@ class DeleteLockTests {
         }
     }
 
-    private void deleteAndVerify(Path target, Builder setup) throws IOException {
-        try (var watch = setup.build(target).onEvent(ev -> {}).start()) {
+    private void deleteAndVerify(Path target, WatchScope scope) throws IOException {
+        try (var watch = Watcher.watch(target, scope).onEvent(ev -> {}).start()) {
             recursiveDelete(target);
             assertFalse(Files.exists(target), "The file/directory shouldn't exist anymore");
         }
@@ -66,7 +61,7 @@ class DeleteLockTests {
     void watchedFileCanBeDeleted() throws IOException {
         deleteAndVerify(
             testDir.getTestFiles().get(0),
-            Watcher::single
+            WatchScope.SINGLE
         );
     }
 
@@ -75,7 +70,7 @@ class DeleteLockTests {
     void watchedDirectoryCanBeDeleted() throws IOException {
         deleteAndVerify(
             testDir.getTestDirectory(),
-            Watcher::singleDirectory
+            WatchScope.INCLUDING_CHILDREN
         );
     }
 
@@ -84,7 +79,7 @@ class DeleteLockTests {
     void watchedRecursiveDirectoryCanBeDeleted() throws IOException {
         deleteAndVerify(
             testDir.getTestDirectory(),
-            Watcher::recursiveDirectory
+            WatchScope.INCLUDING_ALL_DESCENDANTS
         );
     }
 }

@@ -7,7 +7,6 @@ import static java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY;
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.FileSystems;
-import java.nio.file.Path;
 import java.nio.file.WatchEvent;
 import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
@@ -24,6 +23,8 @@ import java.util.function.Consumer;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+
+import com.sun.nio.file.ExtendedWatchEventModifier;
 
 class JDKPoller {
     private JDKPoller() {}
@@ -83,13 +84,19 @@ class JDKPoller {
     }
 
 
-    public static Closeable register(Path path, Consumer<List<WatchEvent<?>>> changes) throws IOException {
+    public static Closeable register(SubscriptionKey path, Consumer<List<WatchEvent<?>>> changes) throws IOException {
         logger.debug("Register watch for: {}", path);
 
         try {
             return CompletableFuture.supplyAsync(() -> {
                     try {
-                        return path.register(service, ENTRY_CREATE, ENTRY_MODIFY, ENTRY_MODIFY, ENTRY_DELETE);
+                        WatchEvent.Kind<?>[] kinds = new WatchEvent.Kind[]{ ENTRY_CREATE, ENTRY_MODIFY, ENTRY_MODIFY, ENTRY_DELETE };
+                        if (path.isRecursive()) {
+                            return path.getPath().register(service, kinds, ExtendedWatchEventModifier.FILE_TREE);
+                        }
+                        else {
+                            return path.getPath().register(service, kinds);
+                        }
                     } catch (IOException e) {
                         throw new RuntimeException(e);
                     }

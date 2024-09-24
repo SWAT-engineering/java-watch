@@ -119,7 +119,7 @@ class TortureTests {
 
 
         var seenCreates = ConcurrentHashMap.<Path>newKeySet();
-        var watchConfig = Watcher.recursiveDirectory(testDir.getTestDirectory())
+        var watchConfig = Watcher.watch(testDir.getTestDirectory(), WatchScope.INCLUDING_ALL_DESCENDANTS)
             .withExecutor(pool)
             .onEvent(ev -> {
                 var fullPath = ev.calculateFullPath();
@@ -188,7 +188,7 @@ class TortureTests {
 
             final var events = new AtomicInteger(0);
             final var happened = new Semaphore(0);
-            var watchConfig = Watcher.recursiveDirectory(testDir.getTestDirectory())
+            var watchConfig = Watcher.watch(testDir.getTestDirectory(), WatchScope.INCLUDING_ALL_DESCENDANTS)
                 .withExecutor(pool)
                 .onEvent(ev -> {
                     events.getAndIncrement();
