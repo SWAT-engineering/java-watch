@@ -113,7 +113,8 @@ public class Watcher {
                     return result;
                 } catch (Throwable ex) {
                     // no native support, use the simulation
-                    logger.info("Not possible to register the native watcher for {}", path, ex);
+                    logger.debug("Not possible to register the native watcher, using fallback for {}", path);
+                    logger.trace(ex);
                     var result = new JDKRecursiveDirectoryWatcher(path, executor, this.eventHandler);
                     result.start();
                     return result;
