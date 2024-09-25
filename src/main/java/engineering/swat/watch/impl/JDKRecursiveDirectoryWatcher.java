@@ -9,7 +9,6 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.List;
@@ -19,8 +18,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
-
-import javax.management.RuntimeErrorException;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -75,7 +72,8 @@ public class JDKRecursiveDirectoryWatcher implements Closeable {
         // we might have some nested directories we missed
         // so if we have a new directory, we have to go in and iterate over it
         // we also have to report all nested files & dirs as created paths
-        // but we don't want to burden ourselves with those events
+        // but we don't want to delay the publication of this
+        // create till after the processing is done, so we schedule it in the background
         var fullPath = ev.calculateFullPath();
         if (!activeWatches.containsKey(fullPath)) {
             CompletableFuture
@@ -114,7 +112,7 @@ public class JDKRecursiveDirectoryWatcher implements Closeable {
         }
     }
 
-    /** Only register a watched for every sub directory */
+    /** Only register a watch for every sub directory */
     private class InitialDirectoryScan extends SimpleFileVisitor<Path> {
         protected final Path subRoot;
 
@@ -145,7 +143,7 @@ public class JDKRecursiveDirectoryWatcher implements Closeable {
             var watcher = activeWatches.computeIfAbsent(dir, d -> new JDKDirectoryWatcher(d, exec, relocater(dir)));
             try {
                 if (!watcher.safeStart()) {
-                    logger.debug("We lost the race on starting a nested watcher, that shouldn't be a problem, but its a very busy, so we might have lost a few events in {}", dir);
+                    logger.debug("We lost the race on starting a nested watcher, that shouldn't be a problem, but it's a very busy, so we might have lost a few events in {}", dir);
                 }
             } catch (IOException ex) {
                 activeWatches.remove(dir);
@@ -212,6 +210,7 @@ public class JDKRecursiveDirectoryWatcher implements Closeable {
                 if (attrs.size() > 0) {
                     events.add(new WatchEvent(WatchEvent.Kind.MODIFIED, root, relative));
                 }
+                seenFiles.add(file);
             }
             return FileVisitResult.CONTINUE;
         }
@@ -282,6 +281,7 @@ public class JDKRecursiveDirectoryWatcher implements Closeable {
         // and when the watches are active. so after we know all the new watches have been registered
         // we do a second scan and make sure to find paths that weren't visible the first time
         // and emulate events for them (and register new watches)
+        // In essence this is the same as when an Overflow happened, so we can reuse that handler.
         int directoryCount = seenDirectories.size() - 1;
         while (directoryCount != seenDirectories.size()) {
             Files.walkFileTree(dir, new OverflowSyncScan(dir, events, seenFiles, seenDirectories));

@@ -14,6 +14,8 @@ import engineering.swat.watch.WatchEvent;
 
 /**
  * It's not possible to monitor a single file (or directory), so we have to find a directory watcher, and connect to that
+ *
+ * Note that you should take care to call start only once.
  */
 public class JDKFileWatcher implements Closeable {
     private final Logger logger = LogManager.getLogger();
@@ -34,23 +36,27 @@ public class JDKFileWatcher implements Closeable {
         this.eventHandler = eventHandler;
     }
 
+    /**
+     * Start the file watcher, but only do it once
+     * @throws IOException
+     */
     public void start() throws IOException {
         try {
+            var dir = file.getParent();
+            if (dir == null) {
+                throw new IllegalArgumentException("cannot watch a single entry that is on the root");
+
+            }
+            assert !dir.equals(file);
+            JDKDirectoryWatcher parentWatch;
             synchronized(this) {
                 if (activeWatch != null) {
                     throw new IOException("Cannot start an already started watch");
                 }
-                var dir = file.getParent();
-                if (dir == null) {
-                    throw new IllegalArgumentException("cannot watch a single entry that is on the root");
-
-                }
-                assert !dir.equals(file);
-                var parentWatch = new JDKDirectoryWatcher(dir, exec, this::filter);
-                activeWatch = parentWatch;
+                activeWatch = parentWatch = new JDKDirectoryWatcher(dir, exec, this::filter);
                 parentWatch.start();
-                logger.debug("Started file watch for {} (in reality a watch on {}): {}", file, dir, parentWatch);
             }
+            logger.debug("Started file watch for {} (in reality a watch on {}): {}", file, dir, parentWatch);
 
         } catch (IOException e) {
             throw new IOException("Could not register file watcher for: " + file, e);
@@ -59,12 +65,12 @@ public class JDKFileWatcher implements Closeable {
 
     private void filter(WatchEvent event) {
         if (fileName.equals(event.getRelativePath())) {
-            exec.execute(() -> eventHandler.accept(event));
+            eventHandler.accept(event);
         }
     }
 
     @Override
-    public void close() throws IOException {
+    public synchronized void close() throws IOException {
         if (activeWatch != null) {
             activeWatch.close();
         }

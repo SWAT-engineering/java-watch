@@ -49,7 +49,7 @@ public class JDKDirectoryWatcher implements Closeable {
     public void start() throws IOException {
         try {
             if (!safeStart()) {
-                throw new IOException("Cannot start a watcher twice");
+                throw new IllegalStateException("Cannot start a watcher twice");
             }
             logger.debug("Started watch for: {}", directory);
         } catch (IOException e) {
@@ -93,7 +93,7 @@ public class JDKDirectoryWatcher implements Closeable {
     }
 
     @Override
-    public void close() throws IOException {
+    public synchronized void close() throws IOException {
         if (activeWatch != null) {
             logger.debug("Closing watch for: {}", this.directory);
             activeWatch.close();

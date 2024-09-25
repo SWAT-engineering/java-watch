@@ -5,6 +5,6 @@ import java.io.IOException;
 import java.util.function.Consumer;
 
 @FunctionalInterface
-public interface ISubscribable<A, R> {
-    Closeable subscribe(A target, Consumer<R> eventListener) throws IOException;
+public interface ISubscribable<Key, Event> {
+    Closeable subscribe(Key target, Consumer<Event> eventListener) throws IOException;
 }

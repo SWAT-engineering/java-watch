@@ -26,10 +26,10 @@ public class Watcher {
     private final Logger logger = LogManager.getLogger();
     private final WatchScope scope;
     private final Path path;
-    private Executor executor = CompletableFuture::runAsync;
+    private volatile Executor executor = CompletableFuture::runAsync;
 
     private static final Consumer<WatchEvent> NULL_HANDLER = p -> {};
-    private Consumer<WatchEvent> eventHandler = NULL_HANDLER;
+    private volatile Consumer<WatchEvent> eventHandler = NULL_HANDLER;
 
 
     private Watcher(WatchScope scope, Path path) {
@@ -94,9 +94,9 @@ public class Watcher {
      * Start watch the path for events.
      * @return a subscription for the watch, when closed, new events will stop being registered to the worker pool.
      * @throws IOException in case the starting of the watcher caused an underlying IO exception
-     * @throws IllegalStateException the watchers is not configured correctly (for example, missing {@link #onEvent(Consumer)})
+     * @throws IllegalStateException the watchers is not configured correctly (for example, missing {@link #onEvent(Consumer)}, or a watcher is started twice)
      */
-    public Closeable start() throws IOException, IllegalStateException {
+    public Closeable start() throws IOException {
         if (this.eventHandler == NULL_HANDLER) {
             throw new IllegalStateException("There is no onEvent handler defined");
         }

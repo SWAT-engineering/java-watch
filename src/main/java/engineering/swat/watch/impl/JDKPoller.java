@@ -84,7 +84,7 @@ class JDKPoller {
     }
 
 
-    public static Closeable register(SubscriptionKey path, Consumer<List<WatchEvent<?>>> changes) throws IOException {
+    public static Closeable register(SubscriptionKey path, Consumer<List<WatchEvent<?>>> changesHandler) throws IOException {
         logger.debug("Register watch for: {}", path);
 
         try {
@@ -102,7 +102,7 @@ class JDKPoller {
                     }
                 }, registerPool) // read registerPool why we have to add a limiter here
                 .thenApplyAsync(key -> {
-                    watchers.put(key, changes);
+                    watchers.put(key, changesHandler);
                     return new Closeable() {
                         @Override
                         public void close() throws IOException {
@@ -114,8 +114,8 @@ class JDKPoller {
                 })
                 .get(); // we have to do a get here, to make sure the `register` function blocks
         } catch (ExecutionException e) {
-            if (e.getCause() instanceof IOException) {
-                throw (IOException)e.getCause();
+            if (e.getCause() instanceof RuntimeException && e.getCause().getCause() instanceof IOException) {
+                throw (IOException)e.getCause().getCause();
             }
             throw new IOException("Could not register path", e.getCause());
         } catch (InterruptedException e) {

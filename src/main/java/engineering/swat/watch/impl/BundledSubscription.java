@@ -11,33 +11,35 @@ import java.util.function.Consumer;
 import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 import org.checkerframework.checker.nullness.qual.NonNull;
 
-public class BundledSubscription<A extends @NonNull Object, R extends @NonNull Object> implements ISubscribable<A,R> {
-    private final ISubscribable<A, R> around;
-    private final ConcurrentMap<A, Subscription<R>> subscriptions = new ConcurrentHashMap<>();
+/**
+ * This is an internal class where we can join multiple subscriptions to the same target by only taking 1 actual subscription but forwarding them to all the interested parties.
+ * This is used (for example) to avoid multiple JDKPoller registries for the same path
+ */
+public class BundledSubscription<Key extends @NonNull Object, Event extends @NonNull Object> implements ISubscribable<Key,Event> {
+    private final ISubscribable<Key, Event> wrapped;
+    private final ConcurrentMap<Key, Subscription<Event>> subscriptions = new ConcurrentHashMap<>();
 
-    public BundledSubscription(ISubscribable<A, R> around) {
-        this.around = around;
+    public BundledSubscription(ISubscribable<Key, Event> wrapped) {
+        this.wrapped = wrapped;
 
     }
 
     private static class Subscription<R> implements Consumer<R> {
         private final List<Consumer<R>> consumers = new CopyOnWriteArrayList<>();
-        private volatile @MonotonicNonNull Closeable closer;
-        Subscription(Consumer<R> initialConsumer) {
-            consumers.add(initialConsumer);
+        private volatile @MonotonicNonNull Closeable toBeClosed;
+        Subscription() {
         }
 
-        public void setCloser(Closeable closer) {
-            this.closer = closer;
+        public void setToBeClosed(Closeable closer) {
+            this.toBeClosed = closer;
         }
 
-        void add(Consumer<R> newConsumer) {
+        public void add(Consumer<R> newConsumer) {
             consumers.add(newConsumer);
         }
 
-        synchronized boolean remove(Consumer<R> existingConsumer) {
+        public void remove(Consumer<R> existingConsumer) {
             consumers.remove(existingConsumer);
-            return consumers.isEmpty();
         }
 
         @Override
@@ -55,38 +57,41 @@ public class BundledSubscription<A extends @NonNull Object, R extends @NonNull O
     }
 
     @Override
-    public Closeable subscribe(A target, Consumer<R> eventListener) throws IOException {
-        var active = this.subscriptions.get(target);
-        if (active == null) {
-            active = new Subscription<>(eventListener);
-            var newSubscriptions = around.subscribe(target, active);
-            active.setCloser(newSubscriptions);
-            var lostRace = this.subscriptions.putIfAbsent(target, active);
-            if (lostRace != null) {
-                try {
-                    newSubscriptions.close();
-                } catch (IOException _ignore) {
-                    // ignore
-                }
-                lostRace.add(eventListener);
-                active = lostRace;
-            }
-        }
-        else {
-            active.add(eventListener);
-        }
-        var finalActive = active;
-        return () -> {
-            if (finalActive.remove(eventListener)) {
-                subscriptions.remove(target);
-                if (finalActive.hasActiveConsumers()) {
-                    // we lost the race, someone else added something again
-                    // so we put it back in the list
-                    subscriptions.put(target, finalActive);
+    public Closeable subscribe(Key target, Consumer<Event> eventListener) throws IOException {
+        var active = this.subscriptions.computeIfAbsent(target, t -> new Subscription<>());
+        boolean first = false;
+        if (active.toBeClosed == null) {
+            // we just added a new one
+            // so lets take a lock on it, and try to be the one that gets to initialize it
+            synchronized(active) {
+                // now lock on it to make sure nobo
+                if (active.toBeClosed == null) {
+                    first = true;
+                    active.add(eventListener); // we know we already have the lock, and we need to do this before we register the watch
+                    var newSubscriptions = wrapped.subscribe(target, active);
+                    active.setToBeClosed(newSubscriptions);
                 }
                 else {
-                    if (finalActive.closer != null) {
-                        finalActive.closer.close();
+                }
+            }
+        }
+        // at this point we have to be sure that we're not the first to in the list
+        // since we might have won the race on the compute, but lost the race
+        if (!first) {
+            active.add(eventListener);
+        }
+        return () -> {
+            active.remove(eventListener);
+            if (!active.hasActiveConsumers()) {
+                subscriptions.remove(target);
+                if (active.hasActiveConsumers()) {
+                    // we lost the race, someone else added something again
+                    // so we put it back in the list
+                    subscriptions.put(target, active);
+                }
+                else {
+                    if (active.toBeClosed != null) {
+                        active.toBeClosed.close();
                     }
                 }
             }

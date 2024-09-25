@@ -32,7 +32,7 @@ public class WatchEvent {
         DELETED,
         /**
          * Rare event where there were so many file events, that the kernel lost a few.
-         * In that case you'll have to consider the whole directory (and it's sub directories) as modified.
+         * In that case you'll have to consider the whole directory (and its sub directories) as modified.
          * The library will try and send events for new and deleted files, but it won't be able to detect modified files.
          */
         OVERFLOW
