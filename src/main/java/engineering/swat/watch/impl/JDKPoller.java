@@ -26,6 +26,9 @@ import org.apache.logging.log4j.Logger;
 
 import com.sun.nio.file.ExtendedWatchEventModifier;
 
+/**
+ * This class is a wrapper around the JDK WatchService, it takes care to poll the service for new events, and then distributes them to the right parties
+ */
 class JDKPoller {
     private JDKPoller() {}
 
@@ -70,7 +73,6 @@ class JDKPoller {
                     hit.reset();
                 }
             }
-
         }
         finally {
             // schedule next run
@@ -89,30 +91,30 @@ class JDKPoller {
 
         try {
             return CompletableFuture.supplyAsync(() -> {
-                    try {
-                        WatchEvent.Kind<?>[] kinds = new WatchEvent.Kind[]{ ENTRY_CREATE, ENTRY_MODIFY, ENTRY_MODIFY, ENTRY_DELETE };
-                        if (path.isRecursive()) {
-                            return path.getPath().register(service, kinds, ExtendedWatchEventModifier.FILE_TREE);
-                        }
-                        else {
-                            return path.getPath().register(service, kinds);
-                        }
-                    } catch (IOException e) {
-                        throw new RuntimeException(e);
+                try {
+                    WatchEvent.Kind<?>[] kinds = new WatchEvent.Kind[]{ ENTRY_CREATE, ENTRY_MODIFY, ENTRY_MODIFY, ENTRY_DELETE };
+                    if (path.isRecursive()) {
+                        return path.getPath().register(service, kinds, ExtendedWatchEventModifier.FILE_TREE);
                     }
-                }, registerPool) // read registerPool why we have to add a limiter here
-                .thenApplyAsync(key -> {
-                    watchers.put(key, changesHandler);
-                    return new Closeable() {
-                        @Override
-                        public void close() throws IOException {
-                            logger.debug("Closing watch for: {}", path);
-                            key.cancel();
-                            watchers.remove(key);
-                        }
-                    };
-                })
-                .get(); // we have to do a get here, to make sure the `register` function blocks
+                    else {
+                        return path.getPath().register(service, kinds);
+                    }
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+            }, registerPool) // read registerPool why we have to add a limiter here
+            .thenApplyAsync(key -> {
+                watchers.put(key, changesHandler);
+                return new Closeable() {
+                    @Override
+                    public void close() throws IOException {
+                        logger.debug("Closing watch for: {}", path);
+                        key.cancel();
+                        watchers.remove(key);
+                    }
+                };
+            })
+            .get(); // we have to do a get here, to make sure the `register` function blocks
         } catch (ExecutionException e) {
             if (e.getCause() instanceof RuntimeException && e.getCause().getCause() instanceof IOException) {
                 throw (IOException)e.getCause().getCause();
