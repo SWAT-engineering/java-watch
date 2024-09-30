@@ -58,46 +58,51 @@ public class BundledSubscription<Key extends @NonNull Object, Event extends @Non
 
     @Override
     public Closeable subscribe(Key target, Consumer<Event> eventListener) throws IOException {
-        var active = this.subscriptions.computeIfAbsent(target, t -> new Subscription<>());
-        boolean first = false;
-        if (active.toBeClosed == null) {
-            // we just added a new one
-            // so lets take a lock on it, and try to be the one that gets to initialize it
-            synchronized(active) {
-                // now lock on it to make sure nobo
+        var retry = false; // The call might need to be retried when another thread interferes
+
+        var active = subscriptions.computeIfAbsent(target, t -> new Subscription<>());
+        synchronized (active) {
+
+            // "Good" case: No other thread has modified the subscription of
+            // `target` between getting `active` and entering this synchronized
+            // block, so the reference held by `active` is still fresh enough
+            if (active == subscriptions.get(target)) {
+                active.add(eventListener);
                 if (active.toBeClosed == null) {
-                    first = true;
-                    active.add(eventListener); // we know we already have the lock, and we need to do this before we register the watch
                     var newSubscriptions = wrapped.subscribe(target, active);
                     active.setToBeClosed(newSubscriptions);
-                }
-                else {
+                    // The next thread that enters the synchronized block is now
+                    // disabled from re-registering
                 }
             }
+
+            // "Bad" case: Another thread had modified the subscription of
+            // `target`, so the reference held by `active` has become stale.
+            // Thus, the call needs to be retried.
+            else {
+                retry = true;
+            }
         }
-        // at this point we have to be sure that we're not the first to in the list
-        // since we might have won the race on the compute, but lost the race
-        if (!first) {
-            active.add(eventListener);
-        }
-        return () -> {
-            active.remove(eventListener);
-            if (!active.hasActiveConsumers()) {
-                subscriptions.remove(target);
-                if (active.hasActiveConsumers()) {
-                    // we lost the race, someone else added something again
-                    // so we put it back in the list
-                    subscriptions.put(target, active);
-                }
-                else {
-                    if (active.toBeClosed != null) {
+
+        if (retry) {
+            return subscribe(target, eventListener);
+        } else {
+            return () -> {
+                synchronized (active) {
+                    active.remove(eventListener);
+                    if (!active.hasActiveConsumers()) {
+                        subscriptions.remove(target);
+
+                        // By removing the subscription of `target`, all aliases
+                        // of `active` in other threads have become stale and
+                        // shouldn't be used by those threads anymore. Only when
+                        // this non-usage can be guaranteed, is it safe to close
+                        // `active`.
+                        assert active.toBeClosed != null;
                         active.toBeClosed.close();
                     }
                 }
-            }
-        };
-
+            };
+        }
     }
-
-
 }
