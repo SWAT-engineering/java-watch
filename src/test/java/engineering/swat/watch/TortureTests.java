@@ -14,12 +14,14 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Predicate;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -213,6 +215,66 @@ class TortureTests {
             fail(exceptions.pop());
         }
         startDeregistring.release();
+    }
+
+    @Test
+    void manyRegisterAndUnregisterSameTime() throws InterruptedException, IOException {
+        var startRegistering = new Semaphore(0);
+        var stopAll = new Semaphore(0);
+        var done = new Semaphore(0);
+        var seen = new ConcurrentLinkedDeque<Path>();
+        var exceptions = new LinkedBlockingDeque<Exception>();
+        int amountOfWatchersActive = 0;
+        try {
+            for (int t = 0; t < THREADS; t++) {
+                final boolean finishWatching = t % 2 == 0;
+                if (finishWatching) {
+                    amountOfWatchersActive++;
+                }
+                var r = new Thread(() -> {
+                    try {
+                        startRegistering.acquire();
+                        for (int k = 0; k < 1000; k++) {
+                            var watcher = Watcher
+                                .watch(testDir.getTestDirectory(), WatchScope.INCLUDING_CHILDREN)
+                                .onEvent(e -> { if (e.getKind() == Kind.CREATED) seen.add(e.calculateFullPath()); });
+                            try (var c = watcher.start()) {
+                                if (finishWatching && k + 1 == 1000) {
+                                    logger.info("Waiting on stop signal");
+                                    stopAll.acquire();
+                                }
+                            }
+                            catch(Exception e) {
+                                exceptions.push(e);
+                            }
+                        }
+                    } catch (InterruptedException e1) {
+                    }
+                    finally {
+                        done.release();
+                    }
+                });
+                r.setDaemon(true);
+                r.start();
+            }
+
+            startRegistering.release(THREADS);
+            done.acquire(THREADS - amountOfWatchersActive);
+            assertTrue(seen.isEmpty(), "No events should have been sent");
+            Files.writeString(testDir.getTestDirectory().resolve("test124.txt"), "Hello World");
+            await("We should see only exactly the events we expect")
+                .failFast(() -> !exceptions.isEmpty())
+                .pollDelay(TestHelper.NORMAL_WAIT.minusMillis(100))
+                .until(seen::size, Predicate.isEqual(amountOfWatchersActive))
+                ;
+            if (!exceptions.isEmpty()) {
+                fail(exceptions.pop());
+            }
+        }
+        finally {
+            stopAll.release(amountOfWatchersActive);
+        }
+
     }
 
 
