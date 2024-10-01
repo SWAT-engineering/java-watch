@@ -3,6 +3,7 @@ package engineering.swat.watch;
 import static org.awaitility.Awaitility.doNotCatchUncaughtExceptionsByDefault;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -15,6 +16,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -167,6 +169,50 @@ class TortureTests {
             // shutdown the pool (so no new events are registered)
             pool.shutdown();
         }
+    }
+
+    @Test
+    void manyRegistrationsForSamePath() throws InterruptedException, IOException {
+        var startRegistering = new Semaphore(0);
+        var startDeregistring = new Semaphore(0);
+        var done = new Semaphore(0);
+        var seen = ConcurrentHashMap.<Path>newKeySet();
+        var exceptions = new LinkedBlockingDeque<Exception>();
+        for (int t = 0; t < THREADS * 100; t++) {
+            var r = new Thread(() -> {
+                try {
+                    var watcher = Watcher
+                        .watch(testDir.getTestDirectory(), WatchScope.INCLUDING_CHILDREN)
+                        .onEvent(e -> { if (e.getKind() == Kind.CREATED) seen.add(e.calculateFullPath()); });
+                    startRegistering.acquire();
+                    try (var c = watcher.start()) {
+                        startDeregistring.acquire();
+                    }
+                    catch(Exception e) {
+                        exceptions.push(e);
+                    }
+                } catch (InterruptedException e1) {
+                }
+                finally {
+                    done.release();
+                }
+            });
+            r.setDaemon(true);
+            r.start();
+        }
+
+        startRegistering.release(THREADS * 100);
+        startDeregistring.release((THREADS * 100) - 1);
+        done.acquire((THREADS * 100) - 1);
+        assertTrue(seen.isEmpty(), "No events should have been sent");
+        Files.writeString(testDir.getTestDirectory().resolve("test124.txt"), "Hello World");
+        await("We should see only one event")
+            .during(Duration.ofMillis(500))
+            .until(() -> seen.size() == 1);
+        if (!exceptions.isEmpty()) {
+            fail(exceptions.pop());
+        }
+        startDeregistring.release();
     }
 
 
