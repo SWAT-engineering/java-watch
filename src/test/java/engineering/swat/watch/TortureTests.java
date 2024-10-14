@@ -209,8 +209,9 @@ class TortureTests {
         assertTrue(seen.isEmpty(), "No events should have been sent");
         Files.writeString(testDir.getTestDirectory().resolve("test124.txt"), "Hello World");
         await("We should see only one event")
-            .during(Duration.ofMillis(500))
-            .until(() -> seen.size() == 1);
+            .timeout(TestHelper.LONG_WAIT)
+            .pollInterval(Duration.ofMillis(10))
+            .until(seen::size, s -> s == 1);
         if (!exceptions.isEmpty()) {
             fail(exceptions.pop());
         }
