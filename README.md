@@ -7,7 +7,7 @@ Currently working features in java-watch:
 
 - Recursive watches, even if platform doesn't support it natively.
 - Recursive watches also work inside directories created after the watch started
-- On overflow events no **new** directories (and it's recursive files) are missed, modification events will however not be simulated
+- Even in case of overflow you will get notifications of **new** directories (and it's recursive files), modification events will however not be simulated
 - Single file watches
 - Multiple watches for the same directory are merged to avoid overloading the kernel
 - Events are process on a worker pool, which you can customize.
