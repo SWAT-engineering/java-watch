@@ -35,7 +35,6 @@ public class Watcher {
     private Watcher(WatchScope scope, Path path) {
         this.scope = scope;
         this.path = path;
-        logger.info("Constructor logger for: {} at {} level", path, scope);
     }
 
     /**

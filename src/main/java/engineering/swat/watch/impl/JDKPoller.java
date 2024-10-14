@@ -110,8 +110,9 @@ class JDKPoller {
                     @Override
                     public void close() throws IOException {
                         logger.debug("Closing watch for: {}", path);
-                        key.cancel();
-                        watchers.remove(key);
+                        if (watchers.remove(key, changesHandler)) {
+                            key.cancel();
+                        }
                     }
                 };
             })
