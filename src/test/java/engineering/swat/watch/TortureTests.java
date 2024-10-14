@@ -123,7 +123,7 @@ class TortureTests {
 
 
         var seenCreates = ConcurrentHashMap.<Path>newKeySet();
-        var watchConfig = Watcher.watch(testDir.getTestDirectory(), WatchScope.INCLUDING_ALL_DESCENDANTS)
+        var watchConfig = Watcher.watch(testDir.getTestDirectory(), WatchScope.PATH_AND_ALL_DESCENDANTS)
             .withExecutor(pool)
             .onEvent(ev -> {
                 var fullPath = ev.calculateFullPath();
@@ -184,7 +184,7 @@ class TortureTests {
             var r = new Thread(() -> {
                 try {
                     var watcher = Watcher
-                        .watch(testDir.getTestDirectory(), WatchScope.INCLUDING_CHILDREN)
+                        .watch(testDir.getTestDirectory(), WatchScope.PATH_AND_CHILDREN)
                         .onEvent(e -> { if (e.getKind() == Kind.CREATED) seen.add(e.calculateFullPath()); });
                     startRegistering.acquire();
                     try (var c = watcher.start()) {
@@ -236,7 +236,7 @@ class TortureTests {
                         startRegistering.acquire();
                         for (int k = 0; k < 1000; k++) {
                             var watcher = Watcher
-                                .watch(testDir.getTestDirectory(), WatchScope.INCLUDING_CHILDREN)
+                                .watch(testDir.getTestDirectory(), WatchScope.PATH_AND_CHILDREN)
                                 .onEvent(e -> { if (e.getKind() == Kind.CREATED) seen.add(e.calculateFullPath()); });
                             try (var c = watcher.start()) {
                                 if (finishWatching && k + 1 == 1000) {
@@ -296,7 +296,7 @@ class TortureTests {
 
             final var events = new AtomicInteger(0);
             final var happened = new Semaphore(0);
-            var watchConfig = Watcher.watch(testDir.getTestDirectory(), WatchScope.INCLUDING_ALL_DESCENDANTS)
+            var watchConfig = Watcher.watch(testDir.getTestDirectory(), WatchScope.PATH_AND_ALL_DESCENDANTS)
                 .withExecutor(pool)
                 .onEvent(ev -> {
                     events.getAndIncrement();

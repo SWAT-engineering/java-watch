@@ -61,7 +61,7 @@ class DeleteLockTests {
     void watchedFileCanBeDeleted() throws IOException {
         deleteAndVerify(
             testDir.getTestFiles().get(0),
-            WatchScope.SINGLE
+            WatchScope.PATH_ONLY
         );
     }
 
@@ -70,7 +70,7 @@ class DeleteLockTests {
     void watchedDirectoryCanBeDeleted() throws IOException {
         deleteAndVerify(
             testDir.getTestDirectory(),
-            WatchScope.INCLUDING_CHILDREN
+            WatchScope.PATH_AND_CHILDREN
         );
     }
 
@@ -79,7 +79,7 @@ class DeleteLockTests {
     void watchedRecursiveDirectoryCanBeDeleted() throws IOException {
         deleteAndVerify(
             testDir.getTestDirectory(),
-            WatchScope.INCLUDING_ALL_DESCENDANTS
+            WatchScope.PATH_AND_ALL_DESCENDANTS
         );
     }
 }

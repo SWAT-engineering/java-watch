@@ -40,7 +40,7 @@ public class SingleDirectoryTests {
     void deleteOfFileInDirectoryShouldBeVisible() throws IOException, InterruptedException {
         var target = testDir.getTestFiles().get(0);
         var seen = new AtomicBoolean(false);
-        var watchConfig = Watcher.watch(target.getParent(), WatchScope.INCLUDING_CHILDREN)
+        var watchConfig = Watcher.watch(target.getParent(), WatchScope.PATH_AND_CHILDREN)
             .onEvent(ev -> {
                 if (ev.getKind() == Kind.DELETED && ev.calculateFullPath().equals(target)) {
                     seen.set(true);

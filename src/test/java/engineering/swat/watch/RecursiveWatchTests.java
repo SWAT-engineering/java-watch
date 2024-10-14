@@ -47,7 +47,7 @@ class RecursiveWatchTests {
         var target = new AtomicReference<Path>();
         var created = new AtomicBoolean(false);
         var changed = new AtomicBoolean(false);
-        var watchConfig = Watcher.watch(testDir.getTestDirectory(), WatchScope.INCLUDING_ALL_DESCENDANTS)
+        var watchConfig = Watcher.watch(testDir.getTestDirectory(), WatchScope.PATH_AND_ALL_DESCENDANTS)
             .onEvent(ev -> {
                     logger.debug("Event received: {}", ev);
                     if (ev.calculateFullPath().equals(target.get())) {
@@ -79,7 +79,7 @@ class RecursiveWatchTests {
     void correctRelativePathIsReported() throws IOException {
         Path relative = Path.of("a","b", "c", "d.txt");
         var seen = new AtomicBoolean(false);
-        var watcher = Watcher.watch(testDir.getTestDirectory(), WatchScope.INCLUDING_ALL_DESCENDANTS)
+        var watcher = Watcher.watch(testDir.getTestDirectory(), WatchScope.PATH_AND_ALL_DESCENDANTS)
             .onEvent(ev -> {
                 logger.debug("Seen event: {}", ev);
                 if (ev.getRelativePath().equals(relative)) {
@@ -104,7 +104,7 @@ class RecursiveWatchTests {
             .findAny()
             .orElseThrow();
         var seen = new AtomicBoolean(false);
-        var watchConfig = Watcher.watch(target.getParent(), WatchScope.INCLUDING_CHILDREN)
+        var watchConfig = Watcher.watch(target.getParent(), WatchScope.PATH_AND_CHILDREN)
             .onEvent(ev -> {
                 if (ev.getKind() == Kind.DELETED && ev.calculateFullPath().equals(target)) {
                     seen.set(true);

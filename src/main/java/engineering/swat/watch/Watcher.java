@@ -49,13 +49,13 @@ public class Watcher {
             throw new IllegalArgumentException("We can only watch absolute paths");
         }
         switch (scope) {
-            case INCLUDING_CHILDREN: // intended fallthrough
-            case INCLUDING_ALL_DESCENDANTS:
+            case PATH_AND_CHILDREN: // intended fallthrough
+            case PATH_AND_ALL_DESCENDANTS:
                 if (!Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
-                    throw new IllegalArgumentException("Only directories are supported for this scope");
+                    throw new IllegalArgumentException("Only directories are supported for this scope: " + scope);
                 }
                 break;
-            case SINGLE:
+            case PATH_ONLY:
                 if (Files.isSymbolicLink(path)) {
                     throw new IllegalArgumentException("Symlinks are not supported");
                 }
@@ -101,12 +101,12 @@ public class Watcher {
             throw new IllegalStateException("There is no onEvent handler defined");
         }
         switch (scope) {
-            case INCLUDING_CHILDREN: {
+            case PATH_AND_CHILDREN: {
                 var result = new JDKDirectoryWatcher(path, executor, this.eventHandler, false);
                 result.start();
                 return result;
             }
-            case INCLUDING_ALL_DESCENDANTS: {
+            case PATH_AND_ALL_DESCENDANTS: {
                 try {
                     var result = new JDKDirectoryWatcher(path, executor, this.eventHandler, true);
                     result.start();
@@ -120,7 +120,7 @@ public class Watcher {
                     return result;
                 }
             }
-            case SINGLE: {
+            case PATH_ONLY: {
                 var result = new JDKFileWatcher(path, executor, this.eventHandler);
                 result.start();
                 return result;

@@ -3,6 +3,7 @@ package engineering.swat.watch.impl;
 import static java.nio.file.StandardWatchEventKinds.ENTRY_CREATE;
 import static java.nio.file.StandardWatchEventKinds.ENTRY_DELETE;
 import static java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY;
+import static java.nio.file.StandardWatchEventKinds.OVERFLOW;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -92,7 +93,7 @@ class JDKPoller {
         try {
             return CompletableFuture.supplyAsync(() -> {
                 try {
-                    WatchEvent.Kind<?>[] kinds = new WatchEvent.Kind[]{ ENTRY_CREATE, ENTRY_MODIFY, ENTRY_MODIFY, ENTRY_DELETE };
+                    WatchEvent.Kind<?>[] kinds = new WatchEvent.Kind[]{ ENTRY_CREATE, ENTRY_MODIFY, OVERFLOW, ENTRY_DELETE };
                     if (path.isRecursive()) {
                         return path.getPath().register(service, kinds, ExtendedWatchEventModifier.FILE_TREE);
                     }
