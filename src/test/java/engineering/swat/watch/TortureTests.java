@@ -248,13 +248,14 @@ class TortureTests {
                 }
                 var r = new Thread(() -> {
                     try {
+                        var id = Thread.currentThread().getId();
                         startRegistering.acquire();
                         for (int k = 0; k < 1000; k++) {
                             var watcher = Watcher
                                 .watch(testDir.getTestDirectory(), WatchScope.PATH_AND_CHILDREN)
                                 .onEvent(e -> {
                                     if (e.calculateFullPath().equals(target)) {
-                                        seen.add(Thread.currentThread().getId());
+                                        seen.add(id);
                                     }
                                 });
                             try (var c = watcher.start()) {
@@ -270,7 +271,6 @@ class TortureTests {
                     } catch (InterruptedException e1) {
                     }
                     finally {
-                        startedWatching.release();
                         done.release();
                     }
                 });
@@ -280,7 +280,7 @@ class TortureTests {
 
             startRegistering.release(THREADS);
             done.acquire(THREADS - amountOfWatchersActive);
-            startedWatching.acquire(THREADS);
+            startedWatching.acquire(amountOfWatchersActive);
             assertTrue(seen.isEmpty(), "No events should have been sent");
             Files.writeString(target, "Hello World");
             await("We should see only exactly the " + amountOfWatchersActive + " events we expect")
