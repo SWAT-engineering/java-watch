@@ -27,18 +27,16 @@ public class BundledSubscription<Key extends @NonNull Object, Event extends @Non
     private static class Subscription<R> implements Consumer<R> {
         private final List<Consumer<R>> consumers = new CopyOnWriteArrayList<>();
         private volatile @MonotonicNonNull Closeable toBeClosed;
-        Subscription() {
+        private volatile boolean closed = false;
+        Subscription(Consumer<R> initial) {
+            consumers.add(initial);
         }
 
-        public void setToBeClosed(Closeable closer) {
-            this.toBeClosed = closer;
-        }
-
-        public void add(Consumer<R> newConsumer) {
+        void add(Consumer<R> newConsumer) {
             consumers.add(newConsumer);
         }
 
-        public void remove(Consumer<R> existingConsumer) {
+        void remove(Consumer<R> existingConsumer) {
             consumers.remove(existingConsumer);
         }
 
@@ -53,49 +51,67 @@ public class BundledSubscription<Key extends @NonNull Object, Event extends @Non
             return !consumers.isEmpty();
         }
 
+        boolean firstIs(Consumer<R> eventListener) {
+            return consumers.stream().findFirst().orElse(null) == eventListener;
+        }
+
 
     }
 
     @Override
     public Closeable subscribe(Key target, Consumer<Event> eventListener) throws IOException {
-        var active = this.subscriptions.computeIfAbsent(target, t -> new Subscription<>());
-        boolean first = false;
-        if (active.toBeClosed == null) {
-            // we just added a new one
-            // so lets take a lock on it, and try to be the one that gets to initialize it
-            synchronized(active) {
-                // now lock on it to make sure nobo
-                if (active.toBeClosed == null) {
-                    first = true;
-                    active.add(eventListener); // we know we already have the lock, and we need to do this before we register the watch
-                    var newSubscriptions = wrapped.subscribe(target, active);
-                    active.setToBeClosed(newSubscriptions);
-                }
-                else {
-                }
-            }
-        }
-        // at this point we have to be sure that we're not the first to in the list
-        // since we might have won the race on the compute, but lost the race
-        if (!first) {
-            active.add(eventListener);
-        }
-        return () -> {
-            active.remove(eventListener);
-            if (!active.hasActiveConsumers()) {
-                subscriptions.remove(target);
-                if (active.hasActiveConsumers()) {
-                    // we lost the race, someone else added something again
-                    // so we put it back in the list
-                    subscriptions.put(target, active);
-                }
-                else {
-                    if (active.toBeClosed != null) {
-                        active.toBeClosed.close();
+        while (true) {
+            Subscription<Event> active = this.subscriptions.computeIfAbsent(target, t -> new Subscription<>(eventListener));
+            // after this, there will only be 1 instance of active subscription in the map.
+            // but we might have a race with remove, which can close the subscript between our get and our addition
+            if (active.toBeClosed == null) {
+                // we might be the first
+                synchronized(active) {
+                    if (active.toBeClosed == null) {
+                        // we're the first here, so we can't be closed
+                        // let's register ourselves
+                        active.toBeClosed = (wrapped.subscribe(target, active));
                     }
                 }
             }
-        };
+            if (!active.firstIs(eventListener)) {
+                // we weren't the one that got the compute action
+                // so we'll add ourselves to the list
+                //
+                active.add(active);
+            }
+            if (active.closed) {
+                // we tried, but we lost the race to add something to the list of subscriptions before we got closed
+                continue;
+            }
+            return () -> {
+                active.remove(eventListener);
+                if (!active.hasActiveConsumers()) {
+                    // we might be able to close it
+                    // let's try to lock us down.
+                    // just so that there are no 2 threads closing it
+                    // and a bit so that there is no thread also just starting to register it
+                    synchronized (active) {
+                        if (!active.hasActiveConsumers() && !active.closed) {
+                            // okay, it's still legal to close this one
+                            // and no other thread is closing it
+                            // so we're going to remove it from the map
+
+
+                            // TODO: still a race! since beween line 95 and the one below, the line 83 can have been checked.
+                            // maybe use atomic boolean to get this logic better?
+                            active.closed = true;
+                            subscriptions.remove(target, active);
+
+                            if (active.toBeClosed != null) {
+                                active.toBeClosed.close();
+                            }
+                        }
+                    }
+                }
+            };
+        }
+
 
     }
 
