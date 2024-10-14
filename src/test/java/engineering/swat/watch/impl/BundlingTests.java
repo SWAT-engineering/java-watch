@@ -11,14 +11,17 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.awaitility.Awaitility;
+import org.hamcrest.core.IsEqual;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 
 import engineering.swat.watch.TestHelper;
@@ -36,7 +39,7 @@ public class BundlingTests {
         public Closeable subscribe(Long target, Consumer<Boolean> eventListener) throws IOException {
             subs.put(target, eventListener);
             return () -> {
-                subs.remove(target);
+                subs.remove(target, eventListener);
             };
         }
 
@@ -60,7 +63,7 @@ public class BundlingTests {
         Awaitility.setDefaultTimeout(TestHelper.LONG_WAIT.getSeconds(), TimeUnit.SECONDS);
     }
 
-    private static final long SUBs = 100;
+    private static final int SUBs = 100;
     private static final long MSGs = 100_000;
 
     @Test
@@ -101,4 +104,44 @@ public class BundlingTests {
 
 
     }
+
+    @RepeatedTest(failureThreshold = 1, value=50)
+    void parallelSubscriptions() throws IOException, InterruptedException {
+        var hits = new AtomicInteger();
+        var endPointReached = new Semaphore(0);
+        var waitingForClose = new Semaphore(0);
+        var done = new Semaphore(0);
+
+        int active = 0;
+        for (int j = 0; j < SUBs; j++) {
+            boolean keepAround = j % 2 == 0;
+            if (keepAround) {
+                active++;
+            }
+            var t = new Thread(() -> {
+                for (int k =0; k < 1000; k++) {
+                    try (var c = target.subscribe(Long.valueOf(0), b -> hits.incrementAndGet())) {
+                        if (keepAround && k + 1 == 1000) {
+                            endPointReached.release();
+                            waitingForClose.acquire();
+                        }
+                    } catch (Exception ignored) {
+                        logger.catching(ignored);
+                    }
+                }
+                done.release();
+            });
+            t.setDaemon(true);
+            t.start();
+        }
+
+        endPointReached.acquire(active);
+        done.acquire(SUBs - active);
+        fakeSubs.publish(Long.valueOf(0));
+
+        await("Subscriptions should have hit")
+            .untilAtomic(hits, IsEqual.equalTo(active));
+        waitingForClose.release(active);
+    }
+
 }

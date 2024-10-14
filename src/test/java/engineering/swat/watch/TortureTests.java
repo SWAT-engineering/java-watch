@@ -1,6 +1,5 @@
 package engineering.swat.watch;
 
-import static org.awaitility.Awaitility.doNotCatchUncaughtExceptionsByDefault;
 import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -11,8 +10,8 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.LocalTime;
 import java.util.Random;
+import java.util.Collections;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.Executor;
@@ -27,10 +26,8 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.DisabledIfEnvironmentVariable;
-import org.junit.jupiter.api.condition.EnabledIf;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 import engineering.swat.watch.WatchEvent.Kind;
@@ -173,24 +170,30 @@ class TortureTests {
         }
     }
 
-    @Test
+    private final int TORTURE_REGISTRATION_THREADS = THREADS * 500;
+
+    @RepeatedTest(failureThreshold=1, value = 20)
     void manyRegistrationsForSamePath() throws InterruptedException, IOException {
         var startRegistering = new Semaphore(0);
+        var startedWatching = new Semaphore(0);
         var startDeregistring = new Semaphore(0);
         var done = new Semaphore(0);
         var seen = ConcurrentHashMap.<Path>newKeySet();
         var exceptions = new LinkedBlockingDeque<Exception>();
-        for (int t = 0; t < THREADS * 100; t++) {
+
+        for (int t = 0; t < TORTURE_REGISTRATION_THREADS; t++) {
             var r = new Thread(() -> {
                 try {
                     var watcher = Watcher
                         .watch(testDir.getTestDirectory(), WatchScope.PATH_AND_CHILDREN)
-                        .onEvent(e -> { if (e.getKind() == Kind.CREATED) seen.add(e.calculateFullPath()); });
+                        .onEvent(e -> seen.add(e.calculateFullPath()));
                     startRegistering.acquire();
                     try (var c = watcher.start()) {
+                        startedWatching.release();
                         startDeregistring.acquire();
                     }
                     catch(Exception e) {
+                        startedWatching.release();
                         exceptions.push(e);
                     }
                 } catch (InterruptedException e1) {
@@ -203,29 +206,39 @@ class TortureTests {
             r.start();
         }
 
-        startRegistering.release(THREADS * 100);
-        startDeregistring.release((THREADS * 100) - 1);
-        done.acquire((THREADS * 100) - 1);
-        assertTrue(seen.isEmpty(), "No events should have been sent");
-        Files.writeString(testDir.getTestDirectory().resolve("test124.txt"), "Hello World");
-        await("We should see only one event")
-            .failFast(() -> !exceptions.isEmpty())
-            .timeout(TestHelper.LONG_WAIT)
-            .pollInterval(Duration.ofMillis(10))
-            .until(seen::size, s -> s == 1);
-        if (!exceptions.isEmpty()) {
-            fail(exceptions.pop());
+        try {
+            startRegistering.release(TORTURE_REGISTRATION_THREADS);
+            startDeregistring.release(TORTURE_REGISTRATION_THREADS - 1);
+            startedWatching.acquire(TORTURE_REGISTRATION_THREADS); // make sure they area ll started
+            done.acquire(TORTURE_REGISTRATION_THREADS - 1);
+            assertTrue(seen.isEmpty(), "No events should have been sent");
+            var target = testDir.getTestDirectory().resolve("test124.txt");
+            //logger.info("Writing: {}", target);
+            Files.writeString(target, "Hello World");
+            var expected = Collections.singleton(target);
+            await("We should see only one event")
+                .failFast(() -> !exceptions.isEmpty())
+                .timeout(TestHelper.LONG_WAIT)
+                .pollInterval(Duration.ofMillis(10))
+                .until(() -> seen, expected::equals);
+            if (!exceptions.isEmpty()) {
+                fail(exceptions.pop());
+            }
         }
-        startDeregistring.release();
+        finally {
+            startDeregistring.release(TORTURE_REGISTRATION_THREADS);
+        }
     }
 
-    @Test
+    @RepeatedTest(failureThreshold=1, value = 20)
     void manyRegisterAndUnregisterSameTime() throws InterruptedException, IOException {
         var startRegistering = new Semaphore(0);
+        var startedWatching = new Semaphore(0);
         var stopAll = new Semaphore(0);
         var done = new Semaphore(0);
-        var seen = new ConcurrentLinkedDeque<Path>();
+        var seen = ConcurrentHashMap.<Long>newKeySet();
         var exceptions = new LinkedBlockingDeque<Exception>();
+        var target = testDir.getTestDirectory().resolve("test124.txt");
         int amountOfWatchersActive = 0;
         try {
             for (int t = 0; t < THREADS; t++) {
@@ -239,10 +252,14 @@ class TortureTests {
                         for (int k = 0; k < 1000; k++) {
                             var watcher = Watcher
                                 .watch(testDir.getTestDirectory(), WatchScope.PATH_AND_CHILDREN)
-                                .onEvent(e -> { if (e.getKind() == Kind.CREATED) seen.add(e.calculateFullPath()); });
+                                .onEvent(e -> {
+                                    if (e.calculateFullPath().equals(target)) {
+                                        seen.add(Thread.currentThread().getId());
+                                    }
+                                });
                             try (var c = watcher.start()) {
                                 if (finishWatching && k + 1 == 1000) {
-                                    logger.info("Waiting on stop signal");
+                                    startedWatching.release();
                                     stopAll.acquire();
                                 }
                             }
@@ -253,6 +270,7 @@ class TortureTests {
                     } catch (InterruptedException e1) {
                     }
                     finally {
+                        startedWatching.release();
                         done.release();
                     }
                 });
@@ -262,9 +280,10 @@ class TortureTests {
 
             startRegistering.release(THREADS);
             done.acquire(THREADS - amountOfWatchersActive);
+            startedWatching.acquire(THREADS);
             assertTrue(seen.isEmpty(), "No events should have been sent");
-            Files.writeString(testDir.getTestDirectory().resolve("test124.txt"), "Hello World");
-            await("We should see only exactly the events we expect")
+            Files.writeString(target, "Hello World");
+            await("We should see only exactly the " + amountOfWatchersActive + " events we expect")
                 .failFast(() -> !exceptions.isEmpty())
                 .pollDelay(TestHelper.NORMAL_WAIT.minusMillis(100))
                 .until(seen::size, Predicate.isEqual(amountOfWatchersActive))

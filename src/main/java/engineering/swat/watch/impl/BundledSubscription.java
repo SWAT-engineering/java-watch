@@ -57,10 +57,11 @@ public class BundledSubscription<Key extends @NonNull Object, Event extends @Non
             Subscription<Event> active = this.subscriptions.computeIfAbsent(target, t -> new Subscription<>());
             // after this, there will only be 1 instance of active subscription in the map.
             // but we might have a race with remove, which can close the subscript between our get and our addition
+            // since this code is very hard to get right without locks, and shouldn't be run too often
+            // we take a big lock around the subscription management
             synchronized(active) {
                 if (active.closed) {
-                    // we lost the race with closing the subscription
-                    // so we retry
+                    // we lost the race with closing the subscription, so we retry
                     continue;
                 }
                 active.add(eventListener);

@@ -36,4 +36,9 @@ public class SubscriptionKey {
     public int hashCode() {
         return Objects.hash(path, recursive);
     }
+
+    @Override
+    public String toString() {
+        return path.toString() + (recursive ? "[recursive]" : "");
+    }
 }
