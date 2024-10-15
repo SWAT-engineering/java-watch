@@ -6,7 +6,7 @@ public class TestHelper {
 
     public static final Duration SHORT_WAIT;
     public static final Duration NORMAL_WAIT;
-    public final static Duration LONG_WAIT;
+    public static final Duration LONG_WAIT;
 
     static {
         var delayFactorConfig = System.getenv("DELAY_FACTOR");

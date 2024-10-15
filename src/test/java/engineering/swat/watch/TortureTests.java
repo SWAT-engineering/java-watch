@@ -76,7 +76,7 @@ class TortureTests {
                             break;
                         }
                         try {
-                            // burst a bunch of creates creates and then sleep a bit
+                            // burst a bunch of creates and then sleep a bit
                             for (int i = 0; i< BURST_SIZE; i++) {
                                 var file = root.resolve("l1-" + r.nextInt(1000))
                                     .resolve("l2-" + r.nextInt(100))
@@ -209,7 +209,7 @@ class TortureTests {
         try {
             startRegistering.release(TORTURE_REGISTRATION_THREADS);
             startDeregistring.release(TORTURE_REGISTRATION_THREADS - 1);
-            startedWatching.acquire(TORTURE_REGISTRATION_THREADS); // make sure they area ll started
+            startedWatching.acquire(TORTURE_REGISTRATION_THREADS); // make sure they are all started
             done.acquire(TORTURE_REGISTRATION_THREADS - 1);
             assertTrue(seen.isEmpty(), "No events should have been sent");
             var target = testDir.getTestDirectory().resolve("test124.txt");
