@@ -39,17 +39,28 @@ public class SingleDirectoryTests {
     @Test
     void deleteOfFileInDirectoryShouldBeVisible() throws IOException, InterruptedException {
         var target = testDir.getTestFiles().get(0);
-        var seen = new AtomicBoolean(false);
+        var seenDelete = new AtomicBoolean(false);
+        var seenCreate = new AtomicBoolean(false);
         var watchConfig = Watcher.watch(target.getParent(), WatchScope.PATH_AND_CHILDREN)
             .onEvent(ev -> {
                 if (ev.getKind() == Kind.DELETED && ev.calculateFullPath().equals(target)) {
-                    seen.set(true);
+                    seenDelete.set(true);
+                }
+                if (ev.getKind() == Kind.CREATED && ev.calculateFullPath().equals(target)) {
+                    seenCreate.set(true);
                 }
             });
         try (var watch = watchConfig.start()) {
+
+            // Delete the file
             Files.delete(target);
             await("File deletion should generate delete event")
-                .untilTrue(seen);
+                .untilTrue(seenDelete);
+
+            // Re-create it again
+            Files.writeString(target, "Hello World");
+            await("File creation should generate create event")
+                .untilTrue(seenCreate);
         }
     }
 }
