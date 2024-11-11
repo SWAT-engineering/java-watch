@@ -14,7 +14,7 @@ Currently working features in java-watch:
 
 Future features:
 
-- Avoid poll based watcher in macOS/OSX that only detects changes every 2 seconds
+- Avoid poll based watcher in macOS/OSX that only detects changes every 2 seconds (see [#4](https://github.com/SWAT-engineering/java-watch/issues/4))
 - Support file watches natively in linux
 - Monitor only specific events (such as only CREATES)
 
