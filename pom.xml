@@ -196,7 +196,7 @@
   </dependencies>
 
   <profiles>
-    <profile>      <!-- run with: mvn clean compile -P checker-framework -->
+    <profile>  <!-- run with: mvn clean compile -P checker-framework -->
       <id>checker-framework</id>
       <build>
         <plugins>
