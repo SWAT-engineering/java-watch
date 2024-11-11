@@ -25,6 +25,8 @@ import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 
 import engineering.swat.watch.TestHelper;
+import engineering.swat.watch.impl.util.BundledSubscription;
+import engineering.swat.watch.impl.util.ISubscribable;
 
 public class BundlingTests {
 
