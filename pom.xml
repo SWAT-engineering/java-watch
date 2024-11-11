@@ -80,6 +80,47 @@
           </execution>
         </executions>
       </plugin>
+      <plugin>
+        <groupId>com.mycila</groupId>
+        <artifactId>license-maven-plugin</artifactId>
+        <!-- mvn license:format adds/updates all license headers -->
+        <version>4.6</version>
+        <configuration>
+          <licenseSets>
+            <licenseSet>
+              <header>LICENSE</header>
+              <excludes>
+                <exclude>README.md</exclude>
+                <exclude>target/**</exclude>
+                <exclude>.vscode/**</exclude>
+                <exclude>.editorconfig</exclude>
+              </excludes>
+            </licenseSet>
+          </licenseSets>
+        </configuration>
+        <executions>
+          <execution>
+            <goals>
+              <goal>check</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.ec4j.maven</groupId>
+        <artifactId>editorconfig-maven-plugin</artifactId>
+        <version>0.1.3</version>
+        <!-- run mvn editorconfig:format to fix errors reported-->
+        <executions>
+          <execution>
+            <id>check</id>
+            <phase>verify</phase>
+            <goals>
+              <goal>check</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
     </plugins>
   </build>
 
