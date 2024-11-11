@@ -1,4 +1,4 @@
-package engineering.swat.watch.impl;
+package engineering.swat.watch.impl.jdk;
 
 import static java.nio.file.StandardWatchEventKinds.ENTRY_CREATE;
 import static java.nio.file.StandardWatchEventKinds.ENTRY_DELETE;
@@ -26,6 +26,8 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import com.sun.nio.file.ExtendedWatchEventModifier;
+
+import engineering.swat.watch.impl.util.SubscriptionKey;
 
 /**
  * This class is a wrapper around the JDK WatchService, it takes care to poll the service for new events, and then distributes them to the right parties

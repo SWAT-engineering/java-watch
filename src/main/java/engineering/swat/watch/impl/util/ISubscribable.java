@@ -1,4 +1,4 @@
-package engineering.swat.watch.impl;
+package engineering.swat.watch.impl.util;
 
 import java.io.Closeable;
 import java.io.IOException;

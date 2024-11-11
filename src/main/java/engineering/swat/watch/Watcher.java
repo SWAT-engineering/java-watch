@@ -12,9 +12,9 @@ import java.util.function.Consumer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import engineering.swat.watch.impl.JDKDirectoryWatcher;
-import engineering.swat.watch.impl.JDKFileWatcher;
-import engineering.swat.watch.impl.JDKRecursiveDirectoryWatcher;
+import engineering.swat.watch.impl.jdk.JDKDirectoryWatcher;
+import engineering.swat.watch.impl.jdk.JDKFileWatcher;
+import engineering.swat.watch.impl.jdk.JDKRecursiveDirectoryWatcher;
 
 /**
  * <p>Watch a path for changes.</p>

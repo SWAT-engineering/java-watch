@@ -1,4 +1,4 @@
-package engineering.swat.watch.impl;
+package engineering.swat.watch.impl.util;
 
 import java.nio.file.Path;
 import java.util.Objects;
