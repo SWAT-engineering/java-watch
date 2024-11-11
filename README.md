@@ -1,8 +1,59 @@
 # java-watch
-a java file watcher that works across platforms and supports recursion and single file watches
+a java file watcher that works across platforms and supports recursion, single file watches, and tries to make sure no events are missed.
 
+## Features
+
+Currently working features in java-watch:
+
+- Recursive watches, even if platform doesn't support it natively.
+- Recursive watches also work inside directories created after the watch started
+- Even in case of overflow you will get notifications of **new** directories (and it's recursive files), modification events will however not be simulated
+- Single file watches
+- Multiple watches for the same directory are merged to avoid overloading the kernel
+- Events are process on a worker pool, which you can customize.
+
+Future features:
+
+- Avoid poll based watcher in macOS/OSX that only detects changes every 2 seconds
+- Support file watches natively in linux
+- Monitor only specific events (such as only CREATES)
+
+## Usage
+
+Import dependency in pom.xml:
+
+```xml
+<dependency>
+  <groupId>engineering.swat</groupId>
+  <artifactId>java-watch</artifactId>
+  <version>${java-watch-version}</version>
+</dependency>
+```
+
+Start using java-watch:
+
+```java
+var directory = Path.of("tmp", "test-dir");
+var watcherSetup = Watcher.watch(directory, WatchScope.PATH_AND_CHILDREN)
+  .withExecutor(Executors.newCachedThreadPool()) // optionally configure a custom thread pool
+  .onEvent(watchEvent -> {
+    System.err.println(watchEvent);
+  });
+
+try(var active = watcherSetup.start()) {
+  System.out.println("Monitoring files, press any key to stop");
+  System.in.read();
+}
+// after active.close(), the watch is stopped and
+// no new events will be scheduled on the threadpool
+```
 
 ## Related work
+
+Before starting this library, we wanted to use existing libraries, but they all lacked proper support for recursive file watches or lacked configurability. This library now has a growing collection of tests and a small API that should allow for future improvements without breaking compatibility.
+
+The following section describes the related work research on the libraries and underlying limitations.
+
 After reading the documentation of the following discussion on file system watches:
 
 - [Paul Millr's nodejs chokidar](https://github.com/paulmillr/chokidar)
