@@ -1,4 +1,4 @@
-package engineering.swat.watch.impl;
+package engineering.swat.watch.impl.jdk;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -13,9 +13,12 @@ import org.apache.logging.log4j.Logger;
 import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import engineering.swat.watch.ActiveWatch;
 import engineering.swat.watch.WatchEvent;
+import engineering.swat.watch.impl.util.BundledSubscription;
+import engineering.swat.watch.impl.util.SubscriptionKey;
 
-public class JDKDirectoryWatcher implements Closeable {
+public class JDKDirectoryWatcher implements ActiveWatch {
     private final Logger logger = LogManager.getLogger();
     private final Path directory;
     private final Executor exec;
@@ -95,7 +98,7 @@ public class JDKDirectoryWatcher implements Closeable {
     @Override
     public synchronized void close() throws IOException {
         if (activeWatch != null) {
-            logger.debug("Closing watch for: {}", this.directory);
+            logger.trace("Closing watch for: {}", this.directory);
             activeWatch.close();
         }
     }

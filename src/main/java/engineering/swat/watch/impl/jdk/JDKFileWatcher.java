@@ -1,4 +1,4 @@
-package engineering.swat.watch.impl;
+package engineering.swat.watch.impl.jdk;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -10,6 +10,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 
+import engineering.swat.watch.ActiveWatch;
 import engineering.swat.watch.WatchEvent;
 
 /**
@@ -17,7 +18,7 @@ import engineering.swat.watch.WatchEvent;
  *
  * Note that you should take care to call start only once.
  */
-public class JDKFileWatcher implements Closeable {
+public class JDKFileWatcher implements ActiveWatch {
     private final Logger logger = LogManager.getLogger();
     private final Path file;
     private final Path fileName;

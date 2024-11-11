@@ -1,6 +1,5 @@
 package engineering.swat.watch;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -96,7 +95,7 @@ public class Watcher {
      * @throws IOException in case the starting of the watcher caused an underlying IO exception
      * @throws IllegalStateException the watchers is not configured correctly (for example, missing {@link #onEvent(Consumer)}, or a watcher is started twice)
      */
-    public Closeable start() throws IOException {
+    public ActiveWatch start() throws IOException {
         if (this.eventHandler == NULL_HANDLER) {
             throw new IllegalStateException("There is no onEvent handler defined");
         }

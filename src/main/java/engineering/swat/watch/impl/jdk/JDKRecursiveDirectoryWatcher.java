@@ -22,9 +22,10 @@ import java.util.function.Consumer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import engineering.swat.watch.ActiveWatch;
 import engineering.swat.watch.WatchEvent;
 
-public class JDKRecursiveDirectoryWatcher implements Closeable {
+public class JDKRecursiveDirectoryWatcher implements ActiveWatch {
     private final Logger logger = LogManager.getLogger();
     private final Path root;
     private final Executor exec;
