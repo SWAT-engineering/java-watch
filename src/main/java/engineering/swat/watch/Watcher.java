@@ -17,9 +17,10 @@ import engineering.swat.watch.impl.JDKFileWatcher;
 import engineering.swat.watch.impl.JDKRecursiveDirectoryWatcher;
 
 /**
- * Watch a path for changes.
+ * <p>Watch a path for changes.</p>
  *
- * It will avoid common errors using the raw apis, and will try to use the most native api where possible.
+ *
+ * <p>It will avoid common errors using the raw apis, and will try to use the most native api where possible.</p>
  * Note, there are differences per platform that cannot be avoided, please review the readme of the library.
  */
 public class Watcher {

@@ -5,14 +5,17 @@ package engineering.swat.watch;
  */
 public enum WatchScope {
     /**
-     * Watch changes to a single file or (metadata of) a directory, but not its
-     * content. That is, the following changes to a directory are watched:
-     *   - any modification caused by the creation of a nested file/directory;
-     *   - any modification caused by the deletion of a nested file/directory;
-     *   - any modification of its own metadata.
+     * <p>Watch changes to a single file or (metadata of) a single directory. </p>
      *
-     * When changes to nested files/directories should also be watched, use
-     * PATH_AND_CHILDREN or PATH_AND_ALL_DESCENDANTS.
+     * <p>Note, depending on the platform you can receive events for a directory
+     * in case of these events: </p>
+     * <ul>
+     *   <li>a MODIFIED caused by the creation of a nested file/directory </li>
+     *   <li>a MODIFIED caused by the deletion of a nested file/directory </li>
+     *   <li>a MODIFIED of its own metadata</li>
+     * </ul>
+     *
+     * <p>In most cases when Path is a Directory you're interested in which nested entries changes, in that case use {@link #PATH_AND_CHILDREN} or {@link #PATH_AND_ALL_DESCENDANTS}. </p>
      */
     PATH_ONLY,
     /**
