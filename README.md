@@ -5,6 +5,7 @@ a java file watcher that works across platforms and supports recursion, single f
 
 Currently working features in java-watch:
 
+- Regular directory watches
 - Recursive watches, even if platform doesn't support it natively.
 - Recursive watches also work inside directories created after the watch started
 - Even in case of overflow you will get notifications of **new** directories (and it's recursive files), modification events will however not be simulated
