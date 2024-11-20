@@ -32,6 +32,11 @@ jobs:
         env:
           DELAY_FACTOR: 3
 
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_ORG_TOKEN }}
+
   checker-framework:
     runs-on: ubuntu-latest
     steps:
