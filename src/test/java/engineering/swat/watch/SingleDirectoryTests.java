@@ -68,7 +68,7 @@ public class SingleDirectoryTests {
         var seenDelete = new AtomicBoolean(false);
         var seenCreate = new AtomicBoolean(false);
         var watchConfig = Watcher.watch(target.getParent(), WatchScope.PATH_AND_CHILDREN)
-            .onEvent(ev -> {
+            .on(ev -> {
                 if (ev.getKind() == Kind.DELETED && ev.calculateFullPath().equals(target)) {
                     seenDelete.set(true);
                 }

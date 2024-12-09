@@ -77,7 +77,7 @@ class DeleteLockTests {
     }
 
     private void deleteAndVerify(Path target, WatchScope scope) throws IOException {
-        try (var watch = Watcher.watch(target, scope).onEvent(ev -> {}).start()) {
+        try (var watch = Watcher.watch(target, scope).on(ev -> {}).start()) {
             recursiveDelete(target);
             assertFalse(Files.exists(target), "The file/directory shouldn't exist anymore");
         }

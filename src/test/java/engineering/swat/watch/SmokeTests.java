@@ -67,7 +67,7 @@ class SmokeTests {
         var changed = new AtomicBoolean(false);
         var target = testDir.getTestFiles().get(0);
         var watchConfig = Watcher.watch(testDir.getTestDirectory(), WatchScope.PATH_AND_CHILDREN)
-            .onEvent(ev -> {if (ev.getKind() == MODIFIED && ev.calculateFullPath().equals(target)) { changed.set(true); }})
+            .on(ev -> {if (ev.getKind() == MODIFIED && ev.calculateFullPath().equals(target)) { changed.set(true); }})
             ;
 
         try (var activeWatch = watchConfig.start() ) {
@@ -84,7 +84,7 @@ class SmokeTests {
             .findFirst()
             .orElseThrow();
         var watchConfig = Watcher.watch(testDir.getTestDirectory(), WatchScope.PATH_AND_ALL_DESCENDANTS)
-            .onEvent(ev -> { if (ev.getKind() == MODIFIED && ev.calculateFullPath().equals(target)) { changed.set(true);}})
+            .on(ev -> { if (ev.getKind() == MODIFIED && ev.calculateFullPath().equals(target)) { changed.set(true);}})
             ;
 
         try (var activeWatch = watchConfig.start() ) {
@@ -102,7 +102,7 @@ class SmokeTests {
             .orElseThrow();
 
         var watchConfig = Watcher.watch(target, WatchScope.PATH_ONLY)
-            .onEvent(ev -> {
+            .on(ev -> {
                 if (ev.calculateFullPath().equals(target)) {
                     changed.set(true);
                 }

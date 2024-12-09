@@ -99,13 +99,13 @@ public class Watcher {
      * @param eventHandler a callback that handles the watch event, will be called once per event.
      * @return this for optional method chaining
      */
-    public Watcher onEvent(Consumer<WatchEvent> eventHandler) {
+    public Watcher on(Consumer<WatchEvent> eventHandler) {
         this.eventHandler = eventHandler;
         return this;
     }
 
     /**
-     * Optionally configure the executor in which the {@link #onEvent(Consumer)} callbacks are scheduled.
+     * Optionally configure the executor in which the {@link #on(Consumer)} callbacks are scheduled.
      * If not defined, every task will be scheduled on the {@link java.util.concurrent.ForkJoinPool#commonPool()}.
      * @param callbackHandler worker pool to use
      * @return this for optional method chaining
@@ -119,7 +119,7 @@ public class Watcher {
      * Start watch the path for events.
      * @return a subscription for the watch, when closed, new events will stop being registered to the worker pool.
      * @throws IOException in case the starting of the watcher caused an underlying IO exception
-     * @throws IllegalStateException the watchers is not configured correctly (for example, missing {@link #onEvent(Consumer)}, or a watcher is started twice)
+     * @throws IllegalStateException the watchers is not configured correctly (for example, missing {@link #on(Consumer)}, or a watcher is started twice)
      */
     public ActiveWatch start() throws IOException {
         if (this.eventHandler == NULL_HANDLER) {
