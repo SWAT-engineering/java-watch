@@ -148,7 +148,7 @@ class TortureTests {
         var seenCreates = ConcurrentHashMap.<Path>newKeySet();
         var watchConfig = Watcher.watch(testDir.getTestDirectory(), WatchScope.PATH_AND_ALL_DESCENDANTS)
             .withExecutor(pool)
-            .onEvent(ev -> {
+            .on(ev -> {
                 var fullPath = ev.calculateFullPath();
                 switch (ev.getKind()) {
                     case CREATED:
@@ -212,7 +212,7 @@ class TortureTests {
                 try {
                     var watcher = Watcher
                         .watch(testDir.getTestDirectory(), WatchScope.PATH_AND_CHILDREN)
-                        .onEvent(e -> seen.add(e.calculateFullPath()));
+                        .on(e -> seen.add(e.calculateFullPath()));
                     startRegistering.acquire();
                     try (var c = watcher.start()) {
                         startedWatching.release();
@@ -279,7 +279,7 @@ class TortureTests {
                         for (int k = 0; k < 1000; k++) {
                             var watcher = Watcher
                                 .watch(testDir.getTestDirectory(), WatchScope.PATH_AND_CHILDREN)
-                                .onEvent(e -> {
+                                .on(e -> {
                                     if (e.calculateFullPath().equals(target)) {
                                         seen.add(id);
                                     }
@@ -345,7 +345,7 @@ class TortureTests {
             final var happened = new Semaphore(0);
             var watchConfig = Watcher.watch(testDir.getTestDirectory(), WatchScope.PATH_AND_ALL_DESCENDANTS)
                 .withExecutor(pool)
-                .onEvent(ev -> {
+                .on(ev -> {
                     events.getAndIncrement();
                     happened.release();
                     var fullPath = ev.calculateFullPath();

@@ -37,7 +37,7 @@ Start using java-watch:
 var directory = Path.of("tmp", "test-dir");
 var watcherSetup = Watcher.watch(directory, WatchScope.PATH_AND_CHILDREN)
   .withExecutor(Executors.newCachedThreadPool()) // optionally configure a custom thread pool
-  .onEvent(watchEvent -> {
+  .on(watchEvent -> {
     System.err.println(watchEvent);
   });
 
