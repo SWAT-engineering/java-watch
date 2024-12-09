@@ -100,7 +100,38 @@ public class Watcher {
      * @return this for optional method chaining
      */
     public Watcher on(Consumer<WatchEvent> eventHandler) {
+        if (this.eventHandler != NULL_HANDLER) {
+            throw new IllegalArgumentException("on handler cannot be set more than once");
+        }
         this.eventHandler = eventHandler;
+        return this;
+    }
+
+    /**
+     * Convenience variant of {@link #on(Consumer)}, which allows you to only respond to certain events
+     */
+    public Watcher on(WatchEventListener listener) {
+        if (this.eventHandler != NULL_HANDLER) {
+            throw new IllegalArgumentException("on handler cannot be set more than once");
+        }
+        this.eventHandler = ev -> {
+            switch (ev.getKind()) {
+                case CREATED:
+                    listener.onCreated(ev);
+                    break;
+                case DELETED:
+                    listener.onDeleted(ev);
+                    break;
+                case MODIFIED:
+                    listener.onModified(ev);
+                    break;
+                case OVERFLOW:
+                    listener.onOverflow(ev);
+                    break;
+                default:
+                    throw new IllegalArgumentException("Unexpected kind: " + ev.getKind());
+            }
+        };
         return this;
     }
 
