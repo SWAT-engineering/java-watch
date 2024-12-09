@@ -89,4 +89,35 @@ public class SingleDirectoryTests {
                 .untilTrue(seenCreate);
         }
     }
+
+    @Test
+    void alternativeAPITest() throws IOException, InterruptedException {
+        var target = testDir.getTestFiles().get(0);
+        var seenDelete = new AtomicBoolean(false);
+        var seenCreate = new AtomicBoolean(false);
+        var watchConfig = Watcher.watch(target.getParent(), WatchScope.PATH_AND_CHILDREN)
+            .on(new WatchEventListener() {
+                @Override
+                public void onCreated(WatchEvent ev) {
+                    seenCreate.set(true);
+                }
+
+                @Override
+                public void onDeleted(WatchEvent ev) {
+                    seenDelete.set(true);
+                }
+            });
+        try (var watch = watchConfig.start()) {
+
+            // Delete the file
+            Files.delete(target);
+            await("File deletion should generate delete event")
+                .untilTrue(seenDelete);
+
+            // Re-create it again
+            Files.writeString(target, "Hello World");
+            await("File creation should generate create event")
+                .untilTrue(seenCreate);
+        }
+    }
 }
