@@ -129,6 +129,7 @@
                 <exclude>target/**</exclude>
                 <exclude>.vscode/**</exclude>
                 <exclude>.editorconfig</exclude>
+                <exclude>.codecov.yml</exclude>
               </excludes>
             </licenseSet>
           </licenseSets>

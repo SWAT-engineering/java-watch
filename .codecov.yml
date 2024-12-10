@@ -4,10 +4,10 @@ coverage:
   status:
     project:
       default:
-        target: auto #default
-        threshold: 5%
+        target: auto
+        threshold: 5% # allow a bit of coverage drop
         base: auto
     patch:
       default:
-        target: auto
+        target: 50% # have at least 50% of test coverage
         threshold: 10%
