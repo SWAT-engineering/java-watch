@@ -26,14 +26,10 @@
  */
 package engineering.swat.watch;
 
+import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
-
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.Comparator;
 
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
@@ -41,7 +37,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-class DeleteLockTests {
+public class APIErrorsTests {
 
     private TestDirectory testDir;
 
@@ -51,7 +47,7 @@ class DeleteLockTests {
     }
 
     @AfterEach
-    void cleanup() throws IOException {
+    void cleanup() {
         if (testDir != null) {
             testDir.close();
         }
@@ -62,50 +58,52 @@ class DeleteLockTests {
         Awaitility.setDefaultTimeout(TestHelper.NORMAL_WAIT);
     }
 
-
-    @FunctionalInterface
-    private interface Deleter {
-        void run(Path target) throws IOException;
-    }
-
-    private static void recursiveDelete(Path target) throws IOException {
-        try (var paths = Files.walk(target)) {
-            paths.sorted(Comparator.reverseOrder())
-                .map(Path::toFile)
-                .forEach(File::delete);
-        }
-    }
-
-    private void deleteAndVerify(Path target, WatchScope scope) throws IOException {
-        try (var watch = Watcher.watch(target, scope).on(ev -> {}).start()) {
-            recursiveDelete(target);
-            assertFalse(Files.exists(target), "The file/directory shouldn't exist anymore");
-        }
-    }
-
     @Test
-    void watchedFileCanBeDeleted() throws IOException {
-        deleteAndVerify(
-            testDir.getTestFiles().get(0),
-            WatchScope.PATH_ONLY
+    void noDuplicateEvents() {
+        assertThrowsExactly(IllegalArgumentException.class, () ->
+            Watcher
+                .watch(testDir.getTestDirectory(), WatchScope.PATH_AND_CHILDREN)
+                .on(System.out::println)
+                .on(System.err::println)
         );
     }
 
-
     @Test
-    void watchedDirectoryCanBeDeleted() throws IOException {
-        deleteAndVerify(
-            testDir.getTestDirectory(),
-            WatchScope.PATH_AND_CHILDREN
+    void onlyDirectoryWatchingOnDirectories() {
+        assertThrowsExactly(IllegalArgumentException.class, () ->
+            Watcher
+                .watch(testDir.getTestFiles().get(0), WatchScope.PATH_AND_CHILDREN)
         );
     }
 
-
     @Test
-    void watchedRecursiveDirectoryCanBeDeleted() throws IOException {
-        deleteAndVerify(
-            testDir.getTestDirectory(),
-            WatchScope.PATH_AND_ALL_DESCENDANTS
+    void doNotStartWithoutEventHandler() {
+        assertThrowsExactly(IllegalStateException.class, () ->
+            Watcher
+                .watch(testDir.getTestDirectory(), WatchScope.PATH_AND_CHILDREN)
+                .start()
         );
     }
+
+    @Test
+    void noRelativePaths() {
+        var relativePath = testDir.getTestDirectory().resolve("d1").relativize(testDir.getTestDirectory());
+
+        assertThrowsExactly(IllegalArgumentException.class, () ->
+            Watcher
+                .watch(relativePath, WatchScope.PATH_AND_CHILDREN)
+                .start()
+        );
+    }
+
+    @Test
+    void nonExistingDirectory() throws IOException {
+        var nonExistingDir = testDir.getTestDirectory().resolve("testd1");
+        Files.createDirectory(nonExistingDir);
+        var w = Watcher.watch(nonExistingDir, WatchScope.PATH_AND_CHILDREN);
+        Files.delete(nonExistingDir);
+        assertThrowsExactly(IllegalStateException.class, w::start);
+    }
+
+
 }

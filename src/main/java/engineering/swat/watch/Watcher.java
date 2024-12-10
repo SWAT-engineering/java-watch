@@ -54,8 +54,8 @@ public class Watcher {
     private final Path path;
     private volatile Executor executor = CompletableFuture::runAsync;
 
-    private static final Consumer<WatchEvent> NULL_HANDLER = p -> {};
-    private volatile Consumer<WatchEvent> eventHandler = NULL_HANDLER;
+    private static final Consumer<WatchEvent> EMPTY_HANDLER = p -> {};
+    private volatile Consumer<WatchEvent> eventHandler = EMPTY_HANDLER;
 
 
     private Watcher(WatchScope scope, Path path) {
@@ -99,13 +99,44 @@ public class Watcher {
      * @param eventHandler a callback that handles the watch event, will be called once per event.
      * @return this for optional method chaining
      */
-    public Watcher onEvent(Consumer<WatchEvent> eventHandler) {
+    public Watcher on(Consumer<WatchEvent> eventHandler) {
+        if (this.eventHandler != EMPTY_HANDLER) {
+            throw new IllegalArgumentException("on handler cannot be set more than once");
+        }
         this.eventHandler = eventHandler;
         return this;
     }
 
     /**
-     * Optionally configure the executor in which the {@link #onEvent(Consumer)} callbacks are scheduled.
+     * Convenience variant of {@link #on(Consumer)}, which allows you to only respond to certain events
+     */
+    public Watcher on(WatchEventListener listener) {
+        if (this.eventHandler != EMPTY_HANDLER) {
+            throw new IllegalArgumentException("on handler cannot be set more than once");
+        }
+        this.eventHandler = ev -> {
+            switch (ev.getKind()) {
+                case CREATED:
+                    listener.onCreated(ev);
+                    break;
+                case DELETED:
+                    listener.onDeleted(ev);
+                    break;
+                case MODIFIED:
+                    listener.onModified(ev);
+                    break;
+                case OVERFLOW:
+                    listener.onOverflow(ev);
+                    break;
+                default:
+                    throw new IllegalArgumentException("Unexpected kind: " + ev.getKind());
+            }
+        };
+        return this;
+    }
+
+    /**
+     * Optionally configure the executor in which the {@link #on(Consumer)} callbacks are scheduled.
      * If not defined, every task will be scheduled on the {@link java.util.concurrent.ForkJoinPool#commonPool()}.
      * @param callbackHandler worker pool to use
      * @return this for optional method chaining
@@ -119,10 +150,10 @@ public class Watcher {
      * Start watch the path for events.
      * @return a subscription for the watch, when closed, new events will stop being registered to the worker pool.
      * @throws IOException in case the starting of the watcher caused an underlying IO exception
-     * @throws IllegalStateException the watchers is not configured correctly (for example, missing {@link #onEvent(Consumer)}, or a watcher is started twice)
+     * @throws IllegalStateException the watchers is not configured correctly (for example, missing {@link #on(Consumer)}, or a watcher is started twice)
      */
     public ActiveWatch start() throws IOException {
-        if (this.eventHandler == NULL_HANDLER) {
+        if (this.eventHandler == EMPTY_HANDLER) {
             throw new IllegalStateException("There is no onEvent handler defined");
         }
         switch (scope) {

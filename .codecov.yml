@@ -1,0 +1,13 @@
+coverage:
+  range: "80..100"
+  precision: 1
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 5% # allow a bit of coverage drop
+        base: auto
+    patch:
+      default:
+        target: 50% # have at least 50% of test coverage
+        threshold: 10%
