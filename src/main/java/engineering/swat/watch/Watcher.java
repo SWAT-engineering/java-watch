@@ -54,8 +54,8 @@ public class Watcher {
     private final Path path;
     private volatile Executor executor = CompletableFuture::runAsync;
 
-    private static final Consumer<WatchEvent> NULL_HANDLER = p -> {};
-    private volatile Consumer<WatchEvent> eventHandler = NULL_HANDLER;
+    private static final Consumer<WatchEvent> EMPTY_HANDLER = p -> {};
+    private volatile Consumer<WatchEvent> eventHandler = EMPTY_HANDLER;
 
 
     private Watcher(WatchScope scope, Path path) {
@@ -100,7 +100,7 @@ public class Watcher {
      * @return this for optional method chaining
      */
     public Watcher on(Consumer<WatchEvent> eventHandler) {
-        if (this.eventHandler != NULL_HANDLER) {
+        if (this.eventHandler != EMPTY_HANDLER) {
             throw new IllegalArgumentException("on handler cannot be set more than once");
         }
         this.eventHandler = eventHandler;
@@ -111,7 +111,7 @@ public class Watcher {
      * Convenience variant of {@link #on(Consumer)}, which allows you to only respond to certain events
      */
     public Watcher on(WatchEventListener listener) {
-        if (this.eventHandler != NULL_HANDLER) {
+        if (this.eventHandler != EMPTY_HANDLER) {
             throw new IllegalArgumentException("on handler cannot be set more than once");
         }
         this.eventHandler = ev -> {
@@ -153,7 +153,7 @@ public class Watcher {
      * @throws IllegalStateException the watchers is not configured correctly (for example, missing {@link #on(Consumer)}, or a watcher is started twice)
      */
     public ActiveWatch start() throws IOException {
-        if (this.eventHandler == NULL_HANDLER) {
+        if (this.eventHandler == EMPTY_HANDLER) {
             throw new IllegalStateException("There is no onEvent handler defined");
         }
         switch (scope) {
