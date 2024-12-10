@@ -69,7 +69,7 @@ public class APIErrorsTests {
     }
 
     @Test
-    void OnlyDirectoryWatchingOnDirectories() {
+    void onlyDirectoryWatchingOnDirectories() {
         assertThrowsExactly(IllegalArgumentException.class, () ->
             Watcher
                 .watch(testDir.getTestFiles().get(0), WatchScope.PATH_AND_CHILDREN)
