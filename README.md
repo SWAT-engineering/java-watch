@@ -1,23 +1,25 @@
 # java-watch
-a java file watcher that works across platforms and supports recursion, single file watches, and tries to make sure no events are missed.
+
+a java file watcher that works across platforms and supports recursion, single file watches, and tries to make sure no events are missed. Where possible it uses Java's NIO WatchService.
 
 ## Features
 
-Currently working features in java-watch:
+Features:
 
-- Regular directory watches
-- Recursive watches, even if platform doesn't support it natively.
-- Recursive watches also work inside directories created after the watch started
-- Even in case of overflow you will get notifications of **new** directories (and it's recursive files), modification events will however not be simulated
-- Single file watches
-- Multiple watches for the same directory are merged to avoid overloading the kernel
-- Events are process on a worker pool, which you can customize.
+- monitor a single file (or directory) for changes
+- monitor a directory for changes to it's direct descendants
+- monitor a directory for changes for all it's descendants (aka recursive directory watch)
+- edge cases dealt with:
+  - in case of overflow we will still generate events for new descendants
+  - recursive watches will also continue in new directories
+  - multiple watches for the same directory are merged to avoid overloading the kernel
+  - events are processed in a configurable worker pool
 
-Future features:
+Planned features:
 
 - Avoid poll based watcher in macOS/OSX that only detects changes every 2 seconds (see [#4](https://github.com/SWAT-engineering/java-watch/issues/4))
-- Support file watches natively in linux
-- Monitor only specific events (such as only CREATES)
+- Support single file watches natively in linux (see [#11](https://github.com/SWAT-engineering/java-watch/issues/11))
+- Monitor only specific events (such as only CREATE events)
 
 ## Usage
 
@@ -25,9 +27,9 @@ Import dependency in pom.xml:
 
 ```xml
 <dependency>
-  <groupId>engineering.swat</groupId>
-  <artifactId>java-watch</artifactId>
-  <version>${java-watch-version}</version>
+    <groupId>engineering.swat</groupId>
+    <artifactId>java-watch</artifactId>
+    <version>${java-watch-version}</version>
 </dependency>
 ```
 
@@ -36,14 +38,14 @@ Start using java-watch:
 ```java
 var directory = Path.of("tmp", "test-dir");
 var watcherSetup = Watcher.watch(directory, WatchScope.PATH_AND_CHILDREN)
-  .withExecutor(Executors.newCachedThreadPool()) // optionally configure a custom thread pool
-  .on(watchEvent -> {
-    System.err.println(watchEvent);
-  });
+    .withExecutor(Executors.newCachedThreadPool()) // optionally configure a custom thread pool
+    .on(watchEvent -> {
+        System.err.println(watchEvent);
+    });
 
 try(var active = watcherSetup.start()) {
-  System.out.println("Monitoring files, press any key to stop");
-  System.in.read();
+    System.out.println("Monitoring files, press any key to stop");
+    System.in.read();
 }
 // after active.close(), the watch is stopped and
 // no new events will be scheduled on the threadpool
@@ -51,7 +53,7 @@ try(var active = watcherSetup.start()) {
 
 ## Related work
 
-Before starting this library, we wanted to use existing libraries, but they all lacked proper support for recursive file watches or lacked configurability. This library now has a growing collection of tests and a small API that should allow for future improvements without breaking compatibility.
+Before starting this library, we wanted to use existing libraries, but they all lacked proper support for recursive file watches, single file watches or lacked configurability. This library now has a growing collection of tests and a small API that should allow for future improvements without breaking compatibility.
 
 The following section describes the related work research on the libraries and underlying limitations.
 
