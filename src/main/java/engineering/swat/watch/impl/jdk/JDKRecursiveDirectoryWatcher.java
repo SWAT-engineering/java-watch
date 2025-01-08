@@ -26,7 +26,6 @@
  */
 package engineering.swat.watch.impl.jdk;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
