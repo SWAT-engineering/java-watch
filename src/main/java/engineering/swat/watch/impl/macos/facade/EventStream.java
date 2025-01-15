@@ -11,12 +11,15 @@ import com.sun.jna.platform.mac.CoreFoundation.CFArrayRef;
 import com.sun.jna.platform.mac.CoreFoundation.CFIndex;
 import com.sun.jna.platform.mac.CoreFoundation.CFStringRef;
 
+import engineering.swat.watch.impl.macos.apis.DispatchObjects;
 import engineering.swat.watch.impl.macos.apis.DispatchQueue;
 import engineering.swat.watch.impl.macos.apis.FileSystemEvents;
 import engineering.swat.watch.impl.macos.apis.FileSystemEvents.FSEventStreamCallback;
+import static engineering.swat.watch.impl.macos.apis.FileSystemEvents.FSEventStreamCreateFlags.*;
 
 public class EventStream implements AutoCloseable {
     private static final DispatchQueue DQ = DispatchQueue.INSTANCE;
+    private static final DispatchObjects DO = DispatchObjects.INSTANCE;
     private static final FileSystemEvents FSE = FileSystemEvents.INSTANCE;
     private static final CFAllocatorRef CURRENT_DEFAULT_ALLOCATOR = null;
 
@@ -48,7 +51,7 @@ public class EventStream implements AutoCloseable {
         FSE.FSEventStreamSetDispatchQueue(stream, Pointer.NULL);
         FSE.FSEventStreamInvalidate(stream);
         FSE.FSEventStreamRelease(stream);
-        DQ.dispatch_release(queue);
+        DO.dispatch_release(queue);
 
         stream = null;
         queue = null;
@@ -59,8 +62,8 @@ public class EventStream implements AutoCloseable {
         var allocator = CURRENT_DEFAULT_ALLOCATOR;
         var context   = Pointer.NULL;
         var sinceWhen = FSE.FSEventsGetCurrentEventId();
-        var latency   = 0.0;
-        var flags     = FileSystemEvents.FSEventStreamCreateFlags.kFSEventStreamCreateFlagFileEvents.mask;
+        var latency   = 0.15;
+        var flags     = Flag.all(Flag.NO_DEFER, Flag.WATCH_ROOT, Flag.FILE_EVENTS);
         return FSE.FSEventStreamCreate(allocator, callback, context, pathsToWatch, sinceWhen, latency, flags);
     }
 
@@ -160,6 +163,32 @@ public class EventStream implements AutoCloseable {
             }
 
             return CoreFoundation.INSTANCE.CFArrayCreate(alloc, values, numValues, callBacks);
+        }
+    }
+
+    private static enum Flag {
+        USE_CF_TYPES     (kFSEventStreamCreateFlagUseCFTypes),
+        NO_DEFER         (kFSEventStreamCreateFlagNoDefer),
+        WATCH_ROOT       (kFSEventStreamCreateFlagWatchRoot),
+        IGNORE_SELF      (kFSEventStreamCreateFlagIgnoreSelf),
+        FILE_EVENTS      (kFSEventStreamCreateFlagFileEvents),
+        MARK_SELF        (kFSEventStreamCreateFlagMarkSelf),
+        FULL_HISTORY     (kFSEventStreamCreateFlagFullHistory),
+        USE_EXTENDED_DATA(kFSEventStreamCreateFlagUseExtendedData),
+        WITH_DOC_ID      (kFSEventStreamCreateWithDocID);
+
+        private final int mask;
+
+        private Flag(int mask) {
+            this.mask = mask;
+        }
+
+        public static int all(Flag... flags) {
+            var ret = 0x00000000;
+            for (var f : flags) {
+                ret |= f.mask;
+            }
+            return ret;
         }
     }
 }

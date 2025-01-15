@@ -4,87 +4,94 @@ import com.sun.jna.Callback;
 import com.sun.jna.Library;
 import com.sun.jna.Native;
 import com.sun.jna.Pointer;
-import com.sun.jna.Structure;
-import com.sun.jna.Structure.FieldOrder;
 import com.sun.jna.platform.mac.CoreFoundation.CFAllocatorRef;
 import com.sun.jna.platform.mac.CoreFoundation.CFArrayRef;
 import com.sun.jna.platform.mac.CoreFoundation.CFStringRef;
 
 /**
  * Interface for the "File System Events" API collection of the "Core Services"
- * framework. See:
+ * framework.
  *
  * https://developer.apple.com/documentation/coreservices/file_system_events?language=objc
  */
 public interface FileSystemEvents extends Library {
     FileSystemEvents INSTANCE = Native.load("CoreServices", FileSystemEvents.class);
 
-    @FieldOrder({ "copyDescription", "info", "release", "retain", "version" })
-    public static class FSEventStreamContext extends Structure {
-        public Object copyDescription;
-        public Object info;
-        public Object release;
-        public Object retain;
-        public Object version;
-    }
+    //
+    // Functions
+    //
 
+    /*
+     * https://developer.apple.com/documentation/coreservices/1443980-fseventstreamcreate?language=objc
+     */
     Pointer FSEventStreamCreate(        // FSEventStreamRef
         CFAllocatorRef allocator,       // CFAllocator
         FSEventStreamCallback callback, // FSEventStreamCallback
-        Pointer context, // FSEventStreamContext
+        Pointer context,                // FSEventStreamContext
         CFArrayRef pathsToWatch,        // CFArray
         long sinceWhen,                 // FSEventStreamEventId
         double latency,                 // CFTimeInterval
         int flags);                     // FSEventStreamCreateFlags
 
+    /*
+     * https://developer.apple.com/documentation/coreservices/1446990-fseventstreaminvalidate?language=objc
+     */
+    void FSEventStreamInvalidate( // void
+        Pointer streamRef);       // FSEventStreamRef
+
+    /*
+     * https://developer.apple.com/documentation/coreservices/1445989-fseventstreamrelease?language=objc
+     */
+    void FSEventStreamRelease( // void
+        Pointer streamRef);    // FSEventStreamRef
+
+    /*
+     * https://developer.apple.com/documentation/coreservices/1444164-fseventstreamsetdispatchqueue?language=objc
+     */
     void FSEventStreamSetDispatchQueue( // void
         Pointer streamRef,              // FSEventStreamRef
         Pointer q);                     // dispatch_queue_t
 
-    boolean FSEventStreamStart( // Boolean
+    /*
+     * https://developer.apple.com/documentation/coreservices/1448000-fseventstreamstart?language=objc
+     */
+    boolean FSEventStreamStart( // void
         Pointer streamRef);     // FSEventStreamRef
 
+    /*
+     * https://developer.apple.com/documentation/coreservices/1447673-fseventstreamstop?language=objc
+     */
     void FSEventStreamStop( // void
         Pointer streamRef); // FSEventStreamRef
 
-    void FSEventStreamRelease( // void
-        Pointer streamRef); // FSEventStreamRef
-
-    void FSEventStreamInvalidate(/* FSEventStreamRef */ Pointer streamRef);
-
-    void FSEventStreamShow( // void
-        Pointer streamRef); // ConstFSEventStreamRef
-
+    /*
+     * https://developer.apple.com/documentation/coreservices/1442917-fseventsgetcurrenteventid?language=objc
+     */
     long FSEventsGetCurrentEventId(); // FSEventStreamEventId
-
-    //
-    // Functions
-    //
 
     //
     // Enumerations
     //
 
-    static enum FSEventStreamCreateFlags {
-        kFSEventStreamCreateFlagNone           (0x00000000),
-        kFSEventStreamCreateFlagUseCFTypes     (0x00000001),
-        kFSEventStreamCreateFlagNoDefer        (0x00000002),
-        kFSEventStreamCreateFlagWatchRoot      (0x00000004),
-        kFSEventStreamCreateFlagIgnoreSelf     (0x00000008),
-        kFSEventStreamCreateFlagFileEvents     (0x00000010),
-        kFSEventStreamCreateFlagMarkSelf       (0x00000020),
-        kFSEventStreamCreateFlagFullHistory    (0x00000080),
-        kFSEventStreamCreateFlagUseExtendedData(0x00000040),
-        kFSEventStreamCreateWithDocID          (0x00000100);
-
-        public final int mask;
-
-        private FSEventStreamCreateFlags(int mask) {
-            this.mask = mask;
-        }
+    /*
+     * https://developer.apple.com/documentation/coreservices/1455376-fseventstreamcreateflags?language=objc
+     */
+    static class FSEventStreamCreateFlags {
+        public static final int kFSEventStreamCreateFlagNone            = 0x00000000;
+        public static final int kFSEventStreamCreateFlagUseCFTypes      = 0x00000001;
+        public static final int kFSEventStreamCreateFlagNoDefer         = 0x00000002;
+        public static final int kFSEventStreamCreateFlagWatchRoot       = 0x00000004;
+        public static final int kFSEventStreamCreateFlagIgnoreSelf      = 0x00000008;
+        public static final int kFSEventStreamCreateFlagFileEvents      = 0x00000010;
+        public static final int kFSEventStreamCreateFlagMarkSelf        = 0x00000020;
+        public static final int kFSEventStreamCreateFlagFullHistory     = 0x00000080;
+        public static final int kFSEventStreamCreateFlagUseExtendedData = 0x00000040;
+        public static final int kFSEventStreamCreateWithDocID           = 0x00000100;
     }
 
-    // https://developer.apple.com/documentation/coreservices/1455361-fseventstreameventflags?language=objc
+    /*
+     * https://developer.apple.com/documentation/coreservices/1455361-fseventstreameventflags?language=objc
+     */
     static class FSEventStreamEventFlags {
         public static final int kFSEventStreamEventFlagNone               = 0x00000000;
         public static final int kFSEventStreamEventFlagMustScanSubDirs    = 0x00000001;
@@ -116,7 +123,9 @@ public interface FileSystemEvents extends Library {
     // Data types
     //
 
-    // https://developer.apple.com/documentation/coreservices/fseventstreamcallback?language=objc
+    /*
+     * https://developer.apple.com/documentation/coreservices/fseventstreamcallback?language=objc
+     */
     static interface FSEventStreamCallback extends Callback {
         void callback(                  // void
             Pointer streamRef,          // ConstFSEventStreamRef
@@ -131,9 +140,13 @@ public interface FileSystemEvents extends Library {
     // Constants
     //
 
-    // https://developer.apple.com/documentation/coreservices/kfseventstreameventextendeddatapathkey?language=objc
+    /*
+     * https://developer.apple.com/documentation/coreservices/kfseventstreameventextendeddatapathkey?language=objc
+     */
     static final CFStringRef kFSEventStreamEventExtendedDataPathKey = CFStringRef.createCFString("path");
 
-    // https://developer.apple.com/documentation/coreservices/kfseventstreameventextendedfileidkey?language=objc
+    /*
+     * https://developer.apple.com/documentation/coreservices/kfseventstreameventextendedfileidkey?language=objc
+     */
     static final CFStringRef kFSEventStreamEventExtendedFileIDKey = CFStringRef.createCFString("fileID");
 }
