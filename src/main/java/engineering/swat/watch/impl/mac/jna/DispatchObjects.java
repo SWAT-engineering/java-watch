@@ -1,4 +1,4 @@
-package engineering.swat.watch.impl.macos.apis;
+package engineering.swat.watch.impl.mac.jna;
 
 import com.sun.jna.Library;
 import com.sun.jna.Native;

@@ -1,4 +1,14 @@
-package engineering.swat.watch.impl.macos.facade;
+package engineering.swat.watch.impl.mac.nio.file;
+
+import static engineering.swat.watch.impl.mac.jna.FileSystemEvents.FSEventStreamCreateFlags.kFSEventStreamCreateFlagFileEvents;
+import static engineering.swat.watch.impl.mac.jna.FileSystemEvents.FSEventStreamCreateFlags.kFSEventStreamCreateFlagFullHistory;
+import static engineering.swat.watch.impl.mac.jna.FileSystemEvents.FSEventStreamCreateFlags.kFSEventStreamCreateFlagIgnoreSelf;
+import static engineering.swat.watch.impl.mac.jna.FileSystemEvents.FSEventStreamCreateFlags.kFSEventStreamCreateFlagMarkSelf;
+import static engineering.swat.watch.impl.mac.jna.FileSystemEvents.FSEventStreamCreateFlags.kFSEventStreamCreateFlagNoDefer;
+import static engineering.swat.watch.impl.mac.jna.FileSystemEvents.FSEventStreamCreateFlags.kFSEventStreamCreateFlagUseCFTypes;
+import static engineering.swat.watch.impl.mac.jna.FileSystemEvents.FSEventStreamCreateFlags.kFSEventStreamCreateFlagUseExtendedData;
+import static engineering.swat.watch.impl.mac.jna.FileSystemEvents.FSEventStreamCreateFlags.kFSEventStreamCreateFlagWatchRoot;
+import static engineering.swat.watch.impl.mac.jna.FileSystemEvents.FSEventStreamCreateFlags.kFSEventStreamCreateWithDocID;
 
 import java.util.function.Consumer;
 
@@ -11,13 +21,12 @@ import com.sun.jna.platform.mac.CoreFoundation.CFArrayRef;
 import com.sun.jna.platform.mac.CoreFoundation.CFIndex;
 import com.sun.jna.platform.mac.CoreFoundation.CFStringRef;
 
-import engineering.swat.watch.impl.macos.apis.DispatchObjects;
-import engineering.swat.watch.impl.macos.apis.DispatchQueue;
-import engineering.swat.watch.impl.macos.apis.FileSystemEvents;
-import engineering.swat.watch.impl.macos.apis.FileSystemEvents.FSEventStreamCallback;
-import static engineering.swat.watch.impl.macos.apis.FileSystemEvents.FSEventStreamCreateFlags.*;
+import engineering.swat.watch.impl.mac.jna.DispatchObjects;
+import engineering.swat.watch.impl.mac.jna.DispatchQueue;
+import engineering.swat.watch.impl.mac.jna.FileSystemEvents;
+import engineering.swat.watch.impl.mac.jna.FileSystemEvents.FSEventStreamCallback;
 
-public class EventStream implements AutoCloseable {
+public class JNAFacade implements AutoCloseable {
     private static final DispatchQueue DQ = DispatchQueue.INSTANCE;
     private static final DispatchObjects DO = DispatchObjects.INSTANCE;
     private static final FileSystemEvents FSE = FileSystemEvents.INSTANCE;
@@ -27,10 +36,10 @@ public class EventStream implements AutoCloseable {
     private Pointer queue;
     private boolean closed;
 
-    public EventStream(Consumer<Event[]> handler, String path) {
+    public JNAFacade(Consumer<MacWatchEvent[]> handler, MacWatchable watchable) {
         try (
-            var callback = new EventStream.Callback(handler);
-            var pathsToWatch = new EventStream.PathsToWatch(path);
+            var callback = new JNAFacade.Callback(handler, watchable);
+            var pathsToWatch = new JNAFacade.PathsToWatch(watchable);
         ) {
             this.stream = createFSEventStream(callback, pathsToWatch.toCFArrayRef());
             this.queue = createDispatchQueue();
@@ -74,10 +83,12 @@ public class EventStream implements AutoCloseable {
     }
 
     private static class Callback implements FSEventStreamCallback, AutoCloseable {
-        private final Consumer<Event[]> handler;
+        private final Consumer<MacWatchEvent[]> handler;
+        private final MacWatchable watchable;
 
-        private Callback(Consumer<Event[]> handler) {
+        private Callback(Consumer<MacWatchEvent[]> handler, MacWatchable watchable) {
             this.handler = handler;
+            this.watchable = watchable;
         }
 
         @Override
@@ -93,9 +104,9 @@ public class EventStream implements AutoCloseable {
             var flags = eventFlags.getIntArray(offset, length);
             var ids = eventIds.getLongArray(offset, length);
 
-            var events = new Event[(int) numEvents];
+            var events = new MacWatchEvent[(int) numEvents];
             for (var i = 0; i < length; i++) {
-                events[i] = new Event(paths[i], flags[i], ids[i]);
+                events[i] = new MacWatchEvent(watchable, paths[i], flags[i], ids[i]);
             }
 
             handler.accept(events);
@@ -111,8 +122,8 @@ public class EventStream implements AutoCloseable {
         private CFArrayRef arrayOfPaths;
         private boolean closed = false;
 
-        public PathsToWatch(String... paths) {
-            this.pathArray = createStringArray(paths);
+        public PathsToWatch(MacWatchable watchable) {
+            this.pathArray = createStringArray(watchable.getPath().toString());
             this.arrayOfPaths = createArrayOfStrings(pathArray);
             this.closed = false;
         }
