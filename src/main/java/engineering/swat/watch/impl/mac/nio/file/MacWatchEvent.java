@@ -90,7 +90,7 @@ public class MacWatchEvent implements WatchEvent<Path> {
                 s += ", " + f.name();
             }
         }
-        s = !s.isEmpty() ? s.substring(2) : s ;
+        s = !s.isEmpty() ? s.substring(2) : s;
         s = path + ", [" + s + "], " + id;
         return s;
     }
@@ -99,16 +99,16 @@ public class MacWatchEvent implements WatchEvent<Path> {
 
     @Override
     public Kind<Path> kind() {
-        if (Flag.ITEM_CREATED.check(flags)) {
+        // TODO: Figure out which kind in case of CREATED and MODIFIED
+        if (isEntryCreate()) {
             return ENTRY_CREATE;
         }
-        if (Flag.ITEM_REMOVED.check(flags)) {
+        if (isEntryDelete()) {
             return ENTRY_DELETE;
         }
-        if (Flag.ITEM_MODIFIED.check(flags)) {
+        if (isEntryModify()) {
             return ENTRY_MODIFY;
         }
-
         return null;
     }
 
@@ -126,5 +126,19 @@ public class MacWatchEvent implements WatchEvent<Path> {
         }
         var leaf = Path.of(path);
         return root.relativize(leaf);
+    }
+
+    private boolean isEntryCreate() {
+        return Flag.ITEM_CREATED.check(flags);
+    }
+
+    private boolean isEntryDelete() {
+        // TODO: Check move to recycle bin?
+        return Flag.ITEM_REMOVED.check(flags);
+    }
+
+    private boolean isEntryModify() {
+        return Flag.ITEM_MODIFIED.check(flags)
+                || (Flag.ITEM_INODE_META_MOD.check(flags) && Flag.ITEM_IS_DIR.check(flags));
     }
 }
