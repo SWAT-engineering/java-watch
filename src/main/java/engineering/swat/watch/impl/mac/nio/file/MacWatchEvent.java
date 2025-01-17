@@ -78,6 +78,14 @@ public class MacWatchEvent implements WatchEvent<Path> {
         public boolean check(int flags) {
             return (flags & mask) == mask;
         }
+
+        public static int all(Flag... flags) {
+            var ret = 0x00000000;
+            for (var f : flags) {
+                ret |= f.mask;
+            }
+            return ret;
+        }
     }
 
     // -- Object --
@@ -99,7 +107,6 @@ public class MacWatchEvent implements WatchEvent<Path> {
 
     @Override
     public Kind<Path> kind() {
-        // TODO: Figure out which kind in case of CREATED and MODIFIED
         if (isEntryCreate()) {
             return ENTRY_CREATE;
         }

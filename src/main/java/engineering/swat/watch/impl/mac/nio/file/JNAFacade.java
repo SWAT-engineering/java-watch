@@ -10,6 +10,7 @@ import static engineering.swat.watch.impl.mac.jna.FileSystemEvents.FSEventStream
 import static engineering.swat.watch.impl.mac.jna.FileSystemEvents.FSEventStreamCreateFlags.kFSEventStreamCreateFlagWatchRoot;
 import static engineering.swat.watch.impl.mac.jna.FileSystemEvents.FSEventStreamCreateFlags.kFSEventStreamCreateWithDocID;
 
+import java.util.ArrayList;
 import java.util.function.Consumer;
 
 import com.sun.jna.Memory;
@@ -36,7 +37,7 @@ public class JNAFacade implements AutoCloseable {
     private Pointer queue;
     private boolean closed;
 
-    public JNAFacade(Consumer<MacWatchEvent[]> handler, MacWatchable watchable) {
+    public JNAFacade(Consumer<Iterable<MacWatchEvent>> handler, MacWatchable watchable) {
         try (
             var callback = new JNAFacade.Callback(handler, watchable);
             var pathsToWatch = new JNAFacade.PathsToWatch(watchable);
@@ -83,10 +84,10 @@ public class JNAFacade implements AutoCloseable {
     }
 
     private static class Callback implements FSEventStreamCallback, AutoCloseable {
-        private final Consumer<MacWatchEvent[]> handler;
+        private final Consumer<Iterable<MacWatchEvent>> handler;
         private final MacWatchable watchable;
 
-        private Callback(Consumer<MacWatchEvent[]> handler, MacWatchable watchable) {
+        private Callback(Consumer<Iterable<MacWatchEvent>> handler, MacWatchable watchable) {
             this.handler = handler;
             this.watchable = watchable;
         }
@@ -104,9 +105,38 @@ public class JNAFacade implements AutoCloseable {
             var flags = eventFlags.getIntArray(offset, length);
             var ids = eventIds.getLongArray(offset, length);
 
-            var events = new MacWatchEvent[(int) numEvents];
+            var events = new ArrayList<MacWatchEvent>();
             for (var i = 0; i < length; i++) {
-                events[i] = new MacWatchEvent(watchable, paths[i], flags[i], ids[i]);
+                var size = events.size();
+
+                // TODO: Generalize/rethink this approach... The problem to be
+                // solved is that multiple "physical" events seem to be merged
+                // together in the same "logical" event object.
+
+                if (MacWatchEvent.Flag.ITEM_CREATED.check(flags[i])) {
+                    var mask = MacWatchEvent.Flag.all(
+                        MacWatchEvent.Flag.ITEM_CREATED,
+                        MacWatchEvent.Flag.ITEM_IS_DIR,
+                        MacWatchEvent.Flag.ITEM_IS_FILE,
+                        MacWatchEvent.Flag.ITEM_XATTR_MOD);
+
+                    events.add(new MacWatchEvent(watchable, paths[i], flags[i] & mask, ids[i]));
+                }
+
+                if (MacWatchEvent.Flag.ITEM_MODIFIED.check(flags[i])) {
+                    var mask = MacWatchEvent.Flag.all(
+                        MacWatchEvent.Flag.ITEM_MODIFIED,
+                        MacWatchEvent.Flag.ITEM_INODE_META_MOD,
+                        MacWatchEvent.Flag.ITEM_IS_DIR,
+                        MacWatchEvent.Flag.ITEM_IS_FILE,
+                        MacWatchEvent.Flag.ITEM_XATTR_MOD);
+
+                    events.add(new MacWatchEvent(watchable, paths[i], flags[i] & mask, ids[i]));
+                }
+
+                if (size == events.size()) {
+                    events.add(new MacWatchEvent(watchable, paths[i], flags[i], ids[i]));
+                }
             }
 
             handler.accept(events);

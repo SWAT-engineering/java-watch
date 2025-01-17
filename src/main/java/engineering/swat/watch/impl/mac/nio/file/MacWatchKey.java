@@ -70,7 +70,7 @@ public class MacWatchKey implements Runnable, WatchKey {
         }
     }
 
-    private void handle(MacWatchEvent[] events) {
+    private void handle(Iterable<MacWatchEvent> events) {
         switch (state) {
 
             case READY:
