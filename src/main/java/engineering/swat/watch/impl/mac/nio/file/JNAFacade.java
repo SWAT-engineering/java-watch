@@ -109,6 +109,8 @@ public class JNAFacade implements AutoCloseable {
             for (var i = 0; i < length; i++) {
                 var size = events.size();
 
+                System.err.println(new MacWatchEvent(watchable, paths[i], flags[i], ids[i]));
+
                 // TODO: Generalize/rethink this approach... The problem to be
                 // solved is that multiple "physical" events seem to be merged
                 // together in the same "logical" event object.
@@ -119,6 +121,15 @@ public class JNAFacade implements AutoCloseable {
                         MacWatchEvent.Flag.ITEM_IS_DIR,
                         MacWatchEvent.Flag.ITEM_IS_FILE,
                         MacWatchEvent.Flag.ITEM_XATTR_MOD);
+
+                    events.add(new MacWatchEvent(watchable, paths[i], flags[i] & mask, ids[i]));
+                }
+
+                if (MacWatchEvent.Flag.ITEM_REMOVED.check(flags[i])) {
+                    var mask = MacWatchEvent.Flag.all(
+                        MacWatchEvent.Flag.ITEM_REMOVED,
+                        MacWatchEvent.Flag.ITEM_IS_DIR,
+                        MacWatchEvent.Flag.ITEM_IS_FILE);
 
                     events.add(new MacWatchEvent(watchable, paths[i], flags[i] & mask, ids[i]));
                 }
@@ -139,6 +150,7 @@ public class JNAFacade implements AutoCloseable {
                 }
             }
 
+            System.err.println();
             handler.accept(events);
         }
 
