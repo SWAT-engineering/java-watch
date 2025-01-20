@@ -11,6 +11,10 @@ import static engineering.swat.watch.impl.mac.jna.FileSystemEvents.FSEventStream
 import static engineering.swat.watch.impl.mac.jna.FileSystemEvents.FSEventStreamCreateFlags.kFSEventStreamCreateWithDocID;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 import com.sun.jna.Memory;
@@ -33,15 +37,20 @@ public class JNAFacade implements AutoCloseable {
     private static final FileSystemEvents FSE = FileSystemEvents.INSTANCE;
     private static final CFAllocatorRef CURRENT_DEFAULT_ALLOCATOR = null;
 
+    private static final Map<JNAFacade, Set<Object>> DO_NOT_COLLECT_YET = new ConcurrentHashMap<>();
+
     private Pointer stream;
     private Pointer queue;
     private boolean closed;
 
-    public JNAFacade(Consumer<Iterable<MacWatchEvent>> handler, MacWatchable watchable) {
+    public JNAFacade(Consumer<Collection<MacWatchEvent>> handler, MacWatchable watchable) {
         try (
-            var callback = new JNAFacade.Callback(handler, watchable);
             var pathsToWatch = new JNAFacade.PathsToWatch(watchable);
         ) {
+            var callback = new JNAFacade.Callback(handler, watchable);
+            DO_NOT_COLLECT_YET.put(this, ConcurrentHashMap.newKeySet());
+            DO_NOT_COLLECT_YET.get(this).add(callback);
+
             this.stream = createFSEventStream(callback, pathsToWatch.toCFArrayRef());
             this.queue = createDispatchQueue();
             this.closed = false;
@@ -63,6 +72,8 @@ public class JNAFacade implements AutoCloseable {
         FSE.FSEventStreamRelease(stream);
         DO.dispatch_release(queue);
 
+        DO_NOT_COLLECT_YET.remove(this);
+
         stream = null;
         queue = null;
         closed = true;
@@ -83,21 +94,17 @@ public class JNAFacade implements AutoCloseable {
         return DQ.dispatch_queue_create(label, attr);
     }
 
-    private static class Callback implements FSEventStreamCallback, AutoCloseable {
-        private final Consumer<Iterable<MacWatchEvent>> handler;
+    private static class Callback implements FSEventStreamCallback {
+        private final Consumer<Collection<MacWatchEvent>> handler;
         private final MacWatchable watchable;
 
-        private Callback(Consumer<Iterable<MacWatchEvent>> handler, MacWatchable watchable) {
+        private Callback(Consumer<Collection<MacWatchEvent>> handler, MacWatchable watchable) {
             this.handler = handler;
             this.watchable = watchable;
         }
 
         @Override
         public void callback(Pointer streamRef, Pointer clientCallBackInfo, long numEvents, Pointer eventPaths, Pointer eventFlags, Pointer eventIds) {
-            if (numEvents > Integer.MAX_VALUE) {
-                throw new IllegalArgumentException("Too many events");
-            }
-
             var offset = 0;
             var length = (int) numEvents;
 
@@ -150,12 +157,7 @@ public class JNAFacade implements AutoCloseable {
                 }
             }
 
-            System.err.println();
             handler.accept(events);
-        }
-
-        @Override
-        public void close() {
         }
     }
 
