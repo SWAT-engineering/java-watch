@@ -37,6 +37,7 @@ import java.util.function.Consumer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import engineering.swat.watch.impl.jdk.JDKBaseWatch;
 import engineering.swat.watch.impl.jdk.JDKDirectoryWatch;
 import engineering.swat.watch.impl.jdk.JDKFileWatch;
 import engineering.swat.watch.impl.jdk.JDKRecursiveDirectoryWatch;
@@ -156,35 +157,31 @@ public class Watcher {
         if (this.eventHandler == EMPTY_HANDLER) {
             throw new IllegalStateException("There is no onEvent handler defined");
         }
+        var result = createWatch();
+        result.start();
+        return result;
+    }
+
+    private JDKBaseWatch createWatch() {
         switch (scope) {
             case PATH_AND_CHILDREN: {
-                var result = new JDKDirectoryWatch(path, executor, this.eventHandler, false);
-                result.start();
-                return result;
+                return new JDKDirectoryWatch(path, executor, eventHandler, false);
             }
             case PATH_AND_ALL_DESCENDANTS: {
                 try {
-                    var result = new JDKDirectoryWatch(path, executor, this.eventHandler, true);
-                    result.start();
-                    return result;
+                    return new JDKDirectoryWatch(path, executor, eventHandler, true);
                 } catch (Throwable ex) {
                     // no native support, use the simulation
                     logger.debug("Not possible to register the native watcher, using fallback for {}", path);
                     logger.trace(ex);
-                    var result = new JDKRecursiveDirectoryWatch(path, executor, this.eventHandler);
-                    result.start();
-                    return result;
+                    return new JDKRecursiveDirectoryWatch(path, executor, eventHandler);
                 }
             }
             case PATH_ONLY: {
-                var result = new JDKFileWatch(path, executor, this.eventHandler);
-                result.start();
-                return result;
+                return new JDKFileWatch(path, executor, eventHandler);
             }
-
             default:
                 throw new IllegalStateException("Not supported yet");
         }
     }
-
 }
