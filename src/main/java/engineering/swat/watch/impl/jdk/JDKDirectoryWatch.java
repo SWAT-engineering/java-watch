@@ -29,7 +29,6 @@ package engineering.swat.watch.impl.jdk;
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.nio.file.StandardWatchEventKinds;
 import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
@@ -37,7 +36,6 @@ import java.util.function.Consumer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
 
 import engineering.swat.watch.WatchEvent;
 import engineering.swat.watch.impl.util.BundledSubscription;
@@ -71,28 +69,6 @@ public class JDKDirectoryWatch extends JDKBaseWatch {
                 }
             }
         });
-    }
-
-    private WatchEvent translate(java.nio.file.WatchEvent<?> ev) {
-        WatchEvent.Kind kind;
-        if (ev.kind() == StandardWatchEventKinds.ENTRY_CREATE) {
-            kind = WatchEvent.Kind.CREATED;
-        }
-        else if (ev.kind() == StandardWatchEventKinds.ENTRY_MODIFY) {
-            kind = WatchEvent.Kind.MODIFIED;
-        }
-        else if (ev.kind() == StandardWatchEventKinds.ENTRY_DELETE) {
-            kind = WatchEvent.Kind.DELETED;
-        }
-        else if (ev.kind() == StandardWatchEventKinds.OVERFLOW) {
-            kind = WatchEvent.Kind.OVERFLOW;
-        }
-        else {
-            throw new IllegalArgumentException("Unexpected watch event: " + ev);
-        }
-        var path = kind == WatchEvent.Kind.OVERFLOW ? this.path : (@Nullable Path)ev.context();
-        logger.trace("Translated: {} to {} at {}", ev, kind, path);
-        return new WatchEvent(kind, path, path);
     }
 
     // -- JDKBaseWatch --
