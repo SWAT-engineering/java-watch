@@ -162,7 +162,7 @@ public class JDKRecursiveDirectoryWatch extends JDKBaseWatch {
         private void addNewDirectory(Path dir) throws IOException {
             var watcher = activeWatches.computeIfAbsent(dir, d -> new JDKDirectoryWatch(d, exec, relocater(dir)));
             try {
-                if (!watcher.safeStart()) {
+                if (!watcher.runIfFirstTime()) {
                     logger.debug("We lost the race on starting a nested watcher, that shouldn't be a problem, but it's a very busy, so we might have lost a few events in {}", dir);
                 }
             } catch (IOException ex) {
@@ -309,7 +309,7 @@ public class JDKRecursiveDirectoryWatch extends JDKBaseWatch {
         }
     }
 
-
+    // -- JDKBaseWatch --
 
     @Override
     public void close() throws IOException {
@@ -333,5 +333,12 @@ public class JDKRecursiveDirectoryWatch extends JDKBaseWatch {
         if (firstFail != null) {
             throw firstFail;
         }
+    }
+
+    @Override
+    protected boolean runIfFirstTime() throws IOException {
+        logger.debug("Running recursive watch for: {}", path);
+        registerInitialWatches(path);
+        return false;
     }
 }

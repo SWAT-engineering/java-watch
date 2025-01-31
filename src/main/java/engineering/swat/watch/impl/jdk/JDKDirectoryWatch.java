@@ -45,7 +45,7 @@ import engineering.swat.watch.impl.util.SubscriptionKey;
 
 public class JDKDirectoryWatch extends JDKBaseWatch {
     private final Logger logger = LogManager.getLogger();
-    private volatile @MonotonicNonNull Closeable activeWatch;
+    private volatile @MonotonicNonNull Closeable bundledWatch;
     private final boolean nativeRecursive;
 
     private static final BundledSubscription<SubscriptionKey, List<java.nio.file.WatchEvent<?>>>
@@ -58,25 +58,6 @@ public class JDKDirectoryWatch extends JDKBaseWatch {
     public JDKDirectoryWatch(Path directory, Executor exec, Consumer<WatchEvent> eventHandler, boolean nativeRecursive) {
         super(directory, exec, eventHandler);
         this.nativeRecursive = nativeRecursive;
-    }
-
-    synchronized boolean safeStart() throws IOException {
-        if (activeWatch != null) {
-            return false;
-        }
-        activeWatch = BUNDLED_JDK_WATCHERS.subscribe(new SubscriptionKey(path, nativeRecursive), this::handleChanges);
-        return true;
-    }
-
-    public void start() throws IOException {
-        try {
-            if (!safeStart()) {
-                throw new IllegalStateException("Cannot start a watcher twice");
-            }
-            logger.debug("Started watch for: {}", path);
-        } catch (IOException e) {
-            throw new IOException("Could not register directory watcher for: " + path, e);
-        }
     }
 
     private void handleChanges(List<java.nio.file.WatchEvent<?>> events) {
@@ -114,11 +95,24 @@ public class JDKDirectoryWatch extends JDKBaseWatch {
         return new WatchEvent(kind, path, path);
     }
 
+    // -- JDKBaseWatch --
+
     @Override
     public synchronized void close() throws IOException {
-        if (activeWatch != null) {
+        if (bundledWatch != null) {
             logger.trace("Closing watch for: {}", this.path);
-            activeWatch.close();
+            bundledWatch.close();
         }
+    }
+
+    @Override
+    protected synchronized boolean runIfFirstTime() throws IOException {
+        if (bundledWatch != null) {
+            return false;
+        }
+
+        var key = new SubscriptionKey(path, nativeRecursive);
+        bundledWatch = BUNDLED_JDK_WATCHERS.subscribe(key, this::handleChanges);
+        return true;
     }
 }
