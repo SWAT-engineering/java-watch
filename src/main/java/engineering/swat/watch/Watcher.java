@@ -37,9 +37,9 @@ import java.util.function.Consumer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import engineering.swat.watch.impl.jdk.JDKDirectoryWatcher;
-import engineering.swat.watch.impl.jdk.JDKFileWatcher;
-import engineering.swat.watch.impl.jdk.JDKRecursiveDirectoryWatcher;
+import engineering.swat.watch.impl.jdk.JDKDirectoryWatch;
+import engineering.swat.watch.impl.jdk.JDKFileWatch;
+import engineering.swat.watch.impl.jdk.JDKRecursiveDirectoryWatch;
 
 /**
  * <p>Watch a path for changes.</p>
@@ -158,26 +158,26 @@ public class Watcher {
         }
         switch (scope) {
             case PATH_AND_CHILDREN: {
-                var result = new JDKDirectoryWatcher(path, executor, this.eventHandler, false);
+                var result = new JDKDirectoryWatch(path, executor, this.eventHandler, false);
                 result.start();
                 return result;
             }
             case PATH_AND_ALL_DESCENDANTS: {
                 try {
-                    var result = new JDKDirectoryWatcher(path, executor, this.eventHandler, true);
+                    var result = new JDKDirectoryWatch(path, executor, this.eventHandler, true);
                     result.start();
                     return result;
                 } catch (Throwable ex) {
                     // no native support, use the simulation
                     logger.debug("Not possible to register the native watcher, using fallback for {}", path);
                     logger.trace(ex);
-                    var result = new JDKRecursiveDirectoryWatcher(path, executor, this.eventHandler);
+                    var result = new JDKRecursiveDirectoryWatch(path, executor, this.eventHandler);
                     result.start();
                     return result;
                 }
             }
             case PATH_ONLY: {
-                var result = new JDKFileWatcher(path, executor, this.eventHandler);
+                var result = new JDKFileWatch(path, executor, this.eventHandler);
                 result.start();
                 return result;
             }

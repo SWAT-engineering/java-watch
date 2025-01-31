@@ -44,7 +44,7 @@ import engineering.swat.watch.WatchEvent;
 import engineering.swat.watch.impl.util.BundledSubscription;
 import engineering.swat.watch.impl.util.SubscriptionKey;
 
-public class JDKDirectoryWatcher implements ActiveWatch {
+public class JDKDirectoryWatch implements ActiveWatch {
     private final Logger logger = LogManager.getLogger();
     private final Path directory;
     private final Executor exec;
@@ -55,11 +55,11 @@ public class JDKDirectoryWatcher implements ActiveWatch {
     private static final BundledSubscription<SubscriptionKey, List<java.nio.file.WatchEvent<?>>>
         BUNDLED_JDK_WATCHERS = new BundledSubscription<>(JDKPoller::register);
 
-    public JDKDirectoryWatcher(Path directory, Executor exec, Consumer<WatchEvent> eventHandler) {
+    public JDKDirectoryWatch(Path directory, Executor exec, Consumer<WatchEvent> eventHandler) {
         this(directory, exec, eventHandler, false);
     }
 
-    public JDKDirectoryWatcher(Path directory, Executor exec, Consumer<WatchEvent> eventHandler, boolean nativeRecursive) {
+    public JDKDirectoryWatch(Path directory, Executor exec, Consumer<WatchEvent> eventHandler, boolean nativeRecursive) {
         this.directory = directory;
         this.exec = exec;
         this.eventHandler = eventHandler;

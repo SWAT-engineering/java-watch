@@ -44,7 +44,7 @@ import engineering.swat.watch.WatchEvent;
  *
  * Note that you should take care to call start only once.
  */
-public class JDKFileWatcher implements ActiveWatch {
+public class JDKFileWatch implements ActiveWatch {
     private final Logger logger = LogManager.getLogger();
     private final Path file;
     private final Path fileName;
@@ -52,7 +52,7 @@ public class JDKFileWatcher implements ActiveWatch {
     private final Consumer<WatchEvent> eventHandler;
     private volatile @MonotonicNonNull Closeable activeWatch;
 
-    public JDKFileWatcher(Path file, Executor exec, Consumer<WatchEvent> eventHandler) {
+    public JDKFileWatch(Path file, Executor exec, Consumer<WatchEvent> eventHandler) {
         this.file = file;
         Path filename= file.getFileName();
         if (filename == null) {
@@ -75,12 +75,12 @@ public class JDKFileWatcher implements ActiveWatch {
 
             }
             assert !dir.equals(file);
-            JDKDirectoryWatcher parentWatch;
+            JDKDirectoryWatch parentWatch;
             synchronized(this) {
                 if (activeWatch != null) {
                     throw new IOException("Cannot start an already started watch");
                 }
-                activeWatch = parentWatch = new JDKDirectoryWatcher(dir, exec, this::filter);
+                activeWatch = parentWatch = new JDKDirectoryWatch(dir, exec, this::filter);
                 parentWatch.start();
             }
             logger.debug("Started file watch for {} (in reality a watch on {}): {}", file, dir, parentWatch);

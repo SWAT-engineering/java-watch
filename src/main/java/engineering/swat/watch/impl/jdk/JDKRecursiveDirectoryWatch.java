@@ -51,14 +51,14 @@ import org.apache.logging.log4j.Logger;
 import engineering.swat.watch.ActiveWatch;
 import engineering.swat.watch.WatchEvent;
 
-public class JDKRecursiveDirectoryWatcher implements ActiveWatch {
+public class JDKRecursiveDirectoryWatch implements ActiveWatch {
     private final Logger logger = LogManager.getLogger();
     private final Path root;
     private final Executor exec;
     private final Consumer<WatchEvent> eventHandler;
-    private final ConcurrentMap<Path, JDKDirectoryWatcher> activeWatches = new ConcurrentHashMap<>();
+    private final ConcurrentMap<Path, JDKDirectoryWatch> activeWatches = new ConcurrentHashMap<>();
 
-    public JDKRecursiveDirectoryWatcher(Path directory, Executor exec, Consumer<WatchEvent> eventHandler) {
+    public JDKRecursiveDirectoryWatch(Path directory, Executor exec, Consumer<WatchEvent> eventHandler) {
         this.root = directory;
         this.exec = exec;
         this.eventHandler = eventHandler;
@@ -167,7 +167,7 @@ public class JDKRecursiveDirectoryWatcher implements ActiveWatch {
         }
 
         private void addNewDirectory(Path dir) throws IOException {
-            var watcher = activeWatches.computeIfAbsent(dir, d -> new JDKDirectoryWatcher(d, exec, relocater(dir)));
+            var watcher = activeWatches.computeIfAbsent(dir, d -> new JDKDirectoryWatch(d, exec, relocater(dir)));
             try {
                 if (!watcher.safeStart()) {
                     logger.debug("We lost the race on starting a nested watcher, that shouldn't be a problem, but it's a very busy, so we might have lost a few events in {}", dir);
