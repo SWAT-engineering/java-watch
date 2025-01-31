@@ -26,7 +26,6 @@
  */
 package engineering.swat.watch.impl.jdk;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
@@ -48,28 +47,22 @@ import java.util.function.Consumer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import engineering.swat.watch.ActiveWatch;
 import engineering.swat.watch.WatchEvent;
 
-public class JDKRecursiveDirectoryWatch implements ActiveWatch {
+public class JDKRecursiveDirectoryWatch extends JDKBaseWatch {
     private final Logger logger = LogManager.getLogger();
-    private final Path root;
-    private final Executor exec;
-    private final Consumer<WatchEvent> eventHandler;
     private final ConcurrentMap<Path, JDKDirectoryWatch> activeWatches = new ConcurrentHashMap<>();
 
     public JDKRecursiveDirectoryWatch(Path directory, Executor exec, Consumer<WatchEvent> eventHandler) {
-        this.root = directory;
-        this.exec = exec;
-        this.eventHandler = eventHandler;
+        super(directory, exec, eventHandler);
     }
 
     public void start() throws IOException {
         try {
-            logger.debug("Starting recursive watch for: {}", root);
-            registerInitialWatches(root);
+            logger.debug("Starting recursive watch for: {}", path);
+            registerInitialWatches(path);
         } catch (IOException e) {
-            throw new IOException("Could not register directory watcher for: " + root, e);
+            throw new IOException("Could not register directory watcher for: " + path, e);
         }
     }
 
@@ -115,7 +108,7 @@ public class JDKRecursiveDirectoryWatch implements ActiveWatch {
     }
 
     private void handleOverflow(WatchEvent ev) {
-        logger.info("Overflow detected, rescanning to find missed entries in {}", root);
+        logger.info("Overflow detected, rescanning to find missed entries in {}", path);
         CompletableFuture
             .completedFuture(ev.calculateFullPath())
             .thenApplyAsync(this::syncAfterOverflow, exec)
@@ -181,9 +174,9 @@ public class JDKRecursiveDirectoryWatch implements ActiveWatch {
 
         /** Make sure that the events are relative to the actual root of the recursive watcher */
         private Consumer<WatchEvent> relocater(Path subRoot) {
-            final Path newRelative = root.relativize(subRoot);
+            final Path newRelative = path.relativize(subRoot);
             return ev -> {
-                var rewritten = new WatchEvent(ev.getKind(), root, newRelative.resolve(ev.getRelativePath()));
+                var rewritten = new WatchEvent(ev.getKind(), path, newRelative.resolve(ev.getRelativePath()));
                 processEvents(rewritten);
             };
         }
@@ -208,7 +201,7 @@ public class JDKRecursiveDirectoryWatch implements ActiveWatch {
                 hasFiles = false;
                 if (!seenDirs.contains(subdir)) {
                     if (!subdir.equals(subRoot)) {
-                        events.add(new WatchEvent(WatchEvent.Kind.CREATED, root, root.relativize(subdir)));
+                        events.add(new WatchEvent(WatchEvent.Kind.CREATED, path, path.relativize(subdir)));
                     }
                     return super.preVisitDirectory(subdir, attrs);
                 }
@@ -222,7 +215,7 @@ public class JDKRecursiveDirectoryWatch implements ActiveWatch {
         @Override
         public FileVisitResult postVisitDirectory(Path subdir, IOException exc) throws IOException {
             if (hasFiles) {
-                events.add(new WatchEvent(WatchEvent.Kind.MODIFIED, root, root.relativize(subdir)));
+                events.add(new WatchEvent(WatchEvent.Kind.MODIFIED, path, path.relativize(subdir)));
             }
             return super.postVisitDirectory(subdir, exc);
         }
@@ -232,10 +225,10 @@ public class JDKRecursiveDirectoryWatch implements ActiveWatch {
             if (!seenFiles.contains(file)) {
                 hasFiles = true;
 
-                var relative = root.relativize(file);
-                events.add(new WatchEvent(WatchEvent.Kind.CREATED, root, relative));
+                var relative = path.relativize(file);
+                events.add(new WatchEvent(WatchEvent.Kind.CREATED, path, relative));
                 if (attrs.size() > 0) {
-                    events.add(new WatchEvent(WatchEvent.Kind.MODIFIED, root, relative));
+                    events.add(new WatchEvent(WatchEvent.Kind.MODIFIED, path, relative));
                 }
                 seenFiles.add(file);
             }

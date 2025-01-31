@@ -39,16 +39,12 @@ import org.apache.logging.log4j.Logger;
 import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import engineering.swat.watch.ActiveWatch;
 import engineering.swat.watch.WatchEvent;
 import engineering.swat.watch.impl.util.BundledSubscription;
 import engineering.swat.watch.impl.util.SubscriptionKey;
 
-public class JDKDirectoryWatch implements ActiveWatch {
+public class JDKDirectoryWatch extends JDKBaseWatch {
     private final Logger logger = LogManager.getLogger();
-    private final Path directory;
-    private final Executor exec;
-    private final Consumer<WatchEvent> eventHandler;
     private volatile @MonotonicNonNull Closeable activeWatch;
     private final boolean nativeRecursive;
 
@@ -60,18 +56,15 @@ public class JDKDirectoryWatch implements ActiveWatch {
     }
 
     public JDKDirectoryWatch(Path directory, Executor exec, Consumer<WatchEvent> eventHandler, boolean nativeRecursive) {
-        this.directory = directory;
-        this.exec = exec;
-        this.eventHandler = eventHandler;
+        super(directory, exec, eventHandler);
         this.nativeRecursive = nativeRecursive;
     }
-
 
     synchronized boolean safeStart() throws IOException {
         if (activeWatch != null) {
             return false;
         }
-        activeWatch = BUNDLED_JDK_WATCHERS.subscribe(new SubscriptionKey(directory, nativeRecursive), this::handleChanges);
+        activeWatch = BUNDLED_JDK_WATCHERS.subscribe(new SubscriptionKey(path, nativeRecursive), this::handleChanges);
         return true;
     }
 
@@ -80,9 +73,9 @@ public class JDKDirectoryWatch implements ActiveWatch {
             if (!safeStart()) {
                 throw new IllegalStateException("Cannot start a watcher twice");
             }
-            logger.debug("Started watch for: {}", directory);
+            logger.debug("Started watch for: {}", path);
         } catch (IOException e) {
-            throw new IOException("Could not register directory watcher for: " + directory, e);
+            throw new IOException("Could not register directory watcher for: " + path, e);
         }
     }
 
@@ -116,15 +109,15 @@ public class JDKDirectoryWatch implements ActiveWatch {
         else {
             throw new IllegalArgumentException("Unexpected watch event: " + ev);
         }
-        var path = kind == WatchEvent.Kind.OVERFLOW ? this.directory : (@Nullable Path)ev.context();
+        var path = kind == WatchEvent.Kind.OVERFLOW ? this.path : (@Nullable Path)ev.context();
         logger.trace("Translated: {} to {} at {}", ev, kind, path);
-        return new WatchEvent(kind, directory, path);
+        return new WatchEvent(kind, path, path);
     }
 
     @Override
     public synchronized void close() throws IOException {
         if (activeWatch != null) {
-            logger.trace("Closing watch for: {}", this.directory);
+            logger.trace("Closing watch for: {}", this.path);
             activeWatch.close();
         }
     }

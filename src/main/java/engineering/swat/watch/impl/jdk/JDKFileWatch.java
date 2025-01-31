@@ -36,7 +36,6 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 
-import engineering.swat.watch.ActiveWatch;
 import engineering.swat.watch.WatchEvent;
 
 /**
@@ -44,23 +43,18 @@ import engineering.swat.watch.WatchEvent;
  *
  * Note that you should take care to call start only once.
  */
-public class JDKFileWatch implements ActiveWatch {
+public class JDKFileWatch extends JDKBaseWatch {
     private final Logger logger = LogManager.getLogger();
-    private final Path file;
     private final Path fileName;
-    private final Executor exec;
-    private final Consumer<WatchEvent> eventHandler;
     private volatile @MonotonicNonNull Closeable activeWatch;
 
     public JDKFileWatch(Path file, Executor exec, Consumer<WatchEvent> eventHandler) {
-        this.file = file;
-        Path filename= file.getFileName();
-        if (filename == null) {
+        super(file, exec, eventHandler);
+
+        this.fileName = file.getFileName();
+        if (this.fileName == null) {
             throw new IllegalArgumentException("Cannot pass in a root path");
         }
-        this.fileName = filename;
-        this.exec = exec;
-        this.eventHandler = eventHandler;
     }
 
     /**
@@ -69,12 +63,12 @@ public class JDKFileWatch implements ActiveWatch {
      */
     public void start() throws IOException {
         try {
-            var dir = file.getParent();
+            var dir = path.getParent();
             if (dir == null) {
                 throw new IllegalArgumentException("cannot watch a single entry that is on the root");
 
             }
-            assert !dir.equals(file);
+            assert !dir.equals(path);
             JDKDirectoryWatch parentWatch;
             synchronized(this) {
                 if (activeWatch != null) {
@@ -83,10 +77,10 @@ public class JDKFileWatch implements ActiveWatch {
                 activeWatch = parentWatch = new JDKDirectoryWatch(dir, exec, this::filter);
                 parentWatch.start();
             }
-            logger.debug("Started file watch for {} (in reality a watch on {}): {}", file, dir, parentWatch);
+            logger.debug("Started file watch for {} (in reality a watch on {}): {}", path, dir, parentWatch);
 
         } catch (IOException e) {
-            throw new IOException("Could not register file watcher for: " + file, e);
+            throw new IOException("Could not register file watcher for: " + path, e);
         }
     }
 
