@@ -51,13 +51,17 @@ public class JDKFileWatch extends JDKBaseWatch {
     public JDKFileWatch(Path file, Executor exec, Consumer<WatchEvent> eventHandler) {
         super(file, exec, eventHandler);
 
-        this.parent = path.getParent();
-        this.fileName = path.getFileName();
+        // Use local variables to check null before field assignments (Checker
+        // Framework doesn't like it the other way around)
+        var parent = path.getParent();
+        var fileName = path.getFileName();
         if (parent == null || fileName == null) {
             throw new IllegalArgumentException("The root path is not a valid path for a file watch");
         }
-
         assert !parent.equals(path);
+
+        this.parent = parent;
+        this.fileName = fileName;
     }
 
     private void filter(WatchEvent event) {
