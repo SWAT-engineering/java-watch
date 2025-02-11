@@ -157,31 +157,37 @@ public class Watcher {
         if (this.eventHandler == EMPTY_HANDLER) {
             throw new IllegalStateException("There is no onEvent handler defined");
         }
-        var result = createWatch();
-        result.start();
-        return result;
-    }
 
-    private JDKBaseWatch createWatch() {
+        JDKBaseWatch result;
+
         switch (scope) {
             case PATH_AND_CHILDREN: {
-                return new JDKDirectoryWatch(path, executor, eventHandler, false);
+                result = new JDKDirectoryWatch(path, executor, eventHandler, false);
+                result.start();
+                break;
             }
             case PATH_AND_ALL_DESCENDANTS: {
                 try {
-                    return new JDKDirectoryWatch(path, executor, eventHandler, true);
+                    result = new JDKDirectoryWatch(path, executor, eventHandler, true);
+                    result.start();
                 } catch (Throwable ex) {
                     // no native support, use the simulation
                     logger.debug("Not possible to register the native watcher, using fallback for {}", path);
                     logger.trace(ex);
-                    return new JDKRecursiveDirectoryWatch(path, executor, eventHandler);
+                    result = new JDKRecursiveDirectoryWatch(path, executor, eventHandler);
+                    result.start();
                 }
+                break;
             }
             case PATH_ONLY: {
-                return new JDKFileWatch(path, executor, eventHandler);
+                result = new JDKFileWatch(path, executor, eventHandler);
+                result.start();
+                break;
             }
             default:
                 throw new IllegalStateException("Not supported yet");
         }
+
+        return result;
     }
 }

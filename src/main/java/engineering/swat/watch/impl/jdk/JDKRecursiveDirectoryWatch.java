@@ -339,6 +339,6 @@ public class JDKRecursiveDirectoryWatch extends JDKBaseWatch {
     protected boolean runIfFirstTime() throws IOException {
         logger.debug("Running recursive watch for: {}", path);
         registerInitialWatches(path);
-        return false;
+        return true;
     }
 }
