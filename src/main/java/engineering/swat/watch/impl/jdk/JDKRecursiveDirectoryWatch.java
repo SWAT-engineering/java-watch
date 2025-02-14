@@ -57,15 +57,27 @@ public class JDKRecursiveDirectoryWatch extends JDKBaseWatch {
         super(directory, exec, eventHandler);
     }
 
+    public void start() throws IOException {
+        try {
+            logger.debug("Starting recursive watch for: {}", path);
+            registerInitialWatches(path);
+        } catch (IOException e) {
+            throw new IOException("Could not register directory watcher for: " + path, e);
+        }
+    }
+
     private void processEvents(WatchEvent ev) {
         logger.trace("Forwarding event: {}", ev);
         eventHandler.accept(ev);
         logger.trace("Unwrapping event: {}", ev);
-        switch (ev.getKind()) {
-            case CREATED: handleCreate(ev); break;
-            case DELETED: handleDeleteDirectory(ev); break;
-            case OVERFLOW: handleOverflow(ev); break;
-            case MODIFIED: break;
+        try {
+            switch (ev.getKind()) {
+                case CREATED: handleCreate(ev); break;
+                case DELETED: handleDeleteDirectory(ev); break;
+                case OVERFLOW: handleOverflow(ev); break;
+                case MODIFIED: break;
+            }
+        } finally {
         }
     }
 
