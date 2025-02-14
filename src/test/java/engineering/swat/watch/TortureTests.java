@@ -319,10 +319,11 @@ class TortureTests {
                 fail(exceptions.pop());
             }
         }
-        catch (TerminalFailureException e) {
+        catch (Exception e) {
             logger.info("Test manyRegisterAndUnregisterSameTime failed");
             logger.info("{} exceptions", exceptions.size());
             exceptions.peek().printStackTrace();
+            e.printStackTrace();
             if (!exceptions.isEmpty()) {
                 fail(exceptions.pop());
             }
