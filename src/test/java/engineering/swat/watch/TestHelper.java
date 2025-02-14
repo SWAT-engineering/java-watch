@@ -51,6 +51,9 @@ public class TestHelper {
         SHORT_WAIT = Duration.ofSeconds(1 * delayFactor);
         NORMAL_WAIT = Duration.ofSeconds(4 * delayFactor);
         LONG_WAIT = Duration.ofSeconds(8 * delayFactor);
+
+        System.out.println("delayFactorConfig: " + delayFactorConfig);
+        System.out.println("delayFactor: " + delayFactor);
     }
 
 }
