@@ -158,36 +158,33 @@ public class Watcher {
             throw new IllegalStateException("There is no onEvent handler defined");
         }
 
-        JDKBaseWatch result;
-
         switch (scope) {
             case PATH_AND_CHILDREN: {
-                result = new JDKDirectoryWatch(path, executor, eventHandler, false);
+                var result = new JDKDirectoryWatch(path, executor, eventHandler, false);
                 result.start();
-                break;
+                return result;
             }
             case PATH_AND_ALL_DESCENDANTS: {
                 try {
-                    result = new JDKDirectoryWatch(path, executor, eventHandler, true);
+                    var result = new JDKDirectoryWatch(path, executor, eventHandler, true);
                     result.start();
+                    return result;
                 } catch (Throwable ex) {
                     // no native support, use the simulation
                     logger.debug("Not possible to register the native watcher, using fallback for {}", path);
                     logger.trace(ex);
-                    result = new JDKRecursiveDirectoryWatch(path, executor, eventHandler);
+                    var result = new JDKRecursiveDirectoryWatch(path, executor, eventHandler);
                     result.start();
+                    return result;
                 }
-                break;
             }
             case PATH_ONLY: {
-                result = new JDKFileWatch(path, executor, eventHandler);
+                var result = new JDKFileWatch(path, executor, eventHandler);
                 result.start();
-                break;
+                return result;
             }
             default:
                 throw new IllegalStateException("Not supported yet");
         }
-
-        return result;
     }
 }
