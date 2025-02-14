@@ -50,7 +50,9 @@ import java.util.function.Predicate;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
@@ -63,6 +65,11 @@ class TortureTests {
     private final Logger logger = LogManager.getLogger();
 
     private TestDirectory testDir;
+
+    @BeforeAll
+    static void setupEverything() {
+        Awaitility.setDefaultTimeout(TestHelper.LONG_WAIT.getSeconds(), TimeUnit.SECONDS);
+    }
 
     @BeforeEach
     void setup() throws IOException {
