@@ -31,7 +31,6 @@ import static org.awaitility.Awaitility.await;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -56,14 +55,14 @@ class RecursiveWatchTests {
     }
 
     @AfterEach
-    void cleanup() throws IOException {
+    void cleanup() {
         if (testDir != null) {
             testDir.close();
         }
     }
 
     @BeforeAll
-    static void setupEverything() throws IOException {
+    static void setupEverything() {
         Awaitility.setDefaultTimeout(TestHelper.NORMAL_WAIT);
     }
 
@@ -123,7 +122,7 @@ class RecursiveWatchTests {
     }
 
     @Test
-    void deleteOfFileInDirectoryShouldBeVisible() throws IOException, InterruptedException {
+    void deleteOfFileInDirectoryShouldBeVisible() throws IOException {
         var target = testDir.getTestFiles()
             .stream()
             .filter(p -> !p.getParent().equals(testDir.getTestDirectory()))

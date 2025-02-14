@@ -51,7 +51,7 @@ class DeleteLockTests {
     }
 
     @AfterEach
-    void cleanup() throws IOException {
+    void cleanup() {
         if (testDir != null) {
             testDir.close();
         }
