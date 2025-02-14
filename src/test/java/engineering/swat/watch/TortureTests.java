@@ -311,7 +311,8 @@ class TortureTests {
             assertTrue(seen.isEmpty(), "No events should have been sent");
             Files.writeString(target, "Hello World");
 
-            logger.info("Ready to await... ({} ms, {} exceptions pending)",
+            logger.info("Ready to await... ({} watchers, {} ms, {} exceptions pending)",
+                amountOfWatchersActive,
                 TestHelper.NORMAL_WAIT.minusMillis(100).toMillis(),
                 exceptions.size());
 

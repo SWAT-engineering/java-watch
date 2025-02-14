@@ -25,7 +25,7 @@ jobs:
         with:
           java-version: ${{ matrix.jdk }}
           distribution: 'temurin'
-          # cache: 'maven'
+          cache: 'maven'
 
       - name: test
         run: mvn -B clean test
