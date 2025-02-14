@@ -43,8 +43,8 @@ import engineering.swat.watch.impl.util.SubscriptionKey;
 
 public class JDKDirectoryWatch extends JDKBaseWatch {
     private final Logger logger = LogManager.getLogger();
-    private volatile @MonotonicNonNull Closeable bundledWatch;
     private final boolean nativeRecursive;
+    private volatile @MonotonicNonNull Closeable bundledJDKWatcher;
 
     private static final BundledSubscription<SubscriptionKey, List<java.nio.file.WatchEvent<?>>>
         BUNDLED_JDK_WATCHERS = new BundledSubscription<>(JDKPoller::register);
@@ -75,20 +75,20 @@ public class JDKDirectoryWatch extends JDKBaseWatch {
 
     @Override
     public synchronized void close() throws IOException {
-        if (bundledWatch != null) {
+        if (bundledJDKWatcher != null) {
             logger.trace("Closing watch for: {}", this.path);
-            bundledWatch.close();
+            bundledJDKWatcher.close();
         }
     }
 
     @Override
     protected synchronized boolean runIfFirstTime() throws IOException {
-        if (bundledWatch != null) {
+        if (bundledJDKWatcher != null) {
             return false;
         }
 
         var key = new SubscriptionKey(path, nativeRecursive);
-        bundledWatch = BUNDLED_JDK_WATCHERS.subscribe(key, this::handleChanges);
+        bundledJDKWatcher = BUNDLED_JDK_WATCHERS.subscribe(key, this::handleChanges);
         return true;
     }
 }

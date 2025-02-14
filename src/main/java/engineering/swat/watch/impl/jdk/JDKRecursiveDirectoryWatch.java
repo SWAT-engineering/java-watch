@@ -148,10 +148,10 @@ public class JDKRecursiveDirectoryWatch extends JDKBaseWatch {
         }
 
         private void addNewDirectory(Path dir) throws IOException {
-            var watcher = activeWatches.computeIfAbsent(dir, d -> new JDKDirectoryWatch(d, exec, relocater(dir)));
+            var watch = activeWatches.computeIfAbsent(dir, d -> new JDKDirectoryWatch(d, exec, relocater(dir)));
             try {
-                if (!watcher.runIfFirstTime()) {
-                    logger.debug("We lost the race on starting a nested watcher, that shouldn't be a problem, but it's a very busy, so we might have lost a few events in {}", dir);
+                if (!watch.runIfFirstTime()) {
+                    logger.debug("We lost the race on starting a nested watch, that shouldn't be a problem, but it's a very busy, so we might have lost a few events in {}", dir);
                 }
             } catch (IOException ex) {
                 activeWatches.remove(dir);
@@ -160,7 +160,7 @@ public class JDKRecursiveDirectoryWatch extends JDKBaseWatch {
             }
         }
 
-        /** Make sure that the events are relative to the actual root of the recursive watcher */
+        /** Make sure that the events are relative to the actual root of the recursive watch */
         private Consumer<WatchEvent> relocater(Path subRoot) {
             final Path newRelative = path.relativize(subRoot);
             return ev -> {
