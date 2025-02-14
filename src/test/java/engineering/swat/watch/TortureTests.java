@@ -50,6 +50,7 @@ import java.util.function.Predicate;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.awaitility.core.TerminalFailureException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.RepeatedTest;
@@ -314,6 +315,14 @@ class TortureTests {
                 .pollDelay(TestHelper.NORMAL_WAIT.minusMillis(100))
                 .until(seen::size, Predicate.isEqual(amountOfWatchersActive))
                 ;
+            if (!exceptions.isEmpty()) {
+                fail(exceptions.pop());
+            }
+        }
+        catch (TerminalFailureException e) {
+            logger.info("Test manyRegisterAndUnregisterSameTime failed");
+            logger.info("{} exceptions", exceptions.size());
+            exceptions.peek().printStackTrace();
             if (!exceptions.isEmpty()) {
                 fail(exceptions.pop());
             }
