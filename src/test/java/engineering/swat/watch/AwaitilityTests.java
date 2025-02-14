@@ -59,9 +59,8 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 class AwaitilityTests {
 
-    // @RepeatedTest(failureThreshold=1, value = 20)
-    @Test
-    void manyRegisterAndUnregisterSameTime() throws InterruptedException, IOException {
+    @RepeatedTest(failureThreshold=1, value=20)
+    void test() throws InterruptedException, IOException {
 
         await()
                 .failFast(() -> false)
