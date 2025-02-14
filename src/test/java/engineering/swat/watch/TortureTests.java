@@ -39,7 +39,6 @@ import java.util.Random;
 import java.util.Collections;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingDeque;
@@ -50,13 +49,13 @@ import java.util.function.Predicate;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
-
-import engineering.swat.watch.WatchEvent.Kind;
 
 class TortureTests {
 
@@ -64,13 +63,18 @@ class TortureTests {
 
     private TestDirectory testDir;
 
+    @BeforeAll
+    static void setupEverything() {
+        Awaitility.setDefaultTimeout(TestHelper.LONG_WAIT.getSeconds(), TimeUnit.SECONDS);
+    }
+
     @BeforeEach
     void setup() throws IOException {
         testDir = new TestDirectory();
     }
 
     @AfterEach
-    void cleanup() throws IOException {
+    void cleanup() {
         if (testDir != null) {
             testDir.close();
         }
@@ -90,7 +94,7 @@ class TortureTests {
             }
         }
 
-        private final static int BURST_SIZE = 1000;
+        private static final int BURST_SIZE = 1000;
 
         private void startJob(final Path root, Random r, Executor exec) {
             exec.execute(() -> {
@@ -239,7 +243,6 @@ class TortureTests {
             done.acquire(TORTURE_REGISTRATION_THREADS - 1);
             assertTrue(seen.isEmpty(), "No events should have been sent");
             var target = testDir.getTestDirectory().resolve("test124.txt");
-            //logger.info("Writing: {}", target);
             Files.writeString(target, "Hello World");
             var expected = Collections.singleton(target);
             await("We should see only one event")
@@ -324,8 +327,6 @@ class TortureTests {
 
     }
 
-
-
     @Test
     //Deletes can race the filesystem, so you might miss a few files in a dir, if that dir is already deleted
     @EnabledIfEnvironmentVariable(named="TORTURE_DELETE", matches="true")
@@ -363,7 +364,7 @@ class TortureTests {
                 });
 
             try (var activeWatch = watchConfig.start() ) {
-                logger.info("Deleting files now", THREADS);
+                logger.info("Deleting files now ({} threads)", THREADS);
                 testDir.deleteAllFiles();
                 logger.info("Waiting for the events processing to stabilize");
                 waitForStable(events, happened);

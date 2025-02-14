@@ -32,7 +32,6 @@ import static org.awaitility.Awaitility.await;
 
 import java.io.IOException;
 import java.nio.file.Files;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.awaitility.Awaitility;
@@ -51,7 +50,7 @@ class SmokeTests {
     }
 
     @AfterEach
-    void cleanup() throws IOException {
+    void cleanup() {
         if (testDir != null) {
             testDir.close();
         }
@@ -63,7 +62,7 @@ class SmokeTests {
     }
 
     @Test
-    void watchDirectory() throws IOException, InterruptedException {
+    void watchDirectory() throws IOException {
         var changed = new AtomicBoolean(false);
         var target = testDir.getTestFiles().get(0);
         var watchConfig = Watcher.watch(testDir.getTestDirectory(), WatchScope.PATH_AND_CHILDREN)
@@ -77,7 +76,7 @@ class SmokeTests {
     }
 
     @Test
-    void watchRecursiveDirectory() throws IOException, InterruptedException {
+    void watchRecursiveDirectory() throws IOException {
         var changed = new AtomicBoolean(false);
         var target = testDir.getTestFiles().stream()
             .filter(p -> !p.getParent().equals(testDir.getTestDirectory()))
@@ -113,6 +112,4 @@ class SmokeTests {
             await("Single file change").untilTrue(changed);
         }
     }
-
-
 }
