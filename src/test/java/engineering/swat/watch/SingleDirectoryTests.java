@@ -30,8 +30,6 @@ import static org.awaitility.Awaitility.await;
 
 import java.io.IOException;
 import java.nio.file.Files;
-import java.time.Duration;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.awaitility.Awaitility;
@@ -42,7 +40,7 @@ import org.junit.jupiter.api.Test;
 
 import engineering.swat.watch.WatchEvent.Kind;
 
-public class SingleDirectoryTests {
+class SingleDirectoryTests {
     private TestDirectory testDir;
 
     @BeforeEach
@@ -51,7 +49,7 @@ public class SingleDirectoryTests {
     }
 
     @AfterEach
-    void cleanup() throws IOException {
+    void cleanup() {
         if (testDir != null) {
             testDir.close();
         }
@@ -63,7 +61,7 @@ public class SingleDirectoryTests {
     }
 
     @Test
-    void deleteOfFileInDirectoryShouldBeVisible() throws IOException, InterruptedException {
+    void deleteOfFileInDirectoryShouldBeVisible() throws IOException {
         var target = testDir.getTestFiles().get(0);
         var seenDelete = new AtomicBoolean(false);
         var seenCreate = new AtomicBoolean(false);
@@ -91,7 +89,7 @@ public class SingleDirectoryTests {
     }
 
     @Test
-    void alternativeAPITest() throws IOException, InterruptedException {
+    void alternativeAPITest() throws IOException {
         var target = testDir.getTestFiles().get(0);
         var seenDelete = new AtomicBoolean(false);
         var seenCreate = new AtomicBoolean(false);

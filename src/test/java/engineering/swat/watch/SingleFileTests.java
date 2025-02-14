@@ -40,7 +40,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-public class SingleFileTests {
+class SingleFileTests {
     private TestDirectory testDir;
 
     @BeforeEach
@@ -49,7 +49,7 @@ public class SingleFileTests {
     }
 
     @AfterEach
-    void cleanup() throws IOException {
+    void cleanup() {
         if (testDir != null) {
             testDir.close();
         }

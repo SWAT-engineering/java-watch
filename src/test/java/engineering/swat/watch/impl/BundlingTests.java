@@ -54,7 +54,7 @@ import engineering.swat.watch.TestHelper;
 import engineering.swat.watch.impl.util.BundledSubscription;
 import engineering.swat.watch.impl.util.ISubscribable;
 
-public class BundlingTests {
+class BundlingTests {
 
     private final Logger logger = LogManager.getLogger();
     private BundledSubscription<Long, Boolean> target;
@@ -77,8 +77,7 @@ public class BundlingTests {
                 s.accept(true);
             }
         }
-    };
-
+    }
 
     @BeforeEach
     void setup() {
@@ -134,7 +133,7 @@ public class BundlingTests {
     }
 
     @RepeatedTest(failureThreshold = 1, value=50)
-    void parallelSubscriptions() throws IOException, InterruptedException {
+    void parallelSubscriptions() throws InterruptedException {
         var hits = new AtomicInteger();
         var endPointReached = new Semaphore(0);
         var waitingForClose = new Semaphore(0);
@@ -171,5 +170,4 @@ public class BundlingTests {
             .untilAtomic(hits, IsEqual.equalTo(active));
         waitingForClose.release(active);
     }
-
 }

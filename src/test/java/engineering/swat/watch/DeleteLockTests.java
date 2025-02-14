@@ -51,7 +51,7 @@ class DeleteLockTests {
     }
 
     @AfterEach
-    void cleanup() throws IOException {
+    void cleanup() {
         if (testDir != null) {
             testDir.close();
         }
@@ -61,7 +61,6 @@ class DeleteLockTests {
     static void setupEverything() {
         Awaitility.setDefaultTimeout(TestHelper.NORMAL_WAIT);
     }
-
 
     @FunctionalInterface
     private interface Deleter {
