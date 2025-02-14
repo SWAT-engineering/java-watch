@@ -320,6 +320,9 @@ class TortureTests {
                 .pollDelay(TestHelper.NORMAL_WAIT.minusMillis(100))
                 .until(seen::size, Predicate.isEqual(amountOfWatchersActive))
                 ;
+
+            logger.info("Await complete");
+
             if (!exceptions.isEmpty()) {
                 fail(exceptions.pop());
             }
