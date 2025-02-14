@@ -310,6 +310,11 @@ class TortureTests {
             startedWatching.acquire(amountOfWatchersActive);
             assertTrue(seen.isEmpty(), "No events should have been sent");
             Files.writeString(target, "Hello World");
+
+            logger.info("Ready to await... ({} ms, {} exceptions pending)",
+                TestHelper.NORMAL_WAIT.minusMillis(100).toMillis(),
+                exceptions.size());
+
             await("We should see only exactly the " + amountOfWatchersActive + " events we expect")
                 .failFast(() -> !exceptions.isEmpty())
                 .pollDelay(TestHelper.NORMAL_WAIT.minusMillis(100))
@@ -322,9 +327,9 @@ class TortureTests {
         catch (Exception e) {
             logger.info("Test manyRegisterAndUnregisterSameTime failed");
             logger.info("{} exceptions", exceptions.size());
-            exceptions.peek().printStackTrace();
             e.printStackTrace();
             if (!exceptions.isEmpty()) {
+                exceptions.peek().printStackTrace();
                 fail(exceptions.pop());
             }
         }
