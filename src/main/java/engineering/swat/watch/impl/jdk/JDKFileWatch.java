@@ -26,7 +26,6 @@
  */
 package engineering.swat.watch.impl.jdk;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.concurrent.Executor;
@@ -35,8 +34,8 @@ import java.util.function.Consumer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
-import engineering.swat.watch.ActiveWatch;
 import engineering.swat.watch.WatchEvent;
 
 /**
@@ -44,50 +43,26 @@ import engineering.swat.watch.WatchEvent;
  *
  * Note that you should take care to call start only once.
  */
-public class JDKFileWatcher implements ActiveWatch {
+public class JDKFileWatch extends JDKBaseWatch {
     private final Logger logger = LogManager.getLogger();
-    private final Path file;
+    private final Path parent;
     private final Path fileName;
-    private final Executor exec;
-    private final Consumer<WatchEvent> eventHandler;
-    private volatile @MonotonicNonNull Closeable activeWatch;
+    private volatile @MonotonicNonNull JDKDirectoryWatch parentWatch;
 
-    public JDKFileWatcher(Path file, Executor exec, Consumer<WatchEvent> eventHandler) {
-        this.file = file;
-        Path filename= file.getFileName();
-        if (filename == null) {
-            throw new IllegalArgumentException("Cannot pass in a root path");
-        }
-        this.fileName = filename;
-        this.exec = exec;
-        this.eventHandler = eventHandler;
+    public JDKFileWatch(Path file, Executor exec, Consumer<WatchEvent> eventHandler) {
+        super(file, exec, eventHandler);
+
+        var message = "The root path is not a valid path for a file watch";
+        this.parent = requireNonNull(path.getParent(), message);
+        this.fileName = requireNonNull(path.getFileName(), message);
+        assert !parent.equals(path);
     }
 
-    /**
-     * Start the file watcher, but only do it once
-     * @throws IOException
-     */
-    public void start() throws IOException {
-        try {
-            var dir = file.getParent();
-            if (dir == null) {
-                throw new IllegalArgumentException("cannot watch a single entry that is on the root");
-
-            }
-            assert !dir.equals(file);
-            JDKDirectoryWatcher parentWatch;
-            synchronized(this) {
-                if (activeWatch != null) {
-                    throw new IOException("Cannot start an already started watch");
-                }
-                activeWatch = parentWatch = new JDKDirectoryWatcher(dir, exec, this::filter);
-                parentWatch.start();
-            }
-            logger.debug("Started file watch for {} (in reality a watch on {}): {}", file, dir, parentWatch);
-
-        } catch (IOException e) {
-            throw new IOException("Could not register file watcher for: " + file, e);
+    private static Path requireNonNull(@Nullable Path p, String message) {
+        if (p == null) {
+            throw new IllegalArgumentException(message);
         }
+        return p;
     }
 
     private void filter(WatchEvent event) {
@@ -96,10 +71,20 @@ public class JDKFileWatcher implements ActiveWatch {
         }
     }
 
+    // -- JDKBaseWatch --
+
     @Override
     public synchronized void close() throws IOException {
-        if (activeWatch != null) {
-            activeWatch.close();
+        if (parentWatch != null) {
+            parentWatch.close();
         }
+    }
+
+    @Override
+    protected synchronized void start() throws IOException {
+        assert parentWatch == null;
+        parentWatch = new JDKDirectoryWatch(parent, exec, this::filter);
+        parentWatch.open();
+        logger.debug("File watch (for: {}) is in reality a directory watch (for: {}) with a filter (for: {})", path, parent, fileName);
     }
 }

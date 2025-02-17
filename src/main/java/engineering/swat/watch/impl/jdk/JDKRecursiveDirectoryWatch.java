@@ -26,7 +26,6 @@
  */
 package engineering.swat.watch.impl.jdk;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
@@ -48,43 +47,25 @@ import java.util.function.Consumer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import engineering.swat.watch.ActiveWatch;
 import engineering.swat.watch.WatchEvent;
 
-public class JDKRecursiveDirectoryWatcher implements ActiveWatch {
+public class JDKRecursiveDirectoryWatch extends JDKBaseWatch {
     private final Logger logger = LogManager.getLogger();
-    private final Path root;
-    private final Executor exec;
-    private final Consumer<WatchEvent> eventHandler;
-    private final ConcurrentMap<Path, JDKDirectoryWatcher> activeWatches = new ConcurrentHashMap<>();
+    private final ConcurrentMap<Path, JDKDirectoryWatch> activeWatches = new ConcurrentHashMap<>();
 
-    public JDKRecursiveDirectoryWatcher(Path directory, Executor exec, Consumer<WatchEvent> eventHandler) {
-        this.root = directory;
-        this.exec = exec;
-        this.eventHandler = eventHandler;
-    }
-
-    public void start() throws IOException {
-        try {
-            logger.debug("Starting recursive watch for: {}", root);
-            registerInitialWatches(root);
-        } catch (IOException e) {
-            throw new IOException("Could not register directory watcher for: " + root, e);
-        }
+    public JDKRecursiveDirectoryWatch(Path directory, Executor exec, Consumer<WatchEvent> eventHandler) {
+        super(directory, exec, eventHandler);
     }
 
     private void processEvents(WatchEvent ev) {
         logger.trace("Forwarding event: {}", ev);
         eventHandler.accept(ev);
         logger.trace("Unwrapping event: {}", ev);
-        try {
-            switch (ev.getKind()) {
-                case CREATED: handleCreate(ev); break;
-                case DELETED: handleDeleteDirectory(ev); break;
-                case OVERFLOW: handleOverflow(ev); break;
-                case MODIFIED: break;
-            }
-        } finally {
+        switch (ev.getKind()) {
+            case CREATED: handleCreate(ev); break;
+            case DELETED: handleDeleteDirectory(ev); break;
+            case OVERFLOW: handleOverflow(ev); break;
+            case MODIFIED: break;
         }
     }
 
@@ -115,7 +96,7 @@ public class JDKRecursiveDirectoryWatcher implements ActiveWatch {
     }
 
     private void handleOverflow(WatchEvent ev) {
-        logger.info("Overflow detected, rescanning to find missed entries in {}", root);
+        logger.info("Overflow detected, rescanning to find missed entries in {}", path);
         CompletableFuture
             .completedFuture(ev.calculateFullPath())
             .thenApplyAsync(this::syncAfterOverflow, exec)
@@ -167,10 +148,10 @@ public class JDKRecursiveDirectoryWatcher implements ActiveWatch {
         }
 
         private void addNewDirectory(Path dir) throws IOException {
-            var watcher = activeWatches.computeIfAbsent(dir, d -> new JDKDirectoryWatcher(d, exec, relocater(dir)));
+            var watch = activeWatches.computeIfAbsent(dir, d -> new JDKDirectoryWatch(d, exec, relocater(dir)));
             try {
-                if (!watcher.safeStart()) {
-                    logger.debug("We lost the race on starting a nested watcher, that shouldn't be a problem, but it's a very busy, so we might have lost a few events in {}", dir);
+                if (!watch.startIfFirstTime()) {
+                    logger.debug("We lost the race on starting a nested watch, that shouldn't be a problem, but it's a very busy, so we might have lost a few events in {}", dir);
                 }
             } catch (IOException ex) {
                 activeWatches.remove(dir);
@@ -179,11 +160,11 @@ public class JDKRecursiveDirectoryWatcher implements ActiveWatch {
             }
         }
 
-        /** Make sure that the events are relative to the actual root of the recursive watcher */
+        /** Make sure that the events are relative to the actual root of the recursive watch */
         private Consumer<WatchEvent> relocater(Path subRoot) {
-            final Path newRelative = root.relativize(subRoot);
+            final Path newRelative = path.relativize(subRoot);
             return ev -> {
-                var rewritten = new WatchEvent(ev.getKind(), root, newRelative.resolve(ev.getRelativePath()));
+                var rewritten = new WatchEvent(ev.getKind(), path, newRelative.resolve(ev.getRelativePath()));
                 processEvents(rewritten);
             };
         }
@@ -208,7 +189,7 @@ public class JDKRecursiveDirectoryWatcher implements ActiveWatch {
                 hasFiles = false;
                 if (!seenDirs.contains(subdir)) {
                     if (!subdir.equals(subRoot)) {
-                        events.add(new WatchEvent(WatchEvent.Kind.CREATED, root, root.relativize(subdir)));
+                        events.add(new WatchEvent(WatchEvent.Kind.CREATED, path, path.relativize(subdir)));
                     }
                     return super.preVisitDirectory(subdir, attrs);
                 }
@@ -222,7 +203,7 @@ public class JDKRecursiveDirectoryWatcher implements ActiveWatch {
         @Override
         public FileVisitResult postVisitDirectory(Path subdir, IOException exc) throws IOException {
             if (hasFiles) {
-                events.add(new WatchEvent(WatchEvent.Kind.MODIFIED, root, root.relativize(subdir)));
+                events.add(new WatchEvent(WatchEvent.Kind.MODIFIED, path, path.relativize(subdir)));
             }
             return super.postVisitDirectory(subdir, exc);
         }
@@ -232,10 +213,10 @@ public class JDKRecursiveDirectoryWatcher implements ActiveWatch {
             if (!seenFiles.contains(file)) {
                 hasFiles = true;
 
-                var relative = root.relativize(file);
-                events.add(new WatchEvent(WatchEvent.Kind.CREATED, root, relative));
+                var relative = path.relativize(file);
+                events.add(new WatchEvent(WatchEvent.Kind.CREATED, path, relative));
                 if (attrs.size() > 0) {
-                    events.add(new WatchEvent(WatchEvent.Kind.MODIFIED, root, relative));
+                    events.add(new WatchEvent(WatchEvent.Kind.MODIFIED, path, relative));
                 }
                 seenFiles.add(file);
             }
@@ -316,7 +297,7 @@ public class JDKRecursiveDirectoryWatcher implements ActiveWatch {
         }
     }
 
-
+    // -- JDKBaseWatch --
 
     @Override
     public void close() throws IOException {
@@ -340,5 +321,11 @@ public class JDKRecursiveDirectoryWatcher implements ActiveWatch {
         if (firstFail != null) {
             throw firstFail;
         }
+    }
+
+    @Override
+    protected void start() throws IOException {
+        logger.debug("Running recursive watch for: {}", path);
+        registerInitialWatches(path);
     }
 }
