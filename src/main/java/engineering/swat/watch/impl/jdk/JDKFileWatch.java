@@ -34,6 +34,7 @@ import java.util.function.Consumer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import engineering.swat.watch.WatchEvent;
 
@@ -51,17 +52,17 @@ public class JDKFileWatch extends JDKBaseWatch {
     public JDKFileWatch(Path file, Executor exec, Consumer<WatchEvent> eventHandler) {
         super(file, exec, eventHandler);
 
-        // Use local variables to check null before field assignments (Checker
-        // Framework doesn't like it the other way around)
-        var parent = path.getParent();
-        var fileName = path.getFileName();
-        if (parent == null || fileName == null) {
-            throw new IllegalArgumentException("The root path is not a valid path for a file watch");
-        }
+        var message = "The root path is not a valid path for a file watch";
+        this.parent = requireNonNull(path.getParent(), message);
+        this.fileName = requireNonNull(path.getFileName(), message);
         assert !parent.equals(path);
+    }
 
-        this.parent = parent;
-        this.fileName = fileName;
+    private static Path requireNonNull(@Nullable Path p, String message) {
+        if (p == null) {
+            throw new IllegalArgumentException(message);
+        }
+        return p;
     }
 
     private void filter(WatchEvent event) {
