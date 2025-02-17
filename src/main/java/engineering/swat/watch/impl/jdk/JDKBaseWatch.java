@@ -81,7 +81,7 @@ public abstract class JDKBaseWatch implements ActiveWatch {
             throw new IllegalArgumentException("Unexpected watch event: " + jdkEvent);
         }
         var rootPath = path;
-        var relativePath = kind == WatchEvent.Kind.OVERFLOW ? rootPath : (@Nullable Path)jdkEvent.context();
+        var relativePath = kind == WatchEvent.Kind.OVERFLOW ? Path.of("") : (@Nullable Path)jdkEvent.context();
 
         var event = new WatchEvent(kind, rootPath, relativePath);
         logger.trace("Translated: {} to {}", jdkEvent, event);
