@@ -46,7 +46,7 @@ public abstract class JDKBaseWatch implements ActiveWatch {
     protected final Path path;
     protected final Executor exec;
     protected final Consumer<WatchEvent> eventHandler;
-    protected final AtomicBoolean running = new AtomicBoolean();
+    protected final AtomicBoolean started = new AtomicBoolean();
 
     protected JDKBaseWatch(Path path, Executor exec, Consumer<WatchEvent> eventHandler) {
         this.path = path;
@@ -54,9 +54,9 @@ public abstract class JDKBaseWatch implements ActiveWatch {
         this.eventHandler = eventHandler;
     }
 
-    public void start() throws IOException {
+    public void open() throws IOException {
         try {
-            if (!runIfFirstTime()) {
+            if (!startIfFirstTime()) {
                 throw new IllegalStateException("Could not restart already-started watch for: " + path);
             }
             logger.debug("Started watch for: {}", path);
@@ -66,23 +66,23 @@ public abstract class JDKBaseWatch implements ActiveWatch {
     }
 
     /**
-     * Runs this watch.
+     * Starts this watch.
      *
      * @throws IOException When an I/O exception of some sort has occurred
      * (e.g., a nested watch failed to start)
      */
-    protected abstract void run() throws IOException;
+    protected abstract void start() throws IOException;
 
     /**
-     * Runs this watch if it's the first time.
+     * Starts this watch if it's the first time.
      *
      * @return `true` iff it's the first time this method is called
      * @throws IOException When an I/O exception of some sort has occurred
      * (e.g., a nested watch failed to start)
      */
-    protected boolean runIfFirstTime() throws IOException {
-        if (running.compareAndSet(false, true)) {
-            run();
+    protected boolean startIfFirstTime() throws IOException {
+        if (started.compareAndSet(false, true)) {
+            start();
             return true;
         } else {
             return false;

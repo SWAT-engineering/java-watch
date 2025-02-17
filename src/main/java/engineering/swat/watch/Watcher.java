@@ -37,7 +37,6 @@ import java.util.function.Consumer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import engineering.swat.watch.impl.jdk.JDKBaseWatch;
 import engineering.swat.watch.impl.jdk.JDKDirectoryWatch;
 import engineering.swat.watch.impl.jdk.JDKFileWatch;
 import engineering.swat.watch.impl.jdk.JDKRecursiveDirectoryWatch;
@@ -161,26 +160,26 @@ public class Watcher {
         switch (scope) {
             case PATH_AND_CHILDREN: {
                 var result = new JDKDirectoryWatch(path, executor, eventHandler, false);
-                result.start();
+                result.open();
                 return result;
             }
             case PATH_AND_ALL_DESCENDANTS: {
                 try {
                     var result = new JDKDirectoryWatch(path, executor, eventHandler, true);
-                    result.start();
+                    result.open();
                     return result;
                 } catch (Throwable ex) {
                     // no native support, use the simulation
                     logger.debug("Not possible to register the native watcher, using fallback for {}", path);
                     logger.trace(ex);
                     var result = new JDKRecursiveDirectoryWatch(path, executor, eventHandler);
-                    result.start();
+                    result.open();
                     return result;
                 }
             }
             case PATH_ONLY: {
                 var result = new JDKFileWatch(path, executor, eventHandler);
-                result.start();
+                result.open();
                 return result;
             }
             default:
