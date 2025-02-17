@@ -37,7 +37,7 @@ public class TestHelper {
     static {
         var delayFactorConfig = System.getenv("DELAY_FACTOR");
         int delayFactor = delayFactorConfig == null ? 1 : Integer.parseInt(delayFactorConfig);
-        var os = System.getProperty("os", "?").toLowerCase();
+        var os = System.getProperty("os.name", "?").toLowerCase();
         if (os.contains("mac")) {
             // OSX is SLOW on it's watches
             delayFactor *= 2;

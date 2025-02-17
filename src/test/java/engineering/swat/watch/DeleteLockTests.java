@@ -62,7 +62,6 @@ class DeleteLockTests {
         Awaitility.setDefaultTimeout(TestHelper.NORMAL_WAIT);
     }
 
-
     @FunctionalInterface
     private interface Deleter {
         void run(Path target) throws IOException;

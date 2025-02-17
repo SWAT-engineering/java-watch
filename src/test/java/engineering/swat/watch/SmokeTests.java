@@ -112,6 +112,4 @@ class SmokeTests {
             await("Single file change").untilTrue(changed);
         }
     }
-
-
 }

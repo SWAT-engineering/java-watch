@@ -66,7 +66,6 @@ class RecursiveWatchTests {
         Awaitility.setDefaultTimeout(TestHelper.NORMAL_WAIT);
     }
 
-
     @Test
     void newDirectoryWithFilesChangesDetected() throws IOException {
         var target = new AtomicReference<Path>();
