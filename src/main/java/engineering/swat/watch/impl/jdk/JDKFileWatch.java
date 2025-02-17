@@ -80,14 +80,10 @@ public class JDKFileWatch extends JDKBaseWatch {
     }
 
     @Override
-    protected synchronized boolean runIfFirstTime() throws IOException {
-        if (parentWatch != null) {
-            return false;
-        }
-
+    protected synchronized void run() throws IOException {
+        assert parentWatch == null;
         parentWatch = new JDKDirectoryWatch(parent, exec, this::filter);
         parentWatch.start();
         logger.debug("File watch (for: {}) is in reality a directory watch (for: {}) with a filter (for: {})", path, parent, fileName);
-        return true;
     }
 }

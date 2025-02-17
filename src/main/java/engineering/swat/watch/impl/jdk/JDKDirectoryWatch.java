@@ -82,13 +82,9 @@ public class JDKDirectoryWatch extends JDKBaseWatch {
     }
 
     @Override
-    protected synchronized boolean runIfFirstTime() throws IOException {
-        if (bundledJDKWatcher != null) {
-            return false;
-        }
-
+    protected synchronized void run() throws IOException {
+        assert bundledJDKWatcher == null;
         var key = new SubscriptionKey(path, nativeRecursive);
         bundledJDKWatcher = BUNDLED_JDK_WATCHERS.subscribe(key, this::handleChanges);
-        return true;
     }
 }

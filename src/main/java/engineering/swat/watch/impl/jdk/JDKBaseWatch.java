@@ -30,6 +30,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.StandardWatchEventKinds;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 import org.apache.logging.log4j.LogManager;
@@ -45,6 +46,7 @@ public abstract class JDKBaseWatch implements ActiveWatch {
     protected final Path path;
     protected final Executor exec;
     protected final Consumer<WatchEvent> eventHandler;
+    protected final AtomicBoolean running = new AtomicBoolean();
 
     protected JDKBaseWatch(Path path, Executor exec, Consumer<WatchEvent> eventHandler) {
         this.path = path;
@@ -60,6 +62,30 @@ public abstract class JDKBaseWatch implements ActiveWatch {
             logger.debug("Started watch for: {}", path);
         } catch (Exception e) {
             throw new IOException("Could not start watch for: " + path, e);
+        }
+    }
+
+    /**
+     * Runs this watch.
+     *
+     * @throws IOException When an I/O exception of some sort has occurred
+     * (e.g., a nested watch failed to start)
+     */
+    protected abstract void run() throws IOException;
+
+    /**
+     * Runs this watch if it's the first time.
+     *
+     * @return `true` iff it's the first time this method is called
+     * @throws IOException When an I/O exception of some sort has occurred
+     * (e.g., a nested watch failed to start)
+     */
+    protected boolean runIfFirstTime() throws IOException {
+        if (running.compareAndSet(false, true)) {
+            run();
+            return true;
+        } else {
+            return false;
         }
     }
 
@@ -87,14 +113,4 @@ public abstract class JDKBaseWatch implements ActiveWatch {
         logger.trace("Translated: {} to {}", jdkEvent, event);
         return event;
     }
-
-    /**
-     * Runs this watch if it's the first time. Intended to be called by method
-     * `start`.
-     *
-     * @return `true` iff it's the first time this method is called
-     * @throws IOException When an I/O exception of some sort (e.g., a nested
-     * watch failed to start) has occurred
-     */
-    protected abstract boolean runIfFirstTime() throws IOException;
 }

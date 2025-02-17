@@ -324,9 +324,8 @@ public class JDKRecursiveDirectoryWatch extends JDKBaseWatch {
     }
 
     @Override
-    protected boolean runIfFirstTime() throws IOException {
+    protected void run() throws IOException {
         logger.debug("Running recursive watch for: {}", path);
         registerInitialWatches(path);
-        return true;
     }
 }
