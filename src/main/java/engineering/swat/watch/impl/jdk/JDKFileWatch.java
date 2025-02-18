@@ -33,7 +33,6 @@ import java.util.function.Consumer;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import engineering.swat.watch.WatchEvent;
@@ -45,16 +44,17 @@ import engineering.swat.watch.WatchEvent;
  */
 public class JDKFileWatch extends JDKBaseWatch {
     private final Logger logger = LogManager.getLogger();
-    private final Path parent;
     private final Path fileName;
-    private volatile @MonotonicNonNull JDKDirectoryWatch parentWatch;
+    private final Path parent;
+    private final JDKBaseWatch parentWatch;
 
     public JDKFileWatch(Path file, Executor exec, Consumer<WatchEvent> eventHandler) {
         super(file, exec, eventHandler);
 
         var message = "The root path is not a valid path for a file watch";
-        this.parent = requireNonNull(path.getParent(), message);
         this.fileName = requireNonNull(path.getFileName(), message);
+        this.parent = requireNonNull(path.getParent(), message);
+        this.parentWatch = new JDKDirectoryWatch(parent, exec, this::filter);
         assert !parent.equals(path);
     }
 
@@ -75,15 +75,11 @@ public class JDKFileWatch extends JDKBaseWatch {
 
     @Override
     public synchronized void close() throws IOException {
-        if (parentWatch != null) {
-            parentWatch.close();
-        }
+        parentWatch.close();
     }
 
     @Override
     protected synchronized void start() throws IOException {
-        assert parentWatch == null;
-        parentWatch = new JDKDirectoryWatch(parent, exec, this::filter);
         parentWatch.open();
         logger.debug("File watch (for: {}) is in reality a directory watch (for: {}) with a filter (for: {})", path, parent, fileName);
     }
