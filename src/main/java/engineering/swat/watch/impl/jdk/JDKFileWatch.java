@@ -44,8 +44,6 @@ import engineering.swat.watch.WatchEvent;
  */
 public class JDKFileWatch extends JDKBaseWatch {
     private final Logger logger = LogManager.getLogger();
-    private final Path parent;
-    private final Path fileName;
     private final JDKBaseWatch internal;
 
     public JDKFileWatch(Path file, Executor exec, Consumer<WatchEvent> eventHandler) {
