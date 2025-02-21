@@ -52,11 +52,17 @@ public class JDKFileWatch extends JDKBaseWatch {
         super(file, exec, eventHandler);
 
         var message = "The root path is not a valid path for a file watch";
-        this.parent = requireNonNull(path.getParent(), message);
-        this.fileName = requireNonNull(path.getFileName(), message);
-        assert !parent.equals(path);
+        var parent = requireNonNull(file.getParent(), message);
+        var fileName = requireNonNull(file.getFileName(), message);
+        assert !parent.equals(file);
 
-        this.internal = new JDKDirectoryWatch(parent, exec, this::filter);
+        this.internal = new JDKDirectoryWatch(parent, exec, e -> {
+            if (fileName.equals(e.getRelativePath())) {
+                eventHandler.accept(e);
+            }
+        });
+
+        logger.debug("File watch (for: {}) is in reality a directory watch (for: {}) with a filter (for: {})", file, parent, fileName);
     }
 
     private static Path requireNonNull(@Nullable Path p, String message) {
@@ -64,12 +70,6 @@ public class JDKFileWatch extends JDKBaseWatch {
             throw new IllegalArgumentException(message);
         }
         return p;
-    }
-
-    private void filter(WatchEvent event) {
-        if (fileName.equals(event.getRelativePath())) {
-            eventHandler.accept(event);
-        }
     }
 
     // -- JDKBaseWatch --
@@ -82,6 +82,5 @@ public class JDKFileWatch extends JDKBaseWatch {
     @Override
     protected synchronized void start() throws IOException {
         internal.open();
-        logger.debug("File watch (for: {}) is in reality a directory watch (for: {}) with a filter (for: {})", path, parent, fileName);
     }
 }
