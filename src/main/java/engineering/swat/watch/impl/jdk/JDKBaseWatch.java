@@ -90,27 +90,32 @@ public abstract class JDKBaseWatch implements ActiveWatch {
     }
 
     protected WatchEvent translate(java.nio.file.WatchEvent<?> jdkEvent) {
-        WatchEvent.Kind kind;
-        if (jdkEvent.kind() == StandardWatchEventKinds.ENTRY_CREATE) {
-            kind = WatchEvent.Kind.CREATED;
-        }
-        else if (jdkEvent.kind() == StandardWatchEventKinds.ENTRY_MODIFY) {
-            kind = WatchEvent.Kind.MODIFIED;
-        }
-        else if (jdkEvent.kind() == StandardWatchEventKinds.ENTRY_DELETE) {
-            kind = WatchEvent.Kind.DELETED;
-        }
-        else if (jdkEvent.kind() == StandardWatchEventKinds.OVERFLOW) {
-            kind = WatchEvent.Kind.OVERFLOW;
-        }
-        else {
-            throw new IllegalArgumentException("Unexpected watch event: " + jdkEvent);
-        }
+        var jdkKind = jdkEvent.kind();
+        var context = jdkKind == StandardWatchEventKinds.OVERFLOW ? null : jdkEvent.context();
+
+        var kind = translate(jdkKind);
         var rootPath = path;
-        var relativePath = kind == WatchEvent.Kind.OVERFLOW ? Path.of("") : (@Nullable Path)jdkEvent.context();
+        var relativePath = context == null ? Path.of("") : (Path) context;
 
         var event = new WatchEvent(kind, rootPath, relativePath);
         logger.trace("Translated: {} to {}", jdkEvent, event);
         return event;
+    }
+
+    private WatchEvent.Kind translate(java.nio.file.WatchEvent.Kind<?> jdkKind) {
+        if (jdkKind == StandardWatchEventKinds.ENTRY_CREATE) {
+            return WatchEvent.Kind.CREATED;
+        }
+        if (jdkKind == StandardWatchEventKinds.ENTRY_MODIFY) {
+            return WatchEvent.Kind.MODIFIED;
+        }
+        if (jdkKind == StandardWatchEventKinds.ENTRY_DELETE) {
+            return WatchEvent.Kind.DELETED;
+        }
+        if (jdkKind == StandardWatchEventKinds.OVERFLOW) {
+            return WatchEvent.Kind.OVERFLOW;
+        }
+
+        throw new IllegalArgumentException("Unexpected watch kind: " + jdkKind);
     }
 }
