@@ -27,12 +27,32 @@
 package engineering.swat.watch;
 
 import java.io.Closeable;
+import java.nio.file.Path;
 
 /**
- * <p>Marker interface for an active watch, in the future might get properties you can inspect.</p>
+ * <p>Marker interface for an active watch, in the future might get more properties you can inspect.</p>
  *
- * <p>For now, make sure to close the watch when not interested in new events</p>
+ * <p>For now, make sure to close the watch when not interested in new events.</p>
  */
 public interface ActiveWatch extends Closeable {
 
+
+    /**
+     * Gets the path watched by this watch.
+     */
+    Path getPath();
+
+    /**
+     * Relativizes the full path of `event` against the path watched by this
+     * watch (as per `getPath()`). Returns a new event whose root path and
+     * relative path are set in accordance with the relativization.
+     */
+    default WatchEvent relativize(WatchEvent event) {
+        var fullPath = event.calculateFullPath();
+
+        var kind = event.getKind();
+        var rootPath = getPath();
+        var relativePath = rootPath.relativize(fullPath);
+        return new WatchEvent(kind, rootPath, relativePath);
+    }
 }

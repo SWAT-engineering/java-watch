@@ -118,4 +118,11 @@ public abstract class JDKBaseWatch implements ActiveWatch {
 
         throw new IllegalArgumentException("Unexpected watch kind: " + jdkKind);
     }
+
+    // -- ActiveWatch --
+
+    @Override
+    public Path getPath() {
+        return path;
+    }
 }
