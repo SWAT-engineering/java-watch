@@ -31,12 +31,13 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.Executor;
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 
+import engineering.swat.watch.ActiveWatch;
 import engineering.swat.watch.WatchEvent;
 import engineering.swat.watch.impl.util.BundledSubscription;
 import engineering.swat.watch.impl.util.SubscriptionKey;
@@ -49,11 +50,11 @@ public class JDKDirectoryWatch extends JDKBaseWatch {
     private static final BundledSubscription<SubscriptionKey, List<java.nio.file.WatchEvent<?>>>
         BUNDLED_JDK_WATCHERS = new BundledSubscription<>(JDKPoller::register);
 
-    public JDKDirectoryWatch(Path directory, Executor exec, Consumer<WatchEvent> eventHandler) {
+    public JDKDirectoryWatch(Path directory, Executor exec, BiConsumer<ActiveWatch, WatchEvent> eventHandler) {
         this(directory, exec, eventHandler, false);
     }
 
-    public JDKDirectoryWatch(Path directory, Executor exec, Consumer<WatchEvent> eventHandler, boolean nativeRecursive) {
+    public JDKDirectoryWatch(Path directory, Executor exec, BiConsumer<ActiveWatch, WatchEvent> eventHandler, boolean nativeRecursive) {
         super(directory, exec, eventHandler);
         this.nativeRecursive = nativeRecursive;
     }

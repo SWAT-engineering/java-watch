@@ -29,12 +29,13 @@ package engineering.swat.watch.impl.jdk;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.concurrent.Executor;
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
+import engineering.swat.watch.ActiveWatch;
 import engineering.swat.watch.WatchEvent;
 
 /**
@@ -46,7 +47,7 @@ public class JDKFileWatch extends JDKBaseWatch {
     private final Logger logger = LogManager.getLogger();
     private final JDKBaseWatch internal;
 
-    public JDKFileWatch(Path file, Executor exec, Consumer<WatchEvent> eventHandler) {
+    public JDKFileWatch(Path file, Executor exec, BiConsumer<ActiveWatch, WatchEvent> eventHandler) {
         super(file, exec, eventHandler);
 
         var message = "The root path is not a valid path for a file watch";
@@ -54,9 +55,9 @@ public class JDKFileWatch extends JDKBaseWatch {
         var fileName = requireNonNull(file.getFileName(), message);
         assert !parent.equals(file);
 
-        this.internal = new JDKDirectoryWatch(parent, exec, e -> {
+        this.internal = new JDKDirectoryWatch(parent, exec, (w, e) -> {
             if (fileName.equals(e.getRelativePath())) {
-                eventHandler.accept(e);
+                eventHandler.accept(w, e);
             }
         });
 
