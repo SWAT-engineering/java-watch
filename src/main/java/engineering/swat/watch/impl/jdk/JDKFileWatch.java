@@ -46,7 +46,7 @@ public class JDKFileWatch extends JDKBaseWatch {
     private final Logger logger = LogManager.getLogger();
     private final Path parent;
     private final Path fileName;
-    private final JDKBaseWatch delegate;
+    private final JDKBaseWatch internal;
 
     public JDKFileWatch(Path file, Executor exec, Consumer<WatchEvent> eventHandler) {
         super(file, exec, eventHandler);
@@ -56,7 +56,7 @@ public class JDKFileWatch extends JDKBaseWatch {
         this.fileName = requireNonNull(path.getFileName(), message);
         assert !parent.equals(path);
 
-        this.delegate = new JDKDirectoryWatch(parent, exec, this::filter, false);
+        this.internal = new JDKDirectoryWatch(parent, exec, this::filter);
     }
 
     private static Path requireNonNull(@Nullable Path p, String message) {
@@ -76,12 +76,12 @@ public class JDKFileWatch extends JDKBaseWatch {
 
     @Override
     public synchronized void close() throws IOException {
-        delegate.close();
+        internal.close();
     }
 
     @Override
     protected synchronized void start() throws IOException {
-        delegate.open();
+        internal.open();
         logger.debug("File watch (for: {}) is in reality a directory watch (for: {}) with a filter (for: {})", path, parent, fileName);
     }
 }
