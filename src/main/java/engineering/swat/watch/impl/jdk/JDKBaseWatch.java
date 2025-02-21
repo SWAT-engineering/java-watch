@@ -122,6 +122,11 @@ public abstract class JDKBaseWatch implements ActiveWatch {
     // -- ActiveWatch --
 
     @Override
+    public void handleEvent(WatchEvent e) {
+        eventHandler.accept(e);
+    }
+
+    @Override
     public Path getPath() {
         return path;
     }

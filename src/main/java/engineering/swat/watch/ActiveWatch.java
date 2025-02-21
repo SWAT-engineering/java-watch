@@ -36,6 +36,13 @@ import java.nio.file.Path;
  */
 public interface ActiveWatch extends Closeable {
 
+    /**
+     * Handles `event`. The purpose of this method is to trigger the event
+     * handler of this watch "from the outside" (in addition to having native
+     * file system libraries trigger the event handler "from the inside"). This
+     * is useful to report synthetic events (e.g., while handling overflows).
+     */
+    void handleEvent(WatchEvent event);
 
     /**
      * Gets the path watched by this watch.
