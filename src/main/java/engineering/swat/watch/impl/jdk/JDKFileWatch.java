@@ -35,8 +35,8 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import engineering.swat.watch.ActiveWatch;
 import engineering.swat.watch.WatchEvent;
+import engineering.swat.watch.impl.EventHandlingWatch;
 
 /**
  * It's not possible to monitor a single file (or directory), so we have to find a directory watcher, and connect to that
@@ -47,7 +47,7 @@ public class JDKFileWatch extends JDKBaseWatch {
     private final Logger logger = LogManager.getLogger();
     private final JDKBaseWatch internal;
 
-    public JDKFileWatch(Path file, Executor exec, BiConsumer<ActiveWatch, WatchEvent> eventHandler) {
+    public JDKFileWatch(Path file, Executor exec, BiConsumer<EventHandlingWatch, WatchEvent> eventHandler) {
         super(file, exec, eventHandler);
 
         var message = "The root path is not a valid path for a file watch";

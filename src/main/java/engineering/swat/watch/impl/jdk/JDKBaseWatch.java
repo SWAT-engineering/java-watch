@@ -45,10 +45,10 @@ public abstract class JDKBaseWatch implements EventHandlingWatch {
 
     protected final Path path;
     protected final Executor exec;
-    protected final BiConsumer<ActiveWatch, WatchEvent> eventHandler;
+    protected final BiConsumer<EventHandlingWatch, WatchEvent> eventHandler;
     protected final AtomicBoolean started = new AtomicBoolean();
 
-    protected JDKBaseWatch(Path path, Executor exec, BiConsumer<ActiveWatch, WatchEvent> eventHandler) {
+    protected JDKBaseWatch(Path path, Executor exec, BiConsumer<EventHandlingWatch, WatchEvent> eventHandler) {
         this.path = path;
         this.exec = exec;
         this.eventHandler = eventHandler;

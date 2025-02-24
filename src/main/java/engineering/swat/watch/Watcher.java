@@ -38,6 +38,7 @@ import java.util.function.Consumer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import engineering.swat.watch.impl.EventHandlingWatch;
 import engineering.swat.watch.impl.jdk.JDKDirectoryWatch;
 import engineering.swat.watch.impl.jdk.JDKFileWatch;
 import engineering.swat.watch.impl.jdk.JDKRecursiveDirectoryWatch;
@@ -55,8 +56,8 @@ public class Watcher {
     private final Path path;
     private volatile Executor executor = CompletableFuture::runAsync;
 
-    private static final BiConsumer<ActiveWatch, WatchEvent> EMPTY_HANDLER = (w, e) -> {};
-    private volatile BiConsumer<ActiveWatch, WatchEvent> eventHandler = EMPTY_HANDLER;
+    private static final BiConsumer<EventHandlingWatch, WatchEvent> EMPTY_HANDLER = (w, e) -> {};
+    private volatile BiConsumer<EventHandlingWatch, WatchEvent> eventHandler = EMPTY_HANDLER;
 
 
     private Watcher(WatchScope scope, Path path) {

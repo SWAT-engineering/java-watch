@@ -47,14 +47,14 @@ import java.util.function.BiConsumer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import engineering.swat.watch.ActiveWatch;
 import engineering.swat.watch.WatchEvent;
+import engineering.swat.watch.impl.EventHandlingWatch;
 
 public class JDKRecursiveDirectoryWatch extends JDKBaseWatch {
     private final Logger logger = LogManager.getLogger();
     private final ConcurrentMap<Path, JDKDirectoryWatch> activeWatches = new ConcurrentHashMap<>();
 
-    public JDKRecursiveDirectoryWatch(Path directory, Executor exec, BiConsumer<ActiveWatch, WatchEvent> eventHandler) {
+    public JDKRecursiveDirectoryWatch(Path directory, Executor exec, BiConsumer<EventHandlingWatch, WatchEvent> eventHandler) {
         super(directory, exec, eventHandler);
     }
 
@@ -161,7 +161,7 @@ public class JDKRecursiveDirectoryWatch extends JDKBaseWatch {
         }
 
         /** Make sure that the events are relative to the actual root of the recursive watch */
-        private BiConsumer<ActiveWatch, WatchEvent> relocater(Path subRoot) {
+        private BiConsumer<EventHandlingWatch, WatchEvent> relocater(Path subRoot) {
             final Path newRelative = path.relativize(subRoot);
             return (w, ev) -> {
                 var rewritten = new WatchEvent(ev.getKind(), path, newRelative.resolve(ev.getRelativePath()));
