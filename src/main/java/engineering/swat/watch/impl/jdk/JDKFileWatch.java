@@ -73,6 +73,11 @@ public class JDKFileWatch extends JDKBaseWatch {
     // -- JDKBaseWatch --
 
     @Override
+    public void handleEvent(WatchEvent event) {
+        internal.handleEvent(event);
+    }
+
+    @Override
     public synchronized void close() throws IOException {
         internal.close();
     }

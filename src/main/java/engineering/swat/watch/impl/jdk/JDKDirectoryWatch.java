@@ -62,7 +62,7 @@ public class JDKDirectoryWatch extends JDKBaseWatch {
         exec.execute(() -> {
             for (var ev : events) {
                 try {
-                    eventHandler.accept(translate(ev));
+                    handleEvent(translate(ev));
                 }
                 catch (Throwable ignored) {
                     logger.error("Ignoring downstream exception:", ignored);

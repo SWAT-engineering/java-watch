@@ -37,10 +37,10 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import engineering.swat.watch.ActiveWatch;
 import engineering.swat.watch.WatchEvent;
+import engineering.swat.watch.impl.EventHandlingWatch;
 
-public abstract class JDKBaseWatch implements ActiveWatch {
+public abstract class JDKBaseWatch implements EventHandlingWatch {
     private final Logger logger = LogManager.getLogger();
 
     protected final Path path;
@@ -114,5 +114,17 @@ public abstract class JDKBaseWatch implements ActiveWatch {
         }
 
         throw new IllegalArgumentException("Unexpected watch kind: " + jdkKind);
+    }
+
+    // -- EventHandlingWatch --
+
+    @Override
+    public void handleEvent(WatchEvent e) {
+        eventHandler.accept(e);
+    }
+
+    @Override
+    public Path getPath() {
+        return path;
     }
 }

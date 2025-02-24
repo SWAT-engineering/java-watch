@@ -270,7 +270,6 @@ public class JDKRecursiveDirectoryWatch extends JDKBaseWatch {
         }
     }
 
-
     private List<WatchEvent> syncAfterOverflow(Path dir) {
         var events = new ArrayList<WatchEvent>();
         var seenFiles = new HashSet<Path>();
@@ -298,6 +297,11 @@ public class JDKRecursiveDirectoryWatch extends JDKBaseWatch {
     }
 
     // -- JDKBaseWatch --
+
+    @Override
+    public void handleEvent(WatchEvent event) {
+        processEvents(event);
+    }
 
     @Override
     public void close() throws IOException {
