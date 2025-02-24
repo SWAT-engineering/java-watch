@@ -28,6 +28,8 @@ package engineering.swat.watch;
 
 import java.nio.file.Path;
 
+import org.checkerframework.checker.nullness.qual.Nullable;
+
 /**
  * The library publishes these events to all subscribers, they are immutable and safe to share around.
  */
@@ -67,13 +69,13 @@ public class WatchEvent {
     private final Path relativePath;
 
     public WatchEvent(Kind kind, Path rootPath) {
-        this(kind, rootPath, Path.of(""));
+        this(kind, rootPath, null);
     }
 
-    public WatchEvent(Kind kind, Path rootPath, Path relativePath) {
+    public WatchEvent(Kind kind, Path rootPath, @Nullable Path relativePath) {
         this.kind = kind;
         this.rootPath = rootPath;
-        this.relativePath = relativePath;
+        this.relativePath = relativePath == null ? Path.of("") : relativePath;
     }
 
     public Kind getKind() {

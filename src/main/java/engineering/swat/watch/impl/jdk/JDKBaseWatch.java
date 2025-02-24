@@ -90,12 +90,9 @@ public abstract class JDKBaseWatch implements ActiveWatch {
     }
 
     protected WatchEvent translate(java.nio.file.WatchEvent<?> jdkEvent) {
-        var jdkKind = jdkEvent.kind();
-        var context = jdkKind == StandardWatchEventKinds.OVERFLOW ? null : jdkEvent.context();
-
-        var kind = translate(jdkKind);
+        var kind = translate(jdkEvent.kind());
         var rootPath = path;
-        var relativePath = context == null ? Path.of("") : (Path) context;
+        var relativePath = kind == WatchEvent.Kind.OVERFLOW ? null : (@Nullable Path) jdkEvent.context();
 
         var event = new WatchEvent(kind, rootPath, relativePath);
         logger.trace("Translated: {} to {}", jdkEvent, event);
