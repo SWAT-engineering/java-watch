@@ -31,13 +31,14 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.Executor;
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 
 import engineering.swat.watch.WatchEvent;
+import engineering.swat.watch.impl.EventHandlingWatch;
 import engineering.swat.watch.impl.util.BundledSubscription;
 import engineering.swat.watch.impl.util.SubscriptionKey;
 
@@ -49,20 +50,20 @@ public class JDKDirectoryWatch extends JDKBaseWatch {
     private static final BundledSubscription<SubscriptionKey, List<java.nio.file.WatchEvent<?>>>
         BUNDLED_JDK_WATCHERS = new BundledSubscription<>(JDKPoller::register);
 
-    public JDKDirectoryWatch(Path directory, Executor exec, Consumer<WatchEvent> eventHandler) {
+    public JDKDirectoryWatch(Path directory, Executor exec, BiConsumer<EventHandlingWatch, WatchEvent> eventHandler) {
         this(directory, exec, eventHandler, false);
     }
 
-    public JDKDirectoryWatch(Path directory, Executor exec, Consumer<WatchEvent> eventHandler, boolean nativeRecursive) {
+    public JDKDirectoryWatch(Path directory, Executor exec, BiConsumer<EventHandlingWatch, WatchEvent> eventHandler, boolean nativeRecursive) {
         super(directory, exec, eventHandler);
         this.nativeRecursive = nativeRecursive;
     }
 
-    private void handleChanges(List<java.nio.file.WatchEvent<?>> events) {
+    private void handleJDKEvents(List<java.nio.file.WatchEvent<?>> events) {
         exec.execute(() -> {
             for (var ev : events) {
                 try {
-                    eventHandler.accept(translate(ev));
+                    handleEvent(translate(ev));
                 }
                 catch (Throwable ignored) {
                     logger.error("Ignoring downstream exception:", ignored);
@@ -85,6 +86,6 @@ public class JDKDirectoryWatch extends JDKBaseWatch {
     protected synchronized void start() throws IOException {
         assert bundledJDKWatcher == null;
         var key = new SubscriptionKey(path, nativeRecursive);
-        bundledJDKWatcher = BUNDLED_JDK_WATCHERS.subscribe(key, this::handleChanges);
+        bundledJDKWatcher = BUNDLED_JDK_WATCHERS.subscribe(key, this::handleJDKEvents);
     }
 }

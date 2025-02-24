@@ -68,6 +68,10 @@ public class WatchEvent {
     private final Path rootPath;
     private final Path relativePath;
 
+    public WatchEvent(Kind kind, Path rootPath) {
+        this(kind, rootPath, null);
+    }
+
     public WatchEvent(Kind kind, Path rootPath, @Nullable Path relativePath) {
         this.kind = kind;
         this.rootPath = rootPath;
