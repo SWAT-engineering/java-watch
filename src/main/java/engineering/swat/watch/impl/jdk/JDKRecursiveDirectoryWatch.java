@@ -299,8 +299,8 @@ public class JDKRecursiveDirectoryWatch extends JDKBaseWatch {
     // -- JDKBaseWatch --
 
     @Override
-    public void handleEvent(WatchEvent ev) {
-        processEvents(ev);
+    public void handleEvent(WatchEvent event) {
+        processEvents(event);
     }
 
     @Override
