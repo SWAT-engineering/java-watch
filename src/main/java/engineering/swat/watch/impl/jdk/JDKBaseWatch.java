@@ -31,7 +31,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardWatchEventKinds;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -45,10 +45,10 @@ public abstract class JDKBaseWatch implements EventHandlingWatch {
 
     protected final Path path;
     protected final Executor exec;
-    protected final Consumer<WatchEvent> eventHandler;
+    protected final BiConsumer<EventHandlingWatch, WatchEvent> eventHandler;
     protected final AtomicBoolean started = new AtomicBoolean();
 
-    protected JDKBaseWatch(Path path, Executor exec, Consumer<WatchEvent> eventHandler) {
+    protected JDKBaseWatch(Path path, Executor exec, BiConsumer<EventHandlingWatch, WatchEvent> eventHandler) {
         this.path = path;
         this.exec = exec;
         this.eventHandler = eventHandler;
@@ -120,7 +120,7 @@ public abstract class JDKBaseWatch implements EventHandlingWatch {
 
     @Override
     public void handleEvent(WatchEvent e) {
-        eventHandler.accept(e);
+        eventHandler.accept(this, e);
     }
 
     @Override

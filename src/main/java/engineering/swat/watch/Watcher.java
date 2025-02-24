@@ -32,11 +32,13 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import engineering.swat.watch.impl.EventHandlingWatch;
 import engineering.swat.watch.impl.jdk.JDKDirectoryWatch;
 import engineering.swat.watch.impl.jdk.JDKFileWatch;
 import engineering.swat.watch.impl.jdk.JDKRecursiveDirectoryWatch;
@@ -54,8 +56,8 @@ public class Watcher {
     private final Path path;
     private volatile Executor executor = CompletableFuture::runAsync;
 
-    private static final Consumer<WatchEvent> EMPTY_HANDLER = p -> {};
-    private volatile Consumer<WatchEvent> eventHandler = EMPTY_HANDLER;
+    private static final BiConsumer<EventHandlingWatch, WatchEvent> EMPTY_HANDLER = (w, e) -> {};
+    private volatile BiConsumer<EventHandlingWatch, WatchEvent> eventHandler = EMPTY_HANDLER;
 
 
     private Watcher(WatchScope scope, Path path) {
@@ -103,7 +105,7 @@ public class Watcher {
         if (this.eventHandler != EMPTY_HANDLER) {
             throw new IllegalArgumentException("on handler cannot be set more than once");
         }
-        this.eventHandler = eventHandler;
+        this.eventHandler = (w, e) -> eventHandler.accept(e);
         return this;
     }
 
@@ -114,7 +116,7 @@ public class Watcher {
         if (this.eventHandler != EMPTY_HANDLER) {
             throw new IllegalArgumentException("on handler cannot be set more than once");
         }
-        this.eventHandler = ev -> {
+        this.eventHandler = (w, ev) -> {
             switch (ev.getKind()) {
                 case CREATED:
                     listener.onCreated(ev);

@@ -42,24 +42,25 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executor;
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import engineering.swat.watch.WatchEvent;
+import engineering.swat.watch.impl.EventHandlingWatch;
 
 public class JDKRecursiveDirectoryWatch extends JDKBaseWatch {
     private final Logger logger = LogManager.getLogger();
     private final ConcurrentMap<Path, JDKDirectoryWatch> activeWatches = new ConcurrentHashMap<>();
 
-    public JDKRecursiveDirectoryWatch(Path directory, Executor exec, Consumer<WatchEvent> eventHandler) {
+    public JDKRecursiveDirectoryWatch(Path directory, Executor exec, BiConsumer<EventHandlingWatch, WatchEvent> eventHandler) {
         super(directory, exec, eventHandler);
     }
 
     private void processEvents(WatchEvent ev) {
         logger.trace("Forwarding event: {}", ev);
-        eventHandler.accept(ev);
+        eventHandler.accept(this, ev);
         logger.trace("Unwrapping event: {}", ev);
         switch (ev.getKind()) {
             case CREATED: handleCreate(ev); break;
@@ -71,9 +72,8 @@ public class JDKRecursiveDirectoryWatch extends JDKBaseWatch {
 
     private void publishExtraEvents(List<WatchEvent> ev) {
         logger.trace("Reporting new nested directories & files: {}", ev);
-        ev.forEach(eventHandler);
+        ev.forEach(e -> eventHandler.accept(this, e));
     }
-
 
     private void handleCreate(WatchEvent ev) {
         // between the event and the current state of the file system
@@ -161,9 +161,9 @@ public class JDKRecursiveDirectoryWatch extends JDKBaseWatch {
         }
 
         /** Make sure that the events are relative to the actual root of the recursive watch */
-        private Consumer<WatchEvent> relocater(Path subRoot) {
+        private BiConsumer<EventHandlingWatch, WatchEvent> relocater(Path subRoot) {
             final Path newRelative = path.relativize(subRoot);
-            return ev -> {
+            return (w, ev) -> {
                 var rewritten = new WatchEvent(ev.getKind(), path, newRelative.resolve(ev.getRelativePath()));
                 processEvents(rewritten);
             };
