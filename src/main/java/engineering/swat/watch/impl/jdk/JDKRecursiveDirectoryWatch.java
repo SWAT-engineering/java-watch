@@ -48,6 +48,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import engineering.swat.watch.WatchEvent;
+import engineering.swat.watch.WatchScope;
 import engineering.swat.watch.impl.EventHandlingWatch;
 
 public class JDKRecursiveDirectoryWatch extends JDKBaseWatch {
@@ -297,6 +298,11 @@ public class JDKRecursiveDirectoryWatch extends JDKBaseWatch {
     }
 
     // -- JDKBaseWatch --
+
+    @Override
+    public WatchScope getScope() {
+        return WatchScope.PATH_AND_ALL_DESCENDANTS;
+    }
 
     @Override
     public void handleEvent(WatchEvent event) {

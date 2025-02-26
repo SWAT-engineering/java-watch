@@ -38,6 +38,7 @@ import org.apache.logging.log4j.Logger;
 import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 
 import engineering.swat.watch.WatchEvent;
+import engineering.swat.watch.WatchScope;
 import engineering.swat.watch.impl.EventHandlingWatch;
 import engineering.swat.watch.impl.util.BundledSubscription;
 import engineering.swat.watch.impl.util.SubscriptionKey;
@@ -73,6 +74,11 @@ public class JDKDirectoryWatch extends JDKBaseWatch {
     }
 
     // -- JDKBaseWatch --
+
+    @Override
+    public WatchScope getScope() {
+        return nativeRecursive ? WatchScope.PATH_AND_ALL_DESCENDANTS : WatchScope.PATH_AND_CHILDREN;
+    }
 
     @Override
     public synchronized void close() throws IOException {

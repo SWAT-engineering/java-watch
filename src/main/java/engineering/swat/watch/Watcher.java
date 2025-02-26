@@ -42,6 +42,7 @@ import engineering.swat.watch.impl.EventHandlingWatch;
 import engineering.swat.watch.impl.jdk.JDKDirectoryWatch;
 import engineering.swat.watch.impl.jdk.JDKFileWatch;
 import engineering.swat.watch.impl.jdk.JDKRecursiveDirectoryWatch;
+import engineering.swat.watch.impl.overflows.MemorylessRescanner;
 
 /**
  * <p>Watch a path for changes.</p>
@@ -52,17 +53,17 @@ import engineering.swat.watch.impl.jdk.JDKRecursiveDirectoryWatch;
  */
 public class Watcher {
     private final Logger logger = LogManager.getLogger();
-    private final WatchScope scope;
     private final Path path;
+    private final WatchScope scope;
+    private volatile OverflowPolicy overflowPolicy = OverflowPolicy.MEMORYLESS_RESCANS;
     private volatile Executor executor = CompletableFuture::runAsync;
 
     private static final BiConsumer<EventHandlingWatch, WatchEvent> EMPTY_HANDLER = (w, e) -> {};
     private volatile BiConsumer<EventHandlingWatch, WatchEvent> eventHandler = EMPTY_HANDLER;
 
-
-    private Watcher(WatchScope scope, Path path) {
-        this.scope = scope;
+    private Watcher(Path path, WatchScope scope) {
         this.path = path;
+        this.scope = scope;
     }
 
     /**
@@ -89,9 +90,8 @@ public class Watcher {
                 break;
             default:
                 throw new IllegalArgumentException("Unsupported scope: " + scope);
-
         }
-        return new Watcher(scope, path);
+        return new Watcher(path, scope);
     }
 
     /**
@@ -149,6 +149,19 @@ public class Watcher {
     }
 
     /**
+     * Optionally configure the overflow policy of this watcher to automatically
+     * handle overflow events. If not defined before this watcher is started,
+     * the {@link engineering.swat.watch.OverflowPolicy#MEMORYLESS_RESCANS}
+     * policy will be used.
+     * @param overflowPolicy The overflow policy to use
+     * @return This watcher for optional method chaining
+     */
+    public Watcher withOverflowPolicy(OverflowPolicy overflowPolicy) {
+        this.overflowPolicy = overflowPolicy;
+        return this;
+    }
+
+    /**
      * Start watch the path for events.
      * @return a subscription for the watch, when closed, new events will stop being registered to the worker pool.
      * @throws IOException in case the starting of the watcher caused an underlying IO exception
@@ -159,9 +172,11 @@ public class Watcher {
             throw new IllegalStateException("There is no onEvent handler defined");
         }
 
+        var h = applyOverflowPolicy();
+
         switch (scope) {
             case PATH_AND_CHILDREN: {
-                var result = new JDKDirectoryWatch(path, executor, eventHandler, false);
+                var result = new JDKDirectoryWatch(path, executor, h);
                 result.open();
                 return result;
             }
@@ -186,6 +201,17 @@ public class Watcher {
             }
             default:
                 throw new IllegalStateException("Not supported yet");
+        }
+    }
+
+    private BiConsumer<EventHandlingWatch, WatchEvent> applyOverflowPolicy() {
+        switch (overflowPolicy) {
+            case NO_RESCANS:
+                return eventHandler;
+            case MEMORYLESS_RESCANS:
+                return new MemorylessRescanner(executor).andThen(eventHandler);
+            default:
+                throw new UnsupportedOperationException("No event handler has been defined yet for this overflow policy");
         }
     }
 }
