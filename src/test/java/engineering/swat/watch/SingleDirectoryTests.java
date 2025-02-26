@@ -131,7 +131,8 @@ class SingleDirectoryTests {
         var nCreated = new AtomicInteger();
         var nModified = new AtomicInteger();
         var nOverflow = new AtomicInteger();
-        var watchConfig = Watcher.watch(directory, WatchScope.PATH_AND_CHILDREN, OverflowPolicy.MEMORYLESS_RESCANS)
+        var watchConfig = Watcher.watch(directory, WatchScope.PATH_AND_CHILDREN)
+            .withOverflowPolicy(OverflowPolicy.MEMORYLESS_RESCANS)
             .on(e -> {
                 switch (e.getKind()) {
                     case CREATED:
