@@ -123,13 +123,14 @@ class SingleDirectoryTests {
     }
 
     @Test
-    void memorylessRescansTest() throws IOException {
+    void memorylessRescanOnOverflow() throws IOException, InterruptedException {
         var directory = testDir.getTestDirectory();
         Files.writeString(directory.resolve("a.txt"), "foo");
         Files.writeString(directory.resolve("b.txt"), "bar");
 
         var nCreated = new AtomicInteger();
         var nModified = new AtomicInteger();
+        var nOverflow = new AtomicInteger();
         var watchConfig = Watcher.watch(directory, WatchScope.PATH_AND_CHILDREN, OverflowPolicy.MEMORYLESS_RESCANS)
             .on(e -> {
                 switch (e.getKind()) {
@@ -139,6 +140,9 @@ class SingleDirectoryTests {
                     case MODIFIED:
                         nModified.incrementAndGet();
                         break;
+                    case OVERFLOW:
+                        nOverflow.incrementAndGet();
+                        break;
                     default:
                         break;
                 }
@@ -147,11 +151,14 @@ class SingleDirectoryTests {
         try (var watch = watchConfig.start()) {
             var overflow = new WatchEvent(WatchEvent.Kind.OVERFLOW, directory);
             ((EventHandlingWatch) watch).handleEvent(overflow);
+            Thread.sleep(TestHelper.SHORT_WAIT.toMillis());
 
-            await("Overflow should generate create events")
+            await("Overflow should trigger created events")
                 .until(nCreated::get, Predicate.isEqual(6)); // 3 directories + 3 files
-            await("Overflow should generate modified events")
+            await("Overflow should trigger modified events")
                 .until(nModified::get, Predicate.isEqual(5)); // 3 directories + 2 files (c.txt is still empty)
+            await("Overflow shouldn't be visible to user-defined event handler")
+                .until(nOverflow::get, Predicate.isEqual(0));
         }
     }
 }
