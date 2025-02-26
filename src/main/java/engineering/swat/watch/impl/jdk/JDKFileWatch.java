@@ -36,6 +36,7 @@ import org.apache.logging.log4j.Logger;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import engineering.swat.watch.WatchEvent;
+import engineering.swat.watch.WatchScope;
 import engineering.swat.watch.impl.EventHandlingWatch;
 
 /**
@@ -72,6 +73,11 @@ public class JDKFileWatch extends JDKBaseWatch {
     }
 
     // -- JDKBaseWatch --
+
+    @Override
+    public WatchScope getScope() {
+        return WatchScope.PATH_ONLY;
+    }
 
     @Override
     public void handleEvent(WatchEvent event) {
