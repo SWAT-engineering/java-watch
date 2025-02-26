@@ -55,33 +55,24 @@ public class Watcher {
     private final Logger logger = LogManager.getLogger();
     private final Path path;
     private final WatchScope scope;
-    private final OverflowPolicy overflowPolicy;
+    private volatile OverflowPolicy overflowPolicy = OverflowPolicy.MEMORYLESS_RESCANS;
     private volatile Executor executor = CompletableFuture::runAsync;
 
     private static final BiConsumer<EventHandlingWatch, WatchEvent> EMPTY_HANDLER = (w, e) -> {};
     private volatile BiConsumer<EventHandlingWatch, WatchEvent> eventHandler = EMPTY_HANDLER;
 
-    private Watcher(Path path, WatchScope scope, OverflowPolicy overflowPolicy) {
+    private Watcher(Path path, WatchScope scope) {
         this.path = path;
         this.scope = scope;
-        this.overflowPolicy = overflowPolicy;
-    }
-
-    /**
-     * Equivalent to: `watch(path, scope, OverflowPolicy.MEMORYLESS_RESCANS)`
-     */
-    public static Watcher watch(Path path, WatchScope scope) {
-        return watch(path, scope, OverflowPolicy.MEMORYLESS_RESCANS);
     }
 
     /**
      * Watch a path for updates, optionally also get events for its children/descendants
      * @param path which absolute path to monitor, can be a file or a directory, but has to be absolute
      * @param scope for directories you can also choose to monitor it's direct children or all it's descendants
-     * @param overflowPolicy policy to automatically handle overflow events
      * @throws IllegalArgumentException in case a path is not supported (in relation to the scope)
      */
-    public static Watcher watch(Path path, WatchScope scope, OverflowPolicy overflowPolicy) {
+    public static Watcher watch(Path path, WatchScope scope) {
         if (!path.isAbsolute()) {
             throw new IllegalArgumentException("We can only watch absolute paths");
         }
@@ -100,7 +91,7 @@ public class Watcher {
             default:
                 throw new IllegalArgumentException("Unsupported scope: " + scope);
         }
-        return new Watcher(path, scope, overflowPolicy);
+        return new Watcher(path, scope);
     }
 
     /**
@@ -154,6 +145,19 @@ public class Watcher {
      */
     public Watcher withExecutor(Executor callbackHandler) {
         this.executor = callbackHandler;
+        return this;
+    }
+
+    /**
+     * Optionally configure the overflow policy of this watcher to automatically
+     * handle overflow events. If not defined before this watcher is started,
+     * the {@link engineering.swat.watch.OverflowPolicy#MEMORYLESS_RESCANS}
+     * policy will be used.
+     * @param overflowPolicy The overflow policy to use
+     * @return This watcher for optional method chaining
+     */
+    public Watcher withOverflowPolicy(OverflowPolicy overflowPolicy) {
+        this.overflowPolicy = overflowPolicy;
         return this;
     }
 
