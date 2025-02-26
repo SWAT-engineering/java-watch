@@ -57,6 +57,10 @@ public class JDKFileWatch extends JDKBaseWatch {
         assert !parent.equals(file);
 
         this.internal = new JDKDirectoryWatch(parent, exec, (w, e) -> {
+            if (e.getKind() == WatchEvent.Kind.OVERFLOW) {
+                var overflow = new WatchEvent(WatchEvent.Kind.OVERFLOW, file);
+                eventHandler.accept(w, overflow);
+            }
             if (fileName.equals(e.getRelativePath())) {
                 eventHandler.accept(w, e);
             }

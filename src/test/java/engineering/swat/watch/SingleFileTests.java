@@ -33,12 +33,15 @@ import java.nio.file.Files;
 import java.nio.file.attribute.FileTime;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import engineering.swat.watch.impl.EventHandlingWatch;
 
 class SingleFileTests {
     private TestDirectory testDir;
@@ -115,6 +118,75 @@ class SingleFileTests {
                 .pollDelay(TestHelper.NORMAL_WAIT.minusMillis(10))
                 .failFast("No others should be notified", others::get)
                 .untilTrue(seen);
+        }
+    }
+
+    @Test
+    void noRescanOnOverflow() throws IOException, InterruptedException {
+        var overflowPolicy = OverflowPolicy.NO_RESCANS;
+        var bookkeeper = new Bookkeeper();
+        try (var watch = startWatchAndTriggerOverflow(overflowPolicy, bookkeeper)) {
+            Thread.sleep(TestHelper.SHORT_WAIT.toMillis());
+
+            await("Overflow shouldn't trigger created events")
+                .untilFalse(bookkeeper.seenCreated);
+            await("Overflow shouldn't trigger modified events")
+                .untilFalse(bookkeeper.seenModified);
+            await("Overflow should be visible to user-defined event handler")
+                .untilTrue(bookkeeper.seenOverflow);
+        }
+    }
+
+    @Test
+    void memorylessRescanOnOverflow() throws IOException, InterruptedException {
+        var overflowPolicy = OverflowPolicy.MEMORYLESS_RESCANS;
+        var bookkeeper = new Bookkeeper();
+        try (var watch = startWatchAndTriggerOverflow(overflowPolicy, bookkeeper)) {
+            Thread.sleep(TestHelper.SHORT_WAIT.toMillis());
+
+            await("Overflow should trigger created event")
+                .untilTrue(bookkeeper.seenCreated);
+            await("Overflow shouldn't trigger modified event (empty file)")
+                .untilFalse(bookkeeper.seenModified);
+            await("Overflow shouldn't be visible to user-defined event handler")
+                .untilFalse(bookkeeper.seenOverflow);
+        }
+    }
+
+    private ActiveWatch startWatchAndTriggerOverflow(OverflowPolicy overflowPolicy, Bookkeeper bookkeeper) throws IOException {
+        var parent = testDir.getTestDirectory();
+        var file = parent.resolve("a.txt");
+
+        var watch = Watcher
+            .watch(file, WatchScope.PATH_ONLY, overflowPolicy)
+            .on(bookkeeper)
+            .start();
+
+        var overflow = new WatchEvent(WatchEvent.Kind.OVERFLOW, parent);
+        ((EventHandlingWatch) watch).handleEvent(overflow);
+        return watch;
+    }
+
+    private static class Bookkeeper implements Consumer<WatchEvent> {
+        private final AtomicBoolean seenCreated = new AtomicBoolean(false);
+        private final AtomicBoolean seenModified = new AtomicBoolean(false);
+        private final AtomicBoolean seenOverflow = new AtomicBoolean(false);
+
+        @Override
+        public void accept(WatchEvent e) {
+            switch (e.getKind()) {
+                case CREATED:
+                    seenCreated.set(true);
+                    break;
+                case MODIFIED:
+                    seenModified.set(true);
+                    break;
+                case OVERFLOW:
+                    seenOverflow.set(true);
+                    break;
+                default:
+                    break;
+            }
         }
     }
 }

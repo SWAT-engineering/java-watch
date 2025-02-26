@@ -191,7 +191,7 @@ public class Watcher {
                 }
             }
             case PATH_ONLY: {
-                var result = new JDKFileWatch(path, executor, eventHandler);
+                var result = new JDKFileWatch(path, executor, h);
                 result.open();
                 return result;
             }
