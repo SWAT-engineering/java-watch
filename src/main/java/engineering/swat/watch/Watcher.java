@@ -52,26 +52,35 @@ import engineering.swat.watch.impl.jdk.JDKRecursiveDirectoryWatch;
  */
 public class Watcher {
     private final Logger logger = LogManager.getLogger();
-    private final WatchScope scope;
     private final Path path;
+    private final WatchScope scope;
+    private final OverflowPolicy overflowPolicy;
     private volatile Executor executor = CompletableFuture::runAsync;
 
     private static final BiConsumer<EventHandlingWatch, WatchEvent> EMPTY_HANDLER = (w, e) -> {};
     private volatile BiConsumer<EventHandlingWatch, WatchEvent> eventHandler = EMPTY_HANDLER;
 
-
-    private Watcher(WatchScope scope, Path path) {
-        this.scope = scope;
+    private Watcher(Path path, WatchScope scope, OverflowPolicy overflowPolicy) {
         this.path = path;
+        this.scope = scope;
+        this.overflowPolicy = overflowPolicy;
+    }
+
+    /**
+     * Equivalent to: `watch(path, scope, OverflowPolicy.MEMORYLESS_RESCANS)`
+     */
+    public static Watcher watch(Path path, WatchScope scope) {
+        return watch(path, scope, OverflowPolicy.MEMORYLESS_RESCANS);
     }
 
     /**
      * Watch a path for updates, optionally also get events for its children/descendants
      * @param path which absolute path to monitor, can be a file or a directory, but has to be absolute
      * @param scope for directories you can also choose to monitor it's direct children or all it's descendants
+     * @param overflowPolicy policy to automatically handle overflow events
      * @throws IllegalArgumentException in case a path is not supported (in relation to the scope)
      */
-    public static Watcher watch(Path path, WatchScope scope) {
+    public static Watcher watch(Path path, WatchScope scope, OverflowPolicy overflowPolicy) {
         if (!path.isAbsolute()) {
             throw new IllegalArgumentException("We can only watch absolute paths");
         }
@@ -89,9 +98,8 @@ public class Watcher {
                 break;
             default:
                 throw new IllegalArgumentException("Unsupported scope: " + scope);
-
         }
-        return new Watcher(scope, path);
+        return new Watcher(path, scope, overflowPolicy);
     }
 
     /**
