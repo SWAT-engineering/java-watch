@@ -168,7 +168,7 @@ public class Watcher {
             throw new IllegalStateException("There is no onEvent handler defined");
         }
 
-        var h = overflowEventHandler().andThen(eventHandler);
+        var h = overflowEventHandler().andThen(userDefinedEventHandler());
 
         switch (scope) {
             case PATH_AND_CHILDREN: {
@@ -209,5 +209,19 @@ public class Watcher {
             default:
                 throw new UnsupportedOperationException("No event handler has been defined yet for this overflow policy");
         }
+    }
+
+    private BiConsumer<EventHandlingWatch, WatchEvent> userDefinedEventHandler() {
+        // If overflow events are auto-handled because of the overflow policy,
+        // then they should be ignored by the user-defined event handler
+        if (overflowPolicy != OverflowPolicy.NO_RESCANS) {
+            return (w, e) -> {
+                if (e.getKind() != WatchEvent.Kind.OVERFLOW) {
+                    eventHandler.accept(w, e);
+                }
+            };
+        }
+
+        return eventHandler;
     }
 }
