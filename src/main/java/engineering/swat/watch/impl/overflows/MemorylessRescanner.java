@@ -56,7 +56,7 @@ public class MemorylessRescanner implements BiConsumer<EventHandlingWatch, Watch
     protected void rescan(EventHandlingWatch watch) {
         try (var content = contentOf(watch.getPath(), watch.getScope())) {
             content
-                .flatMap(this::generateEvents) // Paths aren't properly relativized
+                .flatMap(this::generateEvents) // Paths aren't properly relativized yet...
                 .map(watch::relativize)        // ...so they must be relativized first (wrt the root path of `watch`)
                 .forEach(watch::handleEvent);
         }
