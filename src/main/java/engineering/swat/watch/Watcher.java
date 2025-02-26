@@ -42,6 +42,7 @@ import engineering.swat.watch.impl.EventHandlingWatch;
 import engineering.swat.watch.impl.jdk.JDKDirectoryWatch;
 import engineering.swat.watch.impl.jdk.JDKFileWatch;
 import engineering.swat.watch.impl.jdk.JDKRecursiveDirectoryWatch;
+import engineering.swat.watch.impl.overflows.MemorylessRescanner;
 
 /**
  * <p>Watch a path for changes.</p>
@@ -167,9 +168,11 @@ public class Watcher {
             throw new IllegalStateException("There is no onEvent handler defined");
         }
 
+        var h = overflowEventHandler().andThen(eventHandler);
+
         switch (scope) {
             case PATH_AND_CHILDREN: {
-                var result = new JDKDirectoryWatch(path, executor, eventHandler, false);
+                var result = new JDKDirectoryWatch(path, executor, h);
                 result.open();
                 return result;
             }
@@ -194,6 +197,17 @@ public class Watcher {
             }
             default:
                 throw new IllegalStateException("Not supported yet");
+        }
+    }
+
+    private BiConsumer<EventHandlingWatch, WatchEvent> overflowEventHandler() {
+        switch (overflowPolicy) {
+            case NO_RESCANS:
+                return (w, e) -> {};
+            case MEMORYLESS_RESCANS:
+                return new MemorylessRescanner(executor);
+            default:
+                throw new UnsupportedOperationException("No event handler has been defined yet for this overflow policy");
         }
     }
 }

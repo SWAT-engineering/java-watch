@@ -31,6 +31,8 @@ import static org.awaitility.Awaitility.await;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Predicate;
 
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
@@ -39,6 +41,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import engineering.swat.watch.WatchEvent.Kind;
+import engineering.swat.watch.impl.EventHandlingWatch;
 
 class SingleDirectoryTests {
     private TestDirectory testDir;
@@ -116,6 +119,39 @@ class SingleDirectoryTests {
             Files.writeString(target, "Hello World");
             await("File creation should generate create event")
                 .untilTrue(seenCreate);
+        }
+    }
+
+    @Test
+    void memorylessRescansTest() throws IOException {
+        var directory = testDir.getTestDirectory();
+        Files.writeString(directory.resolve("a.txt"), "foo");
+        Files.writeString(directory.resolve("b.txt"), "bar");
+
+        var nCreated = new AtomicInteger();
+        var nModified = new AtomicInteger();
+        var watchConfig = Watcher.watch(directory, WatchScope.PATH_AND_CHILDREN, OverflowPolicy.MEMORYLESS_RESCANS)
+            .on(e -> {
+                switch (e.getKind()) {
+                    case CREATED:
+                        nCreated.incrementAndGet();
+                        break;
+                    case MODIFIED:
+                        nModified.incrementAndGet();
+                        break;
+                    default:
+                        break;
+                }
+            });
+
+        try (var watch = watchConfig.start()) {
+            var overflow = new WatchEvent(WatchEvent.Kind.OVERFLOW, directory);
+            ((EventHandlingWatch) watch).handleEvent(overflow);
+
+            await("Overflow should generate create events")
+                .until(nCreated::get, Predicate.isEqual(6)); // 3 directories + 3 files
+            await("Overflow should generate modified events")
+                .until(nModified::get, Predicate.isEqual(5)); // 3 directories + 2 files (c.txt is still empty)
         }
     }
 }
