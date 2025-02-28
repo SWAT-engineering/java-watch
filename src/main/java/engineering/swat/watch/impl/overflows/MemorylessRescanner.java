@@ -89,14 +89,14 @@ public class MemorylessRescanner implements BiConsumer<EventHandlingWatch, Watch
             return events;
         }
 
-        protected void addEvents(Path path, BasicFileAttributes attrs) {
+        private void addEvents(Path path, BasicFileAttributes attrs) {
             events.add(newEvent(WatchEvent.Kind.CREATED, path));
-            if (attrs.isDirectory() || attrs.size() > 0) {
+            if (attrs.isRegularFile() && attrs.size() > 0) {
                 events.add(newEvent(WatchEvent.Kind.MODIFIED, path));
             }
         }
 
-        protected WatchEvent newEvent(WatchEvent.Kind kind, Path fullPath) {
+        private WatchEvent newEvent(WatchEvent.Kind kind, Path fullPath) {
             var event = new WatchEvent(kind, fullPath);
             return watch.relativize(event);
         }

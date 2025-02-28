@@ -157,7 +157,7 @@ class SingleDirectoryTests {
             await("Overflow should trigger created events")
                 .until(nCreated::get, Predicate.isEqual(6)); // 3 directories + 3 files
             await("Overflow should trigger modified events")
-                .until(nModified::get, Predicate.isEqual(5)); // 3 directories + 2 files (c.txt is still empty)
+                .until(nModified::get, Predicate.isEqual(2)); // 2 files (c.txt is still empty)
             await("Overflow should be visible to user-defined event handler")
                 .until(nOverflow::get, Predicate.isEqual(1));
         }
