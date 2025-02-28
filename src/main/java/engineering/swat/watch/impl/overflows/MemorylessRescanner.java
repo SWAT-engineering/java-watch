@@ -27,11 +27,17 @@
 package engineering.swat.watch.impl.overflows;
 
 import java.io.IOException;
+import java.nio.file.FileVisitOption;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.ArrayList;
+import java.util.EnumSet;
+import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.function.BiConsumer;
-import java.util.stream.Stream;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -54,36 +60,75 @@ public class MemorylessRescanner implements BiConsumer<EventHandlingWatch, Watch
      * should typically be executed asynchronously (using `exec`).
      */
     protected void rescan(EventHandlingWatch watch) {
-        try (var content = contentOf(watch.getPath(), watch.getScope())) {
-            content
-                .flatMap(this::generateEvents) // Paths aren't properly relativized yet...
-                .map(watch::relativize)        // ...so they must be relativized first (wrt the root path of `watch`)
-                .forEach(watch::handleEvent);
-        }
-    }
+        var start = watch.getPath();
+        var options = EnumSet.noneOf(FileVisitOption.class);
+        var maxDepth = watch.getScope() == WatchScope.PATH_AND_ALL_DESCENDANTS ? Integer.MAX_VALUE : 1;
+        var visitor = new FileVisitor(watch);
 
-    protected Stream<Path> contentOf(Path path, WatchScope scope) {
         try {
-            var maxDepth = scope == WatchScope.PATH_AND_ALL_DESCENDANTS ? Integer.MAX_VALUE : 1;
-            return Files.walk(path, maxDepth).filter(p -> p != path);
+            Files.walkFileTree(start, options, maxDepth, visitor);
         } catch (IOException e) {
-            logger.error("Could not walk: {} ({})", path, e);
-            return Stream.empty();
+            logger.error("Could not walk: {} ({})", start, e);
+        }
+
+        for (var e : visitor.getEvents()) {
+            watch.handleEvent(e);
         }
     }
 
-    protected Stream<WatchEvent> generateEvents(Path path) {
-        try {
-            var created = new WatchEvent(WatchEvent.Kind.CREATED, path);
-            if (Files.size(path) == 0) {
-                return Stream.of(created);
-            } else {
-                var modified = new WatchEvent(WatchEvent.Kind.MODIFIED, path);
-                return Stream.of(created, modified);
+    private class FileVisitor extends SimpleFileVisitor<Path> {
+        private final EventHandlingWatch watch;
+        private final List<WatchEvent> events;
+
+        public FileVisitor(EventHandlingWatch watch) {
+            this.watch = watch;
+            this.events = new ArrayList<>();
+        }
+
+        public List<WatchEvent> getEvents() {
+            return events;
+        }
+
+        protected void addEvents(Path path, BasicFileAttributes attrs) {
+            events.add(newEvent(WatchEvent.Kind.CREATED, path));
+            if (attrs.size() > 0) {
+                events.add(newEvent(WatchEvent.Kind.MODIFIED, path));
             }
-        } catch (IOException e) {
-            logger.error("Could not generate events for: {} ({})", path, e);
-            return Stream.empty();
+        }
+
+        protected WatchEvent newEvent(WatchEvent.Kind kind, Path fullPath) {
+            var event = new WatchEvent(kind, fullPath);
+            return watch.relativize(event);
+        }
+
+        // -- SimpleFileVisitor --
+
+        @Override
+        public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+            if (!watch.getPath().equals(dir)) {
+                addEvents(dir, attrs);
+            }
+            return FileVisitResult.CONTINUE;
+        }
+
+        @Override
+        public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+            addEvents(file, attrs);
+            return FileVisitResult.CONTINUE;
+        }
+
+        @Override
+        public FileVisitResult visitFileFailed(Path file, IOException exc) throws IOException {
+            logger.error("Could not generate events for file: {} ({})", file, exc);
+            return FileVisitResult.CONTINUE;
+        }
+
+        @Override
+        public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
+            if (exc != null) {
+                logger.error("Could not successfully walk: {} ({})", dir, exc);
+            }
+            return FileVisitResult.CONTINUE;
         }
     }
 
