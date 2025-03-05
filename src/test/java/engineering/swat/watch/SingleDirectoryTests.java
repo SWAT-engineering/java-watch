@@ -162,4 +162,50 @@ class SingleDirectoryTests {
                 .until(nOverflow::get, Predicate.isEqual(1));
         }
     }
+
+    @Test
+    void indexingRescanOnOverflow() throws IOException, InterruptedException {
+        var directory = testDir.getTestDirectory();
+        Files.writeString(directory.resolve("a.txt"), "foo");
+        Files.writeString(directory.resolve("b.txt"), "bar");
+
+        var nCreated = new AtomicInteger();
+        var nModified = new AtomicInteger();
+        var watchConfig = Watcher.watch(directory, WatchScope.PATH_AND_CHILDREN)
+            .approximate(OnOverflow.DIRTY)
+            .on(e -> {
+                switch (e.getKind()) {
+                    case CREATED:
+                        nCreated.incrementAndGet();
+                        break;
+                    case MODIFIED:
+                        nModified.incrementAndGet();
+                        break;
+                    default:
+                        break;
+                }
+            });
+
+        try (var watch = watchConfig.start()) {
+            var overflow = new WatchEvent(WatchEvent.Kind.OVERFLOW, directory);
+            ((EventHandlingWatch) watch).handleEvent(overflow);
+
+            Thread.sleep(TestHelper.NORMAL_WAIT.toMillis());
+            await("Overflow shouldn't trigger created events")
+                .until(nCreated::get, Predicate.isEqual(0));
+            await("Overflow shouldn't trigger modified events")
+                .until(nModified::get, Predicate.isEqual(0));
+
+            Files.writeString(directory.resolve("b.txt"), "baz");
+            await("File write should trigger modified event")
+                .until(nModified::get, Predicate.isEqual(1));
+
+            ((EventHandlingWatch) watch).handleEvent(overflow);
+            Thread.sleep(TestHelper.NORMAL_WAIT.toMillis());
+            await("Overflow shouldn't trigger created event after file write (and index updated)")
+                .until(nCreated::get, Predicate.isEqual(0));
+            await("Overflow shouldn't trigger modified event after file write (and index updated)")
+                .until(nModified::get, Predicate.isEqual(1)); // Still 1 (because of the real MODIFIED)
+        }
+    }
 }
