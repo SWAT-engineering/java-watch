@@ -123,9 +123,9 @@ class SingleFileTests {
 
     @Test
     void noRescanOnOverflow() throws IOException, InterruptedException {
-        var overflowPolicy = OverflowPolicy.NO_RESCANS;
+        var whichFiles = OnOverflow.NONE;
         var bookkeeper = new Bookkeeper();
-        try (var watch = startWatchAndTriggerOverflow(overflowPolicy, bookkeeper)) {
+        try (var watch = startWatchAndTriggerOverflow(whichFiles, bookkeeper)) {
             Thread.sleep(TestHelper.SHORT_WAIT.toMillis());
 
             await("Overflow shouldn't trigger created events")
@@ -139,26 +139,27 @@ class SingleFileTests {
 
     @Test
     void memorylessRescanOnOverflow() throws IOException, InterruptedException {
-        var overflowPolicy = OverflowPolicy.MEMORYLESS_RESCANS;
+        var whichFiles = OnOverflow.ALL;
         var bookkeeper = new Bookkeeper();
-        try (var watch = startWatchAndTriggerOverflow(overflowPolicy, bookkeeper)) {
+        try (var watch = startWatchAndTriggerOverflow(whichFiles, bookkeeper)) {
             Thread.sleep(TestHelper.SHORT_WAIT.toMillis());
 
             await("Overflow should trigger created event")
                 .untilTrue(bookkeeper.seenCreated);
             await("Overflow shouldn't trigger modified event (empty file)")
                 .untilFalse(bookkeeper.seenModified);
-            await("Overflow shouldn't be visible to user-defined event handler")
-                .untilFalse(bookkeeper.seenOverflow);
+            await("Overflow should be visible to user-defined event handler")
+                .untilTrue(bookkeeper.seenOverflow);
         }
     }
 
-    private ActiveWatch startWatchAndTriggerOverflow(OverflowPolicy overflowPolicy, Bookkeeper bookkeeper) throws IOException {
+    private ActiveWatch startWatchAndTriggerOverflow(OnOverflow whichFiles, Bookkeeper bookkeeper) throws IOException {
         var parent = testDir.getTestDirectory();
         var file = parent.resolve("a.txt");
 
         var watch = Watcher
-            .watch(file, WatchScope.PATH_ONLY, overflowPolicy)
+            .watch(file, WatchScope.PATH_ONLY)
+            .approximate(whichFiles)
             .on(bookkeeper)
             .start();
 
