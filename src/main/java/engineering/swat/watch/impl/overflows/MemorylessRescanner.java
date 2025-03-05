@@ -59,11 +59,18 @@ public class MemorylessRescanner implements BiConsumer<EventHandlingWatch, Watch
      * `MODIFIED` events (not `DELETED` events) for each file. This method
      * should typically be executed asynchronously (using `exec`).
      */
-    protected void rescan(EventHandlingWatch watch) {
-        var start = watch.getPath();
+    protected void rescanAndHandle(EventHandlingWatch watch) {
+        rescan(watch.getPath(), watch.getScope())
+            .stream()
+            .map(watch::relativize)
+            .forEach(watch::handleEvent);
+    }
+
+    protected List<WatchEvent> rescan(Path path, WatchScope scope) {
+        var start = path;
         var options = EnumSet.noneOf(FileVisitOption.class);
-        var maxDepth = watch.getScope() == WatchScope.PATH_AND_ALL_DESCENDANTS ? Integer.MAX_VALUE : 1;
-        var visitor = new FileVisitor(watch);
+        var maxDepth = scope == WatchScope.PATH_AND_ALL_DESCENDANTS ? Integer.MAX_VALUE : 1;
+        var visitor = newFileVisitor();
 
         try {
             Files.walkFileTree(start, options, maxDepth, visitor);
@@ -71,41 +78,35 @@ public class MemorylessRescanner implements BiConsumer<EventHandlingWatch, Watch
             logger.error("Could not walk: {} ({})", start, e);
         }
 
-        for (var e : visitor.getEvents()) {
-            watch.handleEvent(e);
-        }
+        return visitor.getEvents();
     }
 
-    private class FileVisitor extends SimpleFileVisitor<Path> {
-        private final EventHandlingWatch watch;
-        private final List<WatchEvent> events;
+    protected FileVisitor newFileVisitor() {
+        return new FileVisitor();
+    }
 
-        public FileVisitor(EventHandlingWatch watch) {
-            this.watch = watch;
-            this.events = new ArrayList<>();
-        }
+    protected class FileVisitor extends SimpleFileVisitor<Path> {
+        protected final List<WatchEvent> events = new ArrayList<>();
+        protected Path start;
 
         public List<WatchEvent> getEvents() {
             return events;
         }
 
-        private void addEvents(Path path, BasicFileAttributes attrs) {
-            events.add(newEvent(WatchEvent.Kind.CREATED, path));
+        protected void addEvents(Path path, BasicFileAttributes attrs) {
+            events.add(new WatchEvent(WatchEvent.Kind.CREATED, path));
             if (attrs.isRegularFile() && attrs.size() > 0) {
-                events.add(newEvent(WatchEvent.Kind.MODIFIED, path));
+                events.add(new WatchEvent(WatchEvent.Kind.MODIFIED, path));
             }
-        }
-
-        private WatchEvent newEvent(WatchEvent.Kind kind, Path fullPath) {
-            var event = new WatchEvent(kind, fullPath);
-            return watch.relativize(event);
         }
 
         // -- SimpleFileVisitor --
 
         @Override
         public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
-            if (!watch.getPath().equals(dir)) {
+            if (start == null) {
+                start = dir;
+            } else {
                 addEvents(dir, attrs);
             }
             return FileVisitResult.CONTINUE;
@@ -137,7 +138,7 @@ public class MemorylessRescanner implements BiConsumer<EventHandlingWatch, Watch
     @Override
     public void accept(EventHandlingWatch watch, WatchEvent event) {
         if (event.getKind() == WatchEvent.Kind.OVERFLOW) {
-            exec.execute(() -> rescan(watch));
+            exec.execute(() -> rescanAndHandle(watch));
         }
     }
 }

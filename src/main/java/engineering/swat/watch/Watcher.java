@@ -42,6 +42,7 @@ import engineering.swat.watch.impl.EventHandlingWatch;
 import engineering.swat.watch.impl.jdk.JDKDirectoryWatch;
 import engineering.swat.watch.impl.jdk.JDKFileWatch;
 import engineering.swat.watch.impl.jdk.JDKRecursiveDirectoryWatch;
+import engineering.swat.watch.impl.overflows.IndexingRescanner;
 import engineering.swat.watch.impl.overflows.MemorylessRescanner;
 
 /**
@@ -213,6 +214,8 @@ public class Watcher {
                 return eventHandler;
             case ALL:
                 return new MemorylessRescanner(executor).andThen(eventHandler);
+            case DIRTY:
+                return new IndexingRescanner(executor, path, scope).andThen(eventHandler);
             default:
                 throw new UnsupportedOperationException("No event handler has been defined yet for this overflow policy");
         }
