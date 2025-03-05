@@ -77,7 +77,7 @@ public class IndexingRescanner extends MemorylessRescanner {
             }
 
             // The path is already indexed, and the old last-modified-time is
-            // strictly before the new-last-modified-time
+            // strictly before the new last-modified-time
             else if (lastModifiedTimeOld.compareTo(lastModifiedTimeNew) < 0) {
                 index.put(path, lastModifiedTimeNew);
                 events.add(new WatchEvent(WatchEvent.Kind.MODIFIED, path));
