@@ -132,7 +132,7 @@ class SingleDirectoryTests {
         var nModified = new AtomicInteger();
         var nOverflow = new AtomicInteger();
         var watchConfig = Watcher.watch(directory, WatchScope.PATH_AND_CHILDREN)
-            .withOverflowPolicy(OverflowPolicy.MEMORYLESS_RESCANS)
+            .approximate(OnOverflow.ALL)
             .on(e -> {
                 switch (e.getKind()) {
                     case CREATED:

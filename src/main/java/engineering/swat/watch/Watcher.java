@@ -55,7 +55,7 @@ public class Watcher {
     private final Logger logger = LogManager.getLogger();
     private final Path path;
     private final WatchScope scope;
-    private volatile OverflowPolicy overflowPolicy = OverflowPolicy.MEMORYLESS_RESCANS;
+    private volatile OnOverflow approximateOnOverflow = OnOverflow.ALL;
     private volatile Executor executor = CompletableFuture::runAsync;
 
     private static final BiConsumer<EventHandlingWatch, WatchEvent> EMPTY_HANDLER = (w, e) -> {};
@@ -149,15 +149,18 @@ public class Watcher {
     }
 
     /**
-     * Optionally configure the overflow policy of this watcher to automatically
-     * handle overflow events. If not defined before this watcher is started,
-     * the {@link engineering.swat.watch.OverflowPolicy#MEMORYLESS_RESCANS}
-     * policy will be used.
-     * @param overflowPolicy The overflow policy to use
+     * Optionally configure which regular files/directories in the scope of the
+     * watch an <i>approximation</i> of synthetic events (of kinds
+     * {@link WatchEvent.Kind#CREATED}, {@link WatchEvent.Kind#MODIFIED}, and/or
+     * {@link WatchEvent.Kind#DELETED}) should be issued when an overflow event
+     * happens. If not defined before this watcher is started, the
+     * {@link engineering.swat.watch.OnOverflow#ALL} approach will be used.
+     * @param whichFiles Constant to indicate for which regular
+     * files/directories to approximate
      * @return This watcher for optional method chaining
      */
-    public Watcher withOverflowPolicy(OverflowPolicy overflowPolicy) {
-        this.overflowPolicy = overflowPolicy;
+    public Watcher approximate(OnOverflow whichFiles) {
+        this.approximateOnOverflow = whichFiles;
         return this;
     }
 
@@ -172,7 +175,7 @@ public class Watcher {
             throw new IllegalStateException("There is no onEvent handler defined");
         }
 
-        var h = applyOverflowPolicy();
+        var h = applyApproximateOnOverflow();
 
         switch (scope) {
             case PATH_AND_CHILDREN: {
@@ -204,11 +207,11 @@ public class Watcher {
         }
     }
 
-    private BiConsumer<EventHandlingWatch, WatchEvent> applyOverflowPolicy() {
-        switch (overflowPolicy) {
-            case NO_RESCANS:
+    private BiConsumer<EventHandlingWatch, WatchEvent> applyApproximateOnOverflow() {
+        switch (approximateOnOverflow) {
+            case NONE:
                 return eventHandler;
-            case MEMORYLESS_RESCANS:
+            case ALL:
                 return new MemorylessRescanner(executor).andThen(eventHandler);
             default:
                 throw new UnsupportedOperationException("No event handler has been defined yet for this overflow policy");
