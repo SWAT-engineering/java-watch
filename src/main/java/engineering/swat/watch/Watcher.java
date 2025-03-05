@@ -55,33 +55,24 @@ public class Watcher {
     private final Logger logger = LogManager.getLogger();
     private final Path path;
     private final WatchScope scope;
-    private final OverflowPolicy overflowPolicy;
+    private volatile OnOverflow approximateOnOverflow = OnOverflow.ALL;
     private volatile Executor executor = CompletableFuture::runAsync;
 
     private static final BiConsumer<EventHandlingWatch, WatchEvent> EMPTY_HANDLER = (w, e) -> {};
     private volatile BiConsumer<EventHandlingWatch, WatchEvent> eventHandler = EMPTY_HANDLER;
 
-    private Watcher(Path path, WatchScope scope, OverflowPolicy overflowPolicy) {
+    private Watcher(Path path, WatchScope scope) {
         this.path = path;
         this.scope = scope;
-        this.overflowPolicy = overflowPolicy;
-    }
-
-    /**
-     * Equivalent to: `watch(path, scope, OverflowPolicy.MEMORYLESS_RESCANS)`
-     */
-    public static Watcher watch(Path path, WatchScope scope) {
-        return watch(path, scope, OverflowPolicy.MEMORYLESS_RESCANS);
     }
 
     /**
      * Watch a path for updates, optionally also get events for its children/descendants
      * @param path which absolute path to monitor, can be a file or a directory, but has to be absolute
      * @param scope for directories you can also choose to monitor it's direct children or all it's descendants
-     * @param overflowPolicy policy to automatically handle overflow events
      * @throws IllegalArgumentException in case a path is not supported (in relation to the scope)
      */
-    public static Watcher watch(Path path, WatchScope scope, OverflowPolicy overflowPolicy) {
+    public static Watcher watch(Path path, WatchScope scope) {
         if (!path.isAbsolute()) {
             throw new IllegalArgumentException("We can only watch absolute paths");
         }
@@ -100,7 +91,7 @@ public class Watcher {
             default:
                 throw new IllegalArgumentException("Unsupported scope: " + scope);
         }
-        return new Watcher(path, scope, overflowPolicy);
+        return new Watcher(path, scope);
     }
 
     /**
@@ -158,6 +149,22 @@ public class Watcher {
     }
 
     /**
+     * Optionally configure which regular files/directories in the scope of the
+     * watch an <i>approximation</i> of synthetic events (of kinds
+     * {@link WatchEvent.Kind#CREATED}, {@link WatchEvent.Kind#MODIFIED}, and/or
+     * {@link WatchEvent.Kind#DELETED}) should be issued when an overflow event
+     * happens. If not defined before this watcher is started, the
+     * {@link engineering.swat.watch.OnOverflow#ALL} approach will be used.
+     * @param whichFiles Constant to indicate for which regular
+     * files/directories to approximate
+     * @return This watcher for optional method chaining
+     */
+    public Watcher approximate(OnOverflow whichFiles) {
+        this.approximateOnOverflow = whichFiles;
+        return this;
+    }
+
+    /**
      * Start watch the path for events.
      * @return a subscription for the watch, when closed, new events will stop being registered to the worker pool.
      * @throws IOException in case the starting of the watcher caused an underlying IO exception
@@ -168,7 +175,7 @@ public class Watcher {
             throw new IllegalStateException("There is no onEvent handler defined");
         }
 
-        var h = overflowEventHandler().andThen(userDefinedEventHandler());
+        var h = applyApproximateOnOverflow();
 
         switch (scope) {
             case PATH_AND_CHILDREN: {
@@ -200,28 +207,14 @@ public class Watcher {
         }
     }
 
-    private BiConsumer<EventHandlingWatch, WatchEvent> overflowEventHandler() {
-        switch (overflowPolicy) {
-            case NO_RESCANS:
-                return (w, e) -> {};
-            case MEMORYLESS_RESCANS:
-                return new MemorylessRescanner(executor);
+    private BiConsumer<EventHandlingWatch, WatchEvent> applyApproximateOnOverflow() {
+        switch (approximateOnOverflow) {
+            case NONE:
+                return eventHandler;
+            case ALL:
+                return new MemorylessRescanner(executor).andThen(eventHandler);
             default:
                 throw new UnsupportedOperationException("No event handler has been defined yet for this overflow policy");
         }
-    }
-
-    private BiConsumer<EventHandlingWatch, WatchEvent> userDefinedEventHandler() {
-        // If overflow events are auto-handled because of the overflow policy,
-        // then they should be ignored by the user-defined event handler
-        if (overflowPolicy != OverflowPolicy.NO_RESCANS) {
-            return (w, e) -> {
-                if (e.getKind() != WatchEvent.Kind.OVERFLOW) {
-                    eventHandler.accept(w, e);
-                }
-            };
-        }
-
-        return eventHandler;
     }
 }

@@ -131,7 +131,8 @@ class SingleDirectoryTests {
         var nCreated = new AtomicInteger();
         var nModified = new AtomicInteger();
         var nOverflow = new AtomicInteger();
-        var watchConfig = Watcher.watch(directory, WatchScope.PATH_AND_CHILDREN, OverflowPolicy.MEMORYLESS_RESCANS)
+        var watchConfig = Watcher.watch(directory, WatchScope.PATH_AND_CHILDREN)
+            .approximate(OnOverflow.ALL)
             .on(e -> {
                 switch (e.getKind()) {
                     case CREATED:
@@ -156,9 +157,9 @@ class SingleDirectoryTests {
             await("Overflow should trigger created events")
                 .until(nCreated::get, Predicate.isEqual(6)); // 3 directories + 3 files
             await("Overflow should trigger modified events")
-                .until(nModified::get, Predicate.isEqual(5)); // 3 directories + 2 files (c.txt is still empty)
-            await("Overflow shouldn't be visible to user-defined event handler")
-                .until(nOverflow::get, Predicate.isEqual(0));
+                .until(nModified::get, Predicate.isEqual(2)); // 2 files (c.txt is still empty)
+            await("Overflow should be visible to user-defined event handler")
+                .until(nOverflow::get, Predicate.isEqual(1));
         }
     }
 }
