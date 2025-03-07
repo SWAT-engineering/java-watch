@@ -27,27 +27,20 @@
 package engineering.swat.watch.impl.overflows;
 
 import java.io.IOException;
-import java.nio.file.FileVisitOption;
 import java.nio.file.FileVisitResult;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
-import java.util.EnumSet;
 import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.function.BiConsumer;
-
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import java.util.stream.Stream;
 
 import engineering.swat.watch.WatchEvent;
 import engineering.swat.watch.WatchScope;
 import engineering.swat.watch.impl.EventHandlingWatch;
 
 public class MemorylessRescanner implements BiConsumer<EventHandlingWatch, WatchEvent> {
-    private final Logger logger = LogManager.getLogger();
     private final Executor exec;
 
     public MemorylessRescanner(Executor exec) {
@@ -59,38 +52,27 @@ public class MemorylessRescanner implements BiConsumer<EventHandlingWatch, Watch
      * `MODIFIED` events (not `DELETED` events) for each file. This method
      * should typically be executed asynchronously (using `exec`).
      */
-    protected void rescanAndHandle(EventHandlingWatch watch) {
-        rescan(watch.getPath(), watch.getScope())
-            .stream()
+    protected void rescan(EventHandlingWatch watch) {
+        var generator = newGenerator(watch.getPath(), watch.getScope());
+        generator.walkFileTree();
+        generator.eventStream()
             .map(watch::relativize)
             .forEach(watch::handleEvent);
     }
 
-    protected List<WatchEvent> rescan(Path path, WatchScope scope) {
-        var start = path;
-        var options = EnumSet.noneOf(FileVisitOption.class);
-        var maxDepth = scope == WatchScope.PATH_AND_ALL_DESCENDANTS ? Integer.MAX_VALUE : 1;
-        var visitor = newFileVisitor();
+    protected Generator newGenerator(Path path, WatchScope scope) {
+        return new Generator(path, scope);
+    }
 
-        try {
-            Files.walkFileTree(start, options, maxDepth, visitor);
-        } catch (IOException e) {
-            logger.error("Could not walk: {} ({})", start, e);
+    protected class Generator extends BaseFileVisitor {
+        protected final List<WatchEvent> events = new ArrayList<>();
+
+        public Generator(Path path, WatchScope scope) {
+            super(path, scope);
         }
 
-        return visitor.getEvents();
-    }
-
-    protected FileVisitor newFileVisitor() {
-        return new FileVisitor();
-    }
-
-    protected class FileVisitor extends SimpleFileVisitor<Path> {
-        protected final List<WatchEvent> events = new ArrayList<>();
-        protected Path start;
-
-        public List<WatchEvent> getEvents() {
-            return events;
+        public Stream<WatchEvent> eventStream() {
+            return events.stream();
         }
 
         protected void generateEvents(Path path, BasicFileAttributes attrs) {
@@ -100,13 +82,11 @@ public class MemorylessRescanner implements BiConsumer<EventHandlingWatch, Watch
             }
         }
 
-        // -- SimpleFileVisitor --
+        // -- BaseFileVisitor --
 
         @Override
         public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
-            if (start == null) {
-                start = dir;
-            } else {
+            if (!path.equals(dir)) {
                 generateEvents(dir, attrs);
             }
             return FileVisitResult.CONTINUE;
@@ -117,20 +97,6 @@ public class MemorylessRescanner implements BiConsumer<EventHandlingWatch, Watch
             generateEvents(file, attrs);
             return FileVisitResult.CONTINUE;
         }
-
-        @Override
-        public FileVisitResult visitFileFailed(Path file, IOException exc) throws IOException {
-            logger.error("Could not generate events for file: {} ({})", file, exc);
-            return FileVisitResult.CONTINUE;
-        }
-
-        @Override
-        public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
-            if (exc != null) {
-                logger.error("Could not successfully walk: {} ({})", dir, exc);
-            }
-            return FileVisitResult.CONTINUE;
-        }
     }
 
     // -- BiConsumer --
@@ -138,7 +104,7 @@ public class MemorylessRescanner implements BiConsumer<EventHandlingWatch, Watch
     @Override
     public void accept(EventHandlingWatch watch, WatchEvent event) {
         if (event.getKind() == WatchEvent.Kind.OVERFLOW) {
-            exec.execute(() -> rescanAndHandle(watch));
+            exec.execute(() -> rescan(watch));
         }
     }
 }
