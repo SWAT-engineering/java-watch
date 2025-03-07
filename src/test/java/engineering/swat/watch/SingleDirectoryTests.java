@@ -225,7 +225,7 @@ class SingleDirectoryTests {
 
             var overflow = new WatchEvent(WatchEvent.Kind.OVERFLOW, directory);
             ((EventHandlingWatch) watch).handleEvent(overflow);
-            Thread.sleep(TestHelper.NORMAL_WAIT.toMillis());
+            Thread.sleep(TestHelper.LONG_WAIT.toMillis());
             // At this point, the current thread has presumably slept long
             // enough for the `OVERFLOW` event to have been handled by the
             // rescanner. This means that synthetic events must have been issued
