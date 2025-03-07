@@ -51,21 +51,47 @@ public class IndexingRescanner extends MemorylessRescanner {
 
     public IndexingRescanner(Executor exec, Path path, WatchScope scope) {
         super(exec);
-        rescan(path, scope); // Make an initial scan to populate the index
+        new Indexer(path, scope).walkFileTree(); // Make an initial scan to populate the index
+    }
+
+    private class Indexer extends BaseFileVisitor {
+        public Indexer(Path path, WatchScope scope) {
+            super(path, scope);
+        }
+
+        @Override
+        public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+            if (!path.equals(dir)) {
+                index.put(dir, attrs.lastModifiedTime());
+            }
+            return FileVisitResult.CONTINUE;
+        }
+
+        @Override
+        public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+            index.put(file, attrs.lastModifiedTime());
+            return FileVisitResult.CONTINUE;
+        }
     }
 
     // -- MemorylessRescanner --
 
     @Override
-    protected MemorylessRescanner.FileVisitor newFileVisitor() {
-        return new FileVisitor();
+    protected MemorylessRescanner.Generator newGenerator(Path path, WatchScope scope) {
+        return new Generator(path, scope);
     }
 
-    protected class FileVisitor extends MemorylessRescanner.FileVisitor {
+    protected class Generator extends MemorylessRescanner.Generator {
         // Field to keep track of the paths that are visited during the current
         // rescan. After the visit, the `DELETED` events that happened since the
         // previous rescan can be approximated.
         private Set<Path> visited = new HashSet<>();
+
+        public Generator(Path path, WatchScope scope) {
+            super(path, scope);
+        }
+
+        // -- MemorylessRescanner.Generator --
 
         @Override
         protected void generateEvents(Path path, BasicFileAttributes attrs) {
@@ -75,14 +101,12 @@ public class IndexingRescanner extends MemorylessRescanner {
 
             // The path isn't indexed yet
             if (lastModifiedTimeOld == null) {
-                index.put(path, lastModifiedTimeNew);
                 super.generateEvents(path, attrs);
             }
 
             // The path is already indexed, and the previous last-modified-time
             // is older than the current last-modified-time
             else if (lastModifiedTimeOld.compareTo(lastModifiedTimeNew) < 0) {
-                index.put(path, lastModifiedTimeNew);
                 events.add(new WatchEvent(WatchEvent.Kind.MODIFIED, path));
             }
         }
@@ -92,11 +116,11 @@ public class IndexingRescanner extends MemorylessRescanner {
             // If the visitor is back at the root of the rescan, then the time
             // is right to issue `DELETED` events based on the set of `visited`
             // paths.
-            if (dir.equals(start)) {
+            if (dir.equals(path)) {
                 var i = index.keySet().iterator();
                 while (i.hasNext()) {
                     var p = i.next();
-                    if (p.startsWith(start) && !visited.contains(p)) {
+                    if (p.startsWith(path) && !visited.contains(p)) {
                         events.add(new WatchEvent(WatchEvent.Kind.DELETED, p));
                         i.remove(); // Remove `p` from `index`
                     }
@@ -105,6 +129,8 @@ public class IndexingRescanner extends MemorylessRescanner {
             return super.postVisitDirectory(dir, exc);
         }
     }
+
+    // -- MemorylessRescanner
 
     @Override
     public void accept(EventHandlingWatch watch, WatchEvent event) {
@@ -134,8 +160,7 @@ public class IndexingRescanner extends MemorylessRescanner {
             case DELETED:
                 index.remove(fullPath);
                 break;
-            default:
-                logger.error("Could not auto-handle event of kind: {}", event.getKind());
+            case OVERFLOW: // Already auto-handled above
                 break;
         }
     }
