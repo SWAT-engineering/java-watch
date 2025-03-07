@@ -26,14 +26,25 @@
  */
 package engineering.swat.watch;
 
+import static engineering.swat.watch.WatchEvent.Kind.CREATED;
+import static engineering.swat.watch.WatchEvent.Kind.DELETED;
+import static engineering.swat.watch.WatchEvent.Kind.MODIFIED;
+import static engineering.swat.watch.WatchEvent.Kind.OVERFLOW;
 import static org.awaitility.Awaitility.await;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
+import java.util.stream.Stream;
 
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
@@ -123,33 +134,36 @@ class SingleFileTests {
 
     @Test
     void noRescanOnOverflow() throws IOException, InterruptedException {
-        var whichFiles = OnOverflow.NONE;
         var bookkeeper = new Bookkeeper();
-        try (var watch = startWatchAndTriggerOverflow(whichFiles, bookkeeper)) {
+        try (var watch = startWatchAndTriggerOverflow(OnOverflow.NONE, bookkeeper)) {
             Thread.sleep(TestHelper.SHORT_WAIT.toMillis());
 
-            await("Overflow shouldn't trigger created events")
-                .untilFalse(bookkeeper.seenCreated);
-            await("Overflow shouldn't trigger modified events")
-                .untilFalse(bookkeeper.seenModified);
+            await("Overflow shouldn't trigger created, modified, or deleted events")
+                .until(() -> bookkeeper.fullPaths(CREATED, MODIFIED, DELETED).count() == 0);
             await("Overflow should be visible to user-defined event handler")
-                .untilTrue(bookkeeper.seenOverflow);
+                .until(() -> bookkeeper.fullPaths(OVERFLOW).count() == 1);
         }
     }
 
     @Test
     void memorylessRescanOnOverflow() throws IOException, InterruptedException {
-        var whichFiles = OnOverflow.ALL;
         var bookkeeper = new Bookkeeper();
-        try (var watch = startWatchAndTriggerOverflow(whichFiles, bookkeeper)) {
+        try (var watch = startWatchAndTriggerOverflow(OnOverflow.ALL, bookkeeper)) {
             Thread.sleep(TestHelper.SHORT_WAIT.toMillis());
 
-            await("Overflow should trigger created event")
-                .untilTrue(bookkeeper.seenCreated);
-            await("Overflow shouldn't trigger modified event (empty file)")
-                .untilFalse(bookkeeper.seenModified);
+            var isFile = Predicate.isEqual(watch.getPath());
+            var isNotFile = Predicate.not(isFile);
+
+            await("Overflow should trigger created event for `file`")
+                .until(() -> bookkeeper.fullPaths(CREATED).filter(isFile).count() == 1);
+            await("Overflow shouldn't trigger created events for other files")
+                .until(() -> bookkeeper.fullPaths(CREATED).filter(isNotFile).count() == 0);
+            await("Overflow shouldn't trigger modified events (`file` is empty)")
+                .until(() -> bookkeeper.fullPaths(MODIFIED).count() == 0);
+            await("Overflow shouldn't trigger deleted events")
+                .until(() -> bookkeeper.fullPaths(DELETED).count() == 0);
             await("Overflow should be visible to user-defined event handler")
-                .untilTrue(bookkeeper.seenOverflow);
+                .until(() -> bookkeeper.fullPaths(OVERFLOW).count() == 1);
         }
     }
 
@@ -169,25 +183,21 @@ class SingleFileTests {
     }
 
     private static class Bookkeeper implements Consumer<WatchEvent> {
-        private final AtomicBoolean seenCreated = new AtomicBoolean(false);
-        private final AtomicBoolean seenModified = new AtomicBoolean(false);
-        private final AtomicBoolean seenOverflow = new AtomicBoolean(false);
+        private final List<WatchEvent> events = Collections.synchronizedList(new ArrayList<>());
+
+        public Stream<WatchEvent> events(WatchEvent.Kind... kinds) {
+            var list = Arrays.asList(kinds.length == 0 ? WatchEvent.Kind.values() : kinds);
+            return events.stream().filter(e -> list.contains(e.getKind()));
+        }
+
+        public Stream<Path> fullPaths(WatchEvent.Kind... kinds) {
+            return events(kinds).map(WatchEvent::calculateFullPath);
+        }
 
         @Override
         public void accept(WatchEvent e) {
-            switch (e.getKind()) {
-                case CREATED:
-                    seenCreated.set(true);
-                    break;
-                case MODIFIED:
-                    seenModified.set(true);
-                    break;
-                case OVERFLOW:
-                    seenOverflow.set(true);
-                    break;
-                default:
-                    break;
-            }
+            events.add(e);
+            System.out.println(e);
         }
     }
 }
