@@ -109,18 +109,23 @@ public class IndexingRescanner extends MemorylessRescanner {
 
     @Override
     public void accept(EventHandlingWatch watch, WatchEvent event) {
+        // Auto-handle `OVERFLOW` events
+        super.accept(watch, event);
+
+        // In addition to auto-handling `OVERFLOW` events, extra processing is
+        // needed to update the index when `CREATED`, `MODIFIED`, and `DELETED`
+        // events happen.
         var fullPath = event.calculateFullPath();
         switch (event.getKind()) {
-
             case MODIFIED:
-                // If a modified event happens for a path that's not in the
-                // index yet, then a create event might have been missed.
+                // If a `MODIFIED` event happens for a path that's not in the
+                // index yet, then a `CREATED` event has somehow been missed.
+                // Just in case, it's issued synthetically here.
                 if (!index.containsKey(fullPath)) {
                     var created = new WatchEvent(WatchEvent.Kind.CREATED, fullPath);
                     watch.handleEvent(created);
                 }
                 // Fallthrough intended
-
             case CREATED:
                 try {
                     index.put(fullPath, Files.getLastModifiedTime(fullPath));
@@ -128,13 +133,11 @@ public class IndexingRescanner extends MemorylessRescanner {
                     logger.error("Could not get modification time of: {} ({})", fullPath, e);
                 }
                 break;
-
             case DELETED:
                 index.remove(fullPath);
                 break;
-
-            case OVERFLOW:
-                super.accept(watch, event);
+            default:
+                logger.error("Could not auto-handle event of kind: {}", event.getKind());
                 break;
         }
     }
