@@ -213,7 +213,7 @@ public class Watcher {
             case NONE:
                 return eventHandler;
             case ALL:
-                return new MemorylessRescanner(executor).andThen(eventHandler);
+                return eventHandler.andThen(new MemorylessRescanner(executor));
             case DIRTY:
                 return eventHandler.andThen(new IndexingRescanner(executor, path, scope));
             default:
