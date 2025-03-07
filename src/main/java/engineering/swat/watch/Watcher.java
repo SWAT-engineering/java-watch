@@ -215,7 +215,7 @@ public class Watcher {
             case ALL:
                 return new MemorylessRescanner(executor).andThen(eventHandler);
             case DIRTY:
-                return new IndexingRescanner(executor, path, scope).andThen(eventHandler);
+                return eventHandler.andThen(new IndexingRescanner(executor, path, scope));
             default:
                 throw new UnsupportedOperationException("No event handler has been defined yet for this overflow policy");
         }
