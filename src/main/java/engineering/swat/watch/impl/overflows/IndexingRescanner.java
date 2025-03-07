@@ -63,12 +63,12 @@ public class IndexingRescanner extends MemorylessRescanner {
 
     protected class FileVisitor extends MemorylessRescanner.FileVisitor {
         // Field to keep track of the paths that are visited during the current
-        // rescan. Subsequently, the `DELETED` events since the previous rescan
-        // can be approximated.
+        // rescan. After the visit, the `DELETED` events that happened since the
+        // previous rescan can be approximated.
         private Set<Path> visited = new HashSet<>();
 
         @Override
-        protected void addEvents(Path path, BasicFileAttributes attrs) {
+        protected void generateEvents(Path path, BasicFileAttributes attrs) {
             visited.add(path);
             var lastModifiedTimeOld = index.get(path);
             var lastModifiedTimeNew = attrs.lastModifiedTime();
@@ -76,7 +76,7 @@ public class IndexingRescanner extends MemorylessRescanner {
             // The path isn't indexed yet
             if (lastModifiedTimeOld == null) {
                 index.put(path, lastModifiedTimeNew);
-                super.addEvents(path, attrs);
+                super.generateEvents(path, attrs);
             }
 
             // The path is already indexed, and the previous last-modified-time
@@ -102,7 +102,6 @@ public class IndexingRescanner extends MemorylessRescanner {
                     }
                 }
             }
-
             return super.postVisitDirectory(dir, exc);
         }
     }
@@ -112,9 +111,8 @@ public class IndexingRescanner extends MemorylessRescanner {
         // Auto-handle `OVERFLOW` events
         super.accept(watch, event);
 
-        // In addition to auto-handling `OVERFLOW` events, extra processing is
-        // needed to update the index when `CREATED`, `MODIFIED`, and `DELETED`
-        // events happen.
+        // Additional processing is needed to update the index when `CREATED`,
+        // `MODIFIED`, and `DELETED` events happen.
         var fullPath = event.calculateFullPath();
         switch (event.getKind()) {
             case MODIFIED:

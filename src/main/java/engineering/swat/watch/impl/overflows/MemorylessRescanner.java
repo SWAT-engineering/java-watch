@@ -93,7 +93,7 @@ public class MemorylessRescanner implements BiConsumer<EventHandlingWatch, Watch
             return events;
         }
 
-        protected void addEvents(Path path, BasicFileAttributes attrs) {
+        protected void generateEvents(Path path, BasicFileAttributes attrs) {
             events.add(new WatchEvent(WatchEvent.Kind.CREATED, path));
             if (attrs.isRegularFile() && attrs.size() > 0) {
                 events.add(new WatchEvent(WatchEvent.Kind.MODIFIED, path));
@@ -107,14 +107,14 @@ public class MemorylessRescanner implements BiConsumer<EventHandlingWatch, Watch
             if (start == null) {
                 start = dir;
             } else {
-                addEvents(dir, attrs);
+                generateEvents(dir, attrs);
             }
             return FileVisitResult.CONTINUE;
         }
 
         @Override
         public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-            addEvents(file, attrs);
+            generateEvents(file, attrs);
             return FileVisitResult.CONTINUE;
         }
 
