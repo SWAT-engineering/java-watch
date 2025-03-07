@@ -212,7 +212,7 @@ public class Watcher {
             case NONE:
                 return eventHandler;
             case ALL:
-                return new MemorylessRescanner(executor).andThen(eventHandler);
+                return eventHandler.andThen(new MemorylessRescanner(executor));
             default:
                 throw new UnsupportedOperationException("No event handler has been defined yet for this overflow policy");
         }
