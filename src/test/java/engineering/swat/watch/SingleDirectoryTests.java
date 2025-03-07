@@ -26,10 +26,12 @@
  */
 package engineering.swat.watch;
 
+import static engineering.swat.watch.WatchEvent.Kind.OVERFLOW;
 import static org.awaitility.Awaitility.await;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
@@ -165,47 +167,106 @@ class SingleDirectoryTests {
 
     @Test
     void indexingRescanOnOverflow() throws IOException, InterruptedException {
-        var directory = testDir.getTestDirectory();
-        Files.writeString(directory.resolve("a.txt"), "foo");
-        Files.writeString(directory.resolve("b.txt"), "bar");
+        // Preface: This test looks a bit hacky because there's no API to
+        // directly manipulate, or prevent the auto-manipulation of, the index
+        // inside a watch. I've added some comments below to make it make sense.
 
+        var directory = testDir.getTestDirectory();
+
+        var semaphore = new Semaphore(0);
         var nCreated = new AtomicInteger();
         var nModified = new AtomicInteger();
+        var nDeleted = new AtomicInteger();
+
         var watchConfig = Watcher.watch(directory, WatchScope.PATH_AND_CHILDREN)
             .approximate(OnOverflow.DIRTY)
             .on(e -> {
-                switch (e.getKind()) {
-                    case CREATED:
-                        nCreated.incrementAndGet();
-                        break;
-                    case MODIFIED:
-                        nModified.incrementAndGet();
-                        break;
-                    default:
-                        break;
+                var kind = e.getKind();
+                if (kind != OVERFLOW) {
+                    // Threads can handle non-`OVERFLOW` events *only after*
+                    // everything is "ready" for that (in which case a token is
+                    // released to the semaphore, which is initially empty). See
+                    // below for an explanation of "readiness".
+                    semaphore.acquireUninterruptibly();
+                    switch (e.getKind()) {
+                        case CREATED:
+                            nCreated.incrementAndGet();
+                            break;
+                        case MODIFIED:
+                            nModified.incrementAndGet();
+                            break;
+                        case DELETED:
+                            nDeleted.incrementAndGet();
+                            break;
+                        default:
+                            break;
+                    }
+                    semaphore.release();
                 }
             });
 
         try (var watch = watchConfig.start()) {
+            // At this point, the index of last-modified-times inside `watch` is
+            // populated with initial values.
+
+            Files.writeString(directory.resolve("a.txt"), "foo");
+            Files.writeString(directory.resolve("b.txt"), "bar");
+            Files.delete(directory.resolve("c.txt"));
+            Files.createFile(directory.resolve("d.txt"));
+            // At this point, regular events have been generated for a.txt,
+            // b.txt, c.txt, and d.txt by the file system. These events won't be
+            // handled by `watch` just yet, though, because the semaphore is
+            // still empty (i.e., event-handling threads are blocked from making
+            // progress). Thus, the index inside `watch` still contains the
+            // initial last-modified-times. (Warning: The blockade works only
+            // when the rescanner runs after the user-defined event-handler.
+            // Currently, this is the case, but changing their order probably
+            // breaks this test.)
+
             var overflow = new WatchEvent(WatchEvent.Kind.OVERFLOW, directory);
             ((EventHandlingWatch) watch).handleEvent(overflow);
-
             Thread.sleep(TestHelper.NORMAL_WAIT.toMillis());
-            await("Overflow shouldn't trigger created events")
-                .until(nCreated::get, Predicate.isEqual(0));
-            await("Overflow shouldn't trigger modified events")
-                .until(nModified::get, Predicate.isEqual(0));
+            // At this point, the current thread has presumably slept long
+            // enough for the `OVERFLOW` event to have been handled by the
+            // rescanner. This means that synthetic events must have been issued
+            // (because the index still contained the initial last-modified
+            // times).
 
+            // Readiness achieved: Threads can now start handling non-`OVERFLOW`
+            // events.
+            semaphore.release();
+
+            await("Overflow should trigger created events")
+                .until(nCreated::get, Predicate.isEqual(2)); // 1 synthetic event + 1 regular event
+            await("Overflow should trigger modified events")
+                .until(nModified::get, Predicate.isEqual(4)); // 2 synthetic events + 2 regular events
+            await("Overflow should trigger deleted events")
+                .until(nDeleted::get, Predicate.isEqual(2)); // 1 synthetic event + 1 regular event
+
+            // Let's do some more file operations, trigger another `OVERFLOW`
+            // event, and observe that synthetic events *aren't* issued this
+            // time (because the index was already updated when the regular
+            // events were handled).
             Files.writeString(directory.resolve("b.txt"), "baz");
-            await("File write should trigger modified event")
-                .until(nModified::get, Predicate.isEqual(1));
+            Files.createFile(directory.resolve("c.txt"));
+            Files.delete(directory.resolve("d.txt"));
+
+            await("File create should trigger regular created event")
+                .until(nCreated::get, Predicate.isEqual(3));
+            await("File write should trigger regular modified event")
+                .until(nModified::get, Predicate.isEqual(5));
+            await("File delete should trigger regular deleted event")
+                .until(nDeleted::get, Predicate.isEqual(3));
 
             ((EventHandlingWatch) watch).handleEvent(overflow);
             Thread.sleep(TestHelper.NORMAL_WAIT.toMillis());
-            await("Overflow shouldn't trigger created event after file write (and index updated)")
-                .until(nCreated::get, Predicate.isEqual(0));
-            await("Overflow shouldn't trigger modified event after file write (and index updated)")
-                .until(nModified::get, Predicate.isEqual(1)); // Still 1 (because of the real MODIFIED)
+
+            await("Overflow shouldn't trigger synthetic created event after file create (and index updated)")
+                .until(nCreated::get, Predicate.isEqual(3));
+            await("Overflow shouldn't trigger synthetic modified event after file write (and index updated)")
+                .until(nModified::get, Predicate.isEqual(5));
+            await("Overflow shouldn't trigger synthetic deleted event after file delete (and index updated)")
+                .until(nDeleted::get, Predicate.isEqual(3));
         }
     }
 }
