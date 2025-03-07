@@ -197,7 +197,6 @@ class SingleFileTests {
         @Override
         public void accept(WatchEvent e) {
             events.add(e);
-            System.out.println(e);
         }
     }
 }
