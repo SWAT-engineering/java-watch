@@ -34,10 +34,11 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
 import engineering.swat.watch.WatchEvent;
+import engineering.swat.watch.WatchScope;
 
 class EventHandlingWatchTests {
 
-    private static EventHandlingWatch emptyWatch(Path path) {
+    private static EventHandlingWatch emptyFileWatch(Path path) {
         return new EventHandlingWatch() {
             @Override
             public void handleEvent(WatchEvent event) {
@@ -47,6 +48,11 @@ class EventHandlingWatchTests {
             @Override
             public void close() throws IOException {
                 // Nothing to close
+            }
+
+            @Override
+            public WatchScope getScope() {
+                return WatchScope.PATH_ONLY;
             }
 
             @Override
@@ -60,7 +66,7 @@ class EventHandlingWatchTests {
     void relativizeTest() {
         var e1 = new WatchEvent(WatchEvent.Kind.OVERFLOW, Path.of("foo"), Path.of("bar", "baz.txt"));
         var e2 = new WatchEvent(WatchEvent.Kind.OVERFLOW, Path.of("foo", "bar", "baz.txt"));
-        var e3 = emptyWatch(Path.of("foo")).relativize(e2);
+        var e3 = emptyFileWatch(Path.of("foo")).relativize(e2);
         assertEquals(e1.getRootPath(), e3.getRootPath());
         assertEquals(e1.getRelativePath(), e3.getRelativePath());
     }

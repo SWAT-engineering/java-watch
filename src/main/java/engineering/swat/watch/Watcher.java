@@ -42,6 +42,7 @@ import engineering.swat.watch.impl.EventHandlingWatch;
 import engineering.swat.watch.impl.jdk.JDKDirectoryWatch;
 import engineering.swat.watch.impl.jdk.JDKFileWatch;
 import engineering.swat.watch.impl.jdk.JDKRecursiveDirectoryWatch;
+import engineering.swat.watch.impl.overflows.MemorylessRescanner;
 
 /**
  * <p>Watch a path for changes.</p>
@@ -52,17 +53,17 @@ import engineering.swat.watch.impl.jdk.JDKRecursiveDirectoryWatch;
  */
 public class Watcher {
     private final Logger logger = LogManager.getLogger();
-    private final WatchScope scope;
     private final Path path;
+    private final WatchScope scope;
+    private volatile OnOverflow approximateOnOverflow = OnOverflow.ALL;
     private volatile Executor executor = CompletableFuture::runAsync;
 
     private static final BiConsumer<EventHandlingWatch, WatchEvent> EMPTY_HANDLER = (w, e) -> {};
     private volatile BiConsumer<EventHandlingWatch, WatchEvent> eventHandler = EMPTY_HANDLER;
 
-
-    private Watcher(WatchScope scope, Path path) {
-        this.scope = scope;
+    private Watcher(Path path, WatchScope scope) {
         this.path = path;
+        this.scope = scope;
     }
 
     /**
@@ -89,9 +90,8 @@ public class Watcher {
                 break;
             default:
                 throw new IllegalArgumentException("Unsupported scope: " + scope);
-
         }
-        return new Watcher(scope, path);
+        return new Watcher(path, scope);
     }
 
     /**
@@ -149,6 +149,22 @@ public class Watcher {
     }
 
     /**
+     * Optionally configure which regular files/directories in the scope of the
+     * watch an <i>approximation</i> of synthetic events (of kinds
+     * {@link WatchEvent.Kind#CREATED}, {@link WatchEvent.Kind#MODIFIED}, and/or
+     * {@link WatchEvent.Kind#DELETED}) should be issued when an overflow event
+     * happens. If not defined before this watcher is started, the
+     * {@link engineering.swat.watch.OnOverflow#ALL} approach will be used.
+     * @param whichFiles Constant to indicate for which regular
+     * files/directories to approximate
+     * @return This watcher for optional method chaining
+     */
+    public Watcher approximate(OnOverflow whichFiles) {
+        this.approximateOnOverflow = whichFiles;
+        return this;
+    }
+
+    /**
      * Start watch the path for events.
      * @return a subscription for the watch, when closed, new events will stop being registered to the worker pool.
      * @throws IOException in case the starting of the watcher caused an underlying IO exception
@@ -159,9 +175,11 @@ public class Watcher {
             throw new IllegalStateException("There is no onEvent handler defined");
         }
 
+        var h = applyApproximateOnOverflow();
+
         switch (scope) {
             case PATH_AND_CHILDREN: {
-                var result = new JDKDirectoryWatch(path, executor, eventHandler, false);
+                var result = new JDKDirectoryWatch(path, executor, h);
                 result.open();
                 return result;
             }
@@ -186,6 +204,17 @@ public class Watcher {
             }
             default:
                 throw new IllegalStateException("Not supported yet");
+        }
+    }
+
+    private BiConsumer<EventHandlingWatch, WatchEvent> applyApproximateOnOverflow() {
+        switch (approximateOnOverflow) {
+            case NONE:
+                return eventHandler;
+            case ALL:
+                return eventHandler.andThen(new MemorylessRescanner(executor));
+            default:
+                throw new UnsupportedOperationException("No event handler has been defined yet for this overflow policy");
         }
     }
 }
