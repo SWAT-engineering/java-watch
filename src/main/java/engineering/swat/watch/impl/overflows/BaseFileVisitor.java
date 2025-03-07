@@ -51,7 +51,6 @@ import engineering.swat.watch.WatchScope;
  */
 public class BaseFileVisitor extends SimpleFileVisitor<Path> {
     private final Logger logger = LogManager.getLogger();
-
     protected final Path path;
     protected final WatchScope scope;
 

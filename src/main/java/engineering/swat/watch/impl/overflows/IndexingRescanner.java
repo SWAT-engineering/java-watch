@@ -117,12 +117,9 @@ public class IndexingRescanner extends MemorylessRescanner {
             // is right to issue `DELETED` events based on the set of `visited`
             // paths.
             if (dir.equals(path)) {
-                var i = index.keySet().iterator();
-                while (i.hasNext()) {
-                    var p = i.next();
+                for (var p : index.keySet()) {
                     if (p.startsWith(path) && !visited.contains(p)) {
                         events.add(new WatchEvent(WatchEvent.Kind.DELETED, p));
-                        i.remove(); // Remove `p` from `index`
                     }
                 }
             }
@@ -130,7 +127,7 @@ public class IndexingRescanner extends MemorylessRescanner {
         }
     }
 
-    // -- MemorylessRescanner
+    // -- MemorylessRescanner --
 
     @Override
     public void accept(EventHandlingWatch watch, WatchEvent event) {
