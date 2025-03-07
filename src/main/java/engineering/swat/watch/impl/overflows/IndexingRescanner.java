@@ -62,6 +62,9 @@ public class IndexingRescanner extends MemorylessRescanner {
     }
 
     protected class FileVisitor extends MemorylessRescanner.FileVisitor {
+        // Field to keep track of the paths that are visited during the current
+        // rescan. Subsequently, the `DELETED` events since the previous rescan
+        // can be approximated.
         private Set<Path> visited = new HashSet<>();
 
         @Override
@@ -76,8 +79,8 @@ public class IndexingRescanner extends MemorylessRescanner {
                 super.addEvents(path, attrs);
             }
 
-            // The path is already indexed, and the old last-modified-time is
-            // strictly before the new last-modified-time
+            // The path is already indexed, and the previous last-modified-time
+            // is older than the current last-modified-time
             else if (lastModifiedTimeOld.compareTo(lastModifiedTimeNew) < 0) {
                 index.put(path, lastModifiedTimeNew);
                 events.add(new WatchEvent(WatchEvent.Kind.MODIFIED, path));
@@ -86,8 +89,9 @@ public class IndexingRescanner extends MemorylessRescanner {
 
         @Override
         public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
-            // If the visitor is back at the start, then the time is right to
-            // issue `DELETED` events based on the set of `visited` paths.
+            // If the visitor is back at the root of the rescan, then the time
+            // is right to issue `DELETED` events based on the set of `visited`
+            // paths.
             if (dir.equals(start)) {
                 var i = index.keySet().iterator();
                 while (i.hasNext()) {
