@@ -65,6 +65,10 @@ public class MemorylessRescanner implements BiConsumer<EventHandlingWatch, Watch
     }
 
     protected class Generator extends BaseFileVisitor {
+        // When this class is used as intended, `events` is accessed only by one
+        // thread (the one that executes `Files.walkFileTree` via
+        // `BaseFileVisitor.walkFileTree`), so no additional thread-safety
+        // measures are needed to protect it from concurrent accesses.
         protected final List<WatchEvent> events = new ArrayList<>();
 
         public Generator(Path path, WatchScope scope) {
