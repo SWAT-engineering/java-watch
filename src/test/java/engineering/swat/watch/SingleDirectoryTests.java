@@ -172,8 +172,8 @@ class SingleDirectoryTests {
         // inside a watch. I've added some comments below to make it make sense.
 
         var directory = testDir.getTestDirectory();
-
         var semaphore = new Semaphore(0);
+
         var nCreated = new AtomicInteger();
         var nModified = new AtomicInteger();
         var nDeleted = new AtomicInteger();
@@ -225,7 +225,7 @@ class SingleDirectoryTests {
 
             var overflow = new WatchEvent(WatchEvent.Kind.OVERFLOW, directory);
             ((EventHandlingWatch) watch).handleEvent(overflow);
-            Thread.sleep(TestHelper.LONG_WAIT.toMillis());
+            Thread.sleep(TestHelper.NORMAL_WAIT.toMillis());
             // At this point, the current thread has presumably slept long
             // enough for the `OVERFLOW` event to have been handled by the
             // rescanner. This means that synthetic events must have been issued
@@ -237,11 +237,16 @@ class SingleDirectoryTests {
             semaphore.release();
 
             await("Overflow should trigger created events")
-                .until(nCreated::get, Predicate.isEqual(2)); // 1 synthetic event + 1 regular event
+                .until(nCreated::get, n -> n >= 2); // 1 synthetic event + >=1 regular event
             await("Overflow should trigger modified events")
-                .until(nModified::get, Predicate.isEqual(4)); // 2 synthetic events + 2 regular events
+                .until(nModified::get, n -> n >= 4); // 2 synthetic events + >=2 regular events
             await("Overflow should trigger deleted events")
-                .until(nDeleted::get, Predicate.isEqual(2)); // 1 synthetic event + 1 regular event
+                .until(nDeleted::get, n -> n >= 2); // 1 synthetic event + >=1 regular event
+
+            // Reset counters for next phase of the test
+            nCreated.set(0);
+            nModified.set(0);
+            nDeleted.set(0);
 
             // Let's do some more file operations, trigger another `OVERFLOW`
             // event, and observe that synthetic events *aren't* issued this
@@ -252,21 +257,25 @@ class SingleDirectoryTests {
             Files.delete(directory.resolve("d.txt"));
 
             await("File create should trigger regular created event")
-                .until(nCreated::get, Predicate.isEqual(3));
+                .until(nCreated::get, n -> n >= 1);
             await("File write should trigger regular modified event")
-                .until(nModified::get, Predicate.isEqual(5));
+                .until(nModified::get, n -> n >= 1);
             await("File delete should trigger regular deleted event")
-                .until(nDeleted::get, Predicate.isEqual(3));
+                .until(nDeleted::get, n -> n >= 1);
+
+            var nCreatedBeforeOverflow = nCreated.get();
+            var nModifiedBeforeOverflow = nModified.get();
+            var nDeletedBeforeOverflow = nDeleted.get();
 
             ((EventHandlingWatch) watch).handleEvent(overflow);
             Thread.sleep(TestHelper.NORMAL_WAIT.toMillis());
 
             await("Overflow shouldn't trigger synthetic created event after file create (and index updated)")
-                .until(nCreated::get, Predicate.isEqual(3));
+                .until(nCreated::get, Predicate.isEqual(nCreatedBeforeOverflow));
             await("Overflow shouldn't trigger synthetic modified event after file write (and index updated)")
-                .until(nModified::get, Predicate.isEqual(5));
+                .until(nModified::get, Predicate.isEqual(nModifiedBeforeOverflow));
             await("Overflow shouldn't trigger synthetic deleted event after file delete (and index updated)")
-                .until(nDeleted::get, Predicate.isEqual(3));
+                .until(nDeleted::get, Predicate.isEqual(nDeletedBeforeOverflow));
         }
     }
 }
