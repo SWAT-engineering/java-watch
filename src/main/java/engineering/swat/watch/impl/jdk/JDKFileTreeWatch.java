@@ -37,6 +37,7 @@ import java.util.function.Consumer;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.checkerframework.checker.initialization.qual.NotOnlyInitialized;
 
 import engineering.swat.watch.WatchEvent;
 import engineering.swat.watch.WatchScope;
@@ -45,30 +46,30 @@ import engineering.swat.watch.impl.EventHandlingWatch;
 public class JDKFileTreeWatch extends JDKBaseWatch {
     private final Logger logger = LogManager.getLogger();
     private final Map<Path, JDKFileTreeWatch> childWatches = new ConcurrentHashMap<>();
-    private final JDKBaseWatch internal;
+    private final @NotOnlyInitialized JDKBaseWatch internal;
 
     public JDKFileTreeWatch(Path root, Executor exec,
             BiConsumer<EventHandlingWatch, WatchEvent> eventHandler) {
 
         super(root, exec, eventHandler);
-        var internalEventHandler = updateChildWatches().andThen(eventHandler);
+        var internalEventHandler = new ChildWatchesUpdater().andThen(eventHandler);
         this.internal = new JDKDirectoryWatch(root, exec, internalEventHandler);
     }
 
     /**
-     * @return An event handler that updates the child watches according to the
-     * following rules: (a) when an overflow happens, it's propagated to each
-     * existing child watch; (b) when a subdirectory creation happens, a new
-     * child watch is opened for that subdirectory; (c) when a subdirectory
-     * deletion happens, an existing child watch is closed for that
-     * subdirectory.
+     * Event handler that updates the child watches according to the following
+     * rules: (a) when an overflow happens, it's propagated to each existing
+     * child watch; (b) when a subdirectory creation happens, a new child watch
+     * is opened for that subdirectory; (c) when a subdirectory deletion
+     * happens, an existing child watch is closed for that subdirectory.
      */
-    private BiConsumer<EventHandlingWatch, WatchEvent> updateChildWatches() {
-        return (watch, event) -> {
+    private class ChildWatchesUpdater implements BiConsumer<EventHandlingWatch, WatchEvent> {
+        @Override
+        public void accept(EventHandlingWatch watch, WatchEvent event) {
             var kind = event.getKind();
 
             if (kind == WatchEvent.Kind.OVERFLOW) {
-                forEachChild(this::reportOverflowToChildWatch);
+                forEachChild(JDKFileTreeWatch.this::reportOverflowToChildWatch);
                 return;
             }
 
@@ -83,11 +84,10 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
                 // event for the watch.
                 reportOverflowToChildWatch(child);
             }
-
             if (kind == WatchEvent.Kind.DELETED && directory) {
                 closeChildWatch(child);
             }
-        };
+        }
     }
 
     private void openChildWatch(Path child) {
