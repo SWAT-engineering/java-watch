@@ -136,20 +136,22 @@ public class IndexingRescanner extends MemorylessRescanner {
 
         // Additional processing is needed to update the index when `CREATED`,
         // `MODIFIED`, and `DELETED` events happen.
+        var kind = event.getKind();
         var fullPath = event.calculateFullPath();
-        switch (event.getKind()) {
-            case MODIFIED:
-                // If a `MODIFIED` event happens for a path that's not in the
-                // index yet, then a `CREATED` event has somehow been missed.
-                // Just in case, it's issued synthetically here.
-                if (!index.containsKey(fullPath)) {
-                    var created = new WatchEvent(WatchEvent.Kind.CREATED, fullPath);
-                    watch.handleEvent(created);
-                }
-                // Fallthrough intended
+        switch (kind) {
             case CREATED:
+            case MODIFIED:
                 try {
-                    index.put(fullPath, Files.getLastModifiedTime(fullPath));
+                    var lastModifiedTimeNew = Files.getLastModifiedTime(fullPath);
+                    var lastModifiedTimeOld = index.put(fullPath, lastModifiedTimeNew);
+
+                    // If a `MODIFIED` event happens for a path that wasn't in
+                    // the index yet, then a `CREATED` event has somehow been
+                    // missed. Just in case, it's issued synthetically here.
+                    if (lastModifiedTimeOld == null && kind == WatchEvent.Kind.MODIFIED) {
+                        var created = new WatchEvent(WatchEvent.Kind.CREATED, fullPath);
+                        watch.handleEvent(created);
+                    }
                 } catch (IOException e) {
                     logger.error("Could not get modification time of: {} ({})", fullPath, e);
                 }
