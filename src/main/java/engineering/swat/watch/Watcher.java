@@ -40,8 +40,8 @@ import org.apache.logging.log4j.Logger;
 
 import engineering.swat.watch.impl.EventHandlingWatch;
 import engineering.swat.watch.impl.jdk.JDKDirectoryWatch;
+import engineering.swat.watch.impl.jdk.JDKFileTreeWatch;
 import engineering.swat.watch.impl.jdk.JDKFileWatch;
-import engineering.swat.watch.impl.jdk.JDKRecursiveDirectoryWatch;
 import engineering.swat.watch.impl.overflows.MemorylessRescanner;
 
 /**
@@ -185,14 +185,14 @@ public class Watcher {
             }
             case PATH_AND_ALL_DESCENDANTS: {
                 try {
-                    var result = new JDKDirectoryWatch(path, executor, eventHandler, true);
+                    var result = new JDKDirectoryWatch(path, executor, h, true);
                     result.open();
                     return result;
                 } catch (Throwable ex) {
                     // no native support, use the simulation
                     logger.debug("Not possible to register the native watcher, using fallback for {}", path);
                     logger.trace(ex);
-                    var result = new JDKRecursiveDirectoryWatch(path, executor, eventHandler);
+                    var result = new JDKFileTreeWatch(path, executor, h);
                     result.open();
                     return result;
                 }
