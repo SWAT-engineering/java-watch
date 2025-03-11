@@ -32,13 +32,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Deque;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executor;
@@ -59,9 +52,9 @@ public class JDKRecursiveDirectoryWatch extends JDKBaseWatch {
         super(directory, exec, eventHandler);
     }
 
-    private void processEvents(WatchEvent ev) {
+    private void processEvents(EventHandlingWatch w, WatchEvent ev) {
         logger.trace("Forwarding event: {}", ev);
-        eventHandler.accept(this, ev);
+        eventHandler.accept(w, ev);
         logger.trace("Unwrapping event: {}", ev);
         switch (ev.getKind()) {
             case CREATED: handleCreate(ev); break;
@@ -69,11 +62,6 @@ public class JDKRecursiveDirectoryWatch extends JDKBaseWatch {
             case OVERFLOW: handleOverflow(ev); break;
             case MODIFIED: break;
         }
-    }
-
-    private void publishExtraEvents(List<WatchEvent> ev) {
-        logger.trace("Reporting new nested directories & files: {}", ev);
-        ev.forEach(e -> eventHandler.accept(this, e));
     }
 
     private void handleCreate(WatchEvent ev) {
@@ -85,27 +73,24 @@ public class JDKRecursiveDirectoryWatch extends JDKBaseWatch {
         // create till after the processing is done, so we schedule it in the background
         var fullPath = ev.calculateFullPath();
         if (!activeWatches.containsKey(fullPath)) {
-            CompletableFuture
-                .completedFuture(fullPath)
-                .thenApplyAsync(this::registerForNewDirectory, exec)
-                .thenAcceptAsync(this::publishExtraEvents, exec)
-                .exceptionally(ex -> {
-                    logger.error("Could not locate new sub directories for: {}", ev.calculateFullPath(), ex);
-                    return null;
-                });
+            try {
+                if (Files.isDirectory(fullPath)) {
+                    addNewDirectory(fullPath);
+                    triggerOverflow(fullPath);
+                }
+            } catch (IOException ex) {
+                logger.error("Could not locate new sub directories for: {}", ev.calculateFullPath(), ex);
+            }
         }
     }
 
     private void handleOverflow(WatchEvent ev) {
-        logger.info("Overflow detected, rescanning to find missed entries in {}", path);
-        CompletableFuture
-            .completedFuture(ev.calculateFullPath())
-            .thenApplyAsync(this::syncAfterOverflow, exec)
-            .thenAcceptAsync(this::publishExtraEvents, exec)
-            .exceptionally(ex -> {
-                logger.error("Could not register new watch for: {} ({})", ev.calculateFullPath(), ex);
-                return null;
-            });
+        var fullPath = ev.calculateFullPath();
+        try (var children = Files.find(fullPath, 1, (p, attrs) -> p != fullPath && attrs.isDirectory())) {
+            children.forEach(JDKRecursiveDirectoryWatch.this::triggerOverflow);
+        } catch (IOException e) {
+            logger.error("Could not handle overflow for: {} ({})", fullPath, e);
+        }
     }
 
     private void handleDeleteDirectory(WatchEvent ev) {
@@ -147,153 +132,40 @@ public class JDKRecursiveDirectoryWatch extends JDKBaseWatch {
             }
             return FileVisitResult.CONTINUE;
         }
+    }
 
-        private void addNewDirectory(Path dir) throws IOException {
-            var watch = activeWatches.computeIfAbsent(dir, d -> new JDKDirectoryWatch(d, exec, relocater(dir)));
-            try {
-                if (!watch.startIfFirstTime()) {
-                    logger.debug("We lost the race on starting a nested watch, that shouldn't be a problem, but it's a very busy, so we might have lost a few events in {}", dir);
-                }
-            } catch (IOException ex) {
-                activeWatches.remove(dir);
-                logger.error("Could not register a watch for: {} ({})", dir, ex);
-                throw ex;
+    private void addNewDirectory(Path dir) throws IOException {
+        var watch = activeWatches.computeIfAbsent(dir, d -> new JDKDirectoryWatch(d, exec, relocater(dir)));
+        try {
+            if (!watch.startIfFirstTime()) {
+                logger.debug("We lost the race on starting a nested watch, that shouldn't be a problem, but it's a very busy, so we might have lost a few events in {}", dir);
             }
-        }
-
-        /** Make sure that the events are relative to the actual root of the recursive watch */
-        private BiConsumer<EventHandlingWatch, WatchEvent> relocater(Path subRoot) {
-            final Path newRelative = path.relativize(subRoot);
-            return (w, ev) -> {
-                var rewritten = new WatchEvent(ev.getKind(), path, newRelative.resolve(ev.getRelativePath()));
-                processEvents(rewritten);
-            };
+        } catch (IOException ex) {
+            activeWatches.remove(dir);
+            logger.error("Could not register a watch for: {} ({})", dir, ex);
+            throw ex;
         }
     }
 
-    /** register watch for new sub-dir, but also simulate event for every file & subdir found */
-    private class NewDirectoryScan extends InitialDirectoryScan {
-        protected final List<WatchEvent> events;
-        protected final Set<Path> seenFiles;
-        protected final Set<Path> seenDirs;
-        private boolean hasFiles = false;
-        public NewDirectoryScan(Path subRoot, List<WatchEvent> events, Set<Path> seenFiles, Set<Path> seenDirs) {
-            super(subRoot);
-            this.events = events;
-            this.seenFiles = seenFiles;
-            this.seenDirs = seenDirs;
-        }
-
-        @Override
-        public FileVisitResult preVisitDirectory(Path subdir, BasicFileAttributes attrs) throws IOException {
-            try {
-                hasFiles = false;
-                if (!seenDirs.contains(subdir)) {
-                    if (!subdir.equals(subRoot)) {
-                        events.add(new WatchEvent(WatchEvent.Kind.CREATED, path, path.relativize(subdir)));
-                    }
-                    return super.preVisitDirectory(subdir, attrs);
-                }
-                // our children might have newer results
-                return FileVisitResult.CONTINUE;
-            } finally {
-                seenDirs.add(subdir);
-            }
-        }
-
-        @Override
-        public FileVisitResult postVisitDirectory(Path subdir, IOException exc) throws IOException {
-            if (hasFiles) {
-                events.add(new WatchEvent(WatchEvent.Kind.MODIFIED, path, path.relativize(subdir)));
-            }
-            return super.postVisitDirectory(subdir, exc);
-        }
-
-        @Override
-        public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-            if (!seenFiles.contains(file)) {
-                hasFiles = true;
-
-                var relative = path.relativize(file);
-                events.add(new WatchEvent(WatchEvent.Kind.CREATED, path, relative));
-                if (attrs.size() > 0) {
-                    events.add(new WatchEvent(WatchEvent.Kind.MODIFIED, path, relative));
-                }
-                seenFiles.add(file);
-            }
-            return FileVisitResult.CONTINUE;
-        }
-    }
-
-    /** detect directories that aren't tracked yet, and generate events only for new entries */
-    private class OverflowSyncScan extends NewDirectoryScan {
-        private final Deque<Boolean> isNewDirectory = new ArrayDeque<>();
-        public OverflowSyncScan(Path subRoot, List<WatchEvent> events, Set<Path> seenFiles, Set<Path> seenDirs) {
-            super(subRoot, events, seenFiles, seenDirs);
-        }
-        @Override
-        public FileVisitResult preVisitDirectory(Path subdir, BasicFileAttributes attrs) throws IOException {
-            if (!activeWatches.containsKey(subdir)) {
-                isNewDirectory.addLast(true);
-                return super.preVisitDirectory(subdir, attrs);
-            }
-            isNewDirectory.addLast(false);
-            return FileVisitResult.CONTINUE;
-        }
-        @Override
-        public FileVisitResult postVisitDirectory(Path subdir, IOException exc) throws IOException {
-            isNewDirectory.removeLast();
-            return super.postVisitDirectory(subdir, exc);
-        }
-        @Override
-        public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-            if (isNewDirectory.peekLast() == Boolean.TRUE || !seenFiles.contains(file)) {
-                return super.visitFile(file, attrs);
-            }
-            return FileVisitResult.CONTINUE;
-        }
+    /** Make sure that the events are relative to the actual root of the recursive watch */
+    private BiConsumer<EventHandlingWatch, WatchEvent> relocater(Path subRoot) {
+        final Path newRelative = path.relativize(subRoot);
+        return (w, ev) -> {
+            var rewritten = new WatchEvent(ev.getKind(), path, newRelative.resolve(ev.getRelativePath()));
+            processEvents(w, rewritten);
+        };
     }
 
     private void registerInitialWatches(Path dir) throws IOException {
         Files.walkFileTree(dir, new InitialDirectoryScan(dir));
+        triggerOverflow(dir);
     }
 
-    private List<WatchEvent> registerForNewDirectory(Path dir) {
-        var events = new ArrayList<WatchEvent>();
-        var seenFiles = new HashSet<Path>();
-        var seenDirectories = new HashSet<Path>();
-        try {
-            Files.walkFileTree(dir, new NewDirectoryScan(dir, events, seenFiles, seenDirectories));
-            detectedMissingEntries(dir, events, seenFiles, seenDirectories);
-            return events;
-        } catch (IOException ex) {
-            throw new RuntimeException(ex);
-        }
-    }
-
-    private List<WatchEvent> syncAfterOverflow(Path dir) {
-        var events = new ArrayList<WatchEvent>();
-        var seenFiles = new HashSet<Path>();
-        var seenDirectories = new HashSet<Path>();
-        try {
-            Files.walkFileTree(dir, new OverflowSyncScan(dir, events, seenFiles, seenDirectories));
-            detectedMissingEntries(dir, events, seenFiles, seenDirectories);
-            return events;
-        } catch (IOException ex) {
-            throw new RuntimeException(ex);
-        }
-    }
-
-    private void detectedMissingEntries(Path dir, ArrayList<WatchEvent> events, HashSet<Path> seenFiles, HashSet<Path> seenDirectories) throws IOException {
-        // why a second round? well there is a race, between iterating the directory (and sending events)
-        // and when the watches are active. so after we know all the new watches have been registered
-        // we do a second scan and make sure to find paths that weren't visible the first time
-        // and emulate events for them (and register new watches)
-        // In essence this is the same as when an Overflow happened, so we can reuse that handler.
-        int directoryCount = seenDirectories.size() - 1;
-        while (directoryCount != seenDirectories.size()) {
-            Files.walkFileTree(dir, new OverflowSyncScan(dir, events, seenFiles, seenDirectories));
-            directoryCount = seenDirectories.size();
+    private void triggerOverflow(Path p) {
+        var w = activeWatches.get(p);
+        if (w != null) {
+            var overflow = new WatchEvent(WatchEvent.Kind.OVERFLOW, p);
+            w.handleEvent(overflow);
         }
     }
 
@@ -306,7 +178,7 @@ public class JDKRecursiveDirectoryWatch extends JDKBaseWatch {
 
     @Override
     public void handleEvent(WatchEvent event) {
-        processEvents(event);
+        processEvents(this, event);
     }
 
     @Override

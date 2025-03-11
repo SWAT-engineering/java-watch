@@ -193,7 +193,8 @@ public class Watcher {
                     // no native support, use the simulation
                     logger.debug("Not possible to register the native watcher, using fallback for {}", path);
                     logger.trace(ex);
-                    var result = new JDKFileTreeWatch(path, executor, h);
+                    var result = new JDKRecursiveDirectoryWatch(path, executor, h);
+                    // var result = new JDKFileTreeWatch(path, executor, h);
                     result.open();
                     return result;
                 }
