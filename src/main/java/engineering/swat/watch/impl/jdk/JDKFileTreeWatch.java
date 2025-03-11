@@ -34,6 +34,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -91,7 +92,7 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
     }
 
     private void openChildWatch(Path child) {
-        var childWatch = new JDKFileTreeWatch(child, exec, (w, e) ->
+        Function<Path, JDKFileTreeWatch> newChildWatch = p -> new JDKFileTreeWatch(child, exec, (w, e) ->
             // Same as `eventHandler`, except each event is pre-processed such
             // that the last segment of the root path becomes the first segment
             // of the relative path. For instance, `foo/bar` (root path) and
@@ -102,7 +103,8 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
             eventHandler.accept(w, relativize(e))
         );
 
-        if (childWatches.putIfAbsent(child, childWatch) == null) {
+        var childWatch = childWatches.computeIfAbsent(child, newChildWatch);
+        if (childWatch != null) {
             try {
                 childWatch.open();
             } catch (IOException e) {
