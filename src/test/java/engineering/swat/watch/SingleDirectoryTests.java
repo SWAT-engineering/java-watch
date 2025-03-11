@@ -206,6 +206,7 @@ class SingleDirectoryTests {
             });
 
         try (var watch = watchConfig.start()) {
+            Thread.sleep(TestHelper.NORMAL_WAIT.toMillis());
             // At this point, the index of last-modified-times inside `watch` is
             // populated with initial values.
 
@@ -213,6 +214,7 @@ class SingleDirectoryTests {
             Files.writeString(directory.resolve("b.txt"), "bar");
             Files.delete(directory.resolve("c.txt"));
             Files.createFile(directory.resolve("d.txt"));
+            Thread.sleep(TestHelper.NORMAL_WAIT.toMillis());
             // At this point, regular events have been generated for a.txt,
             // b.txt, c.txt, and d.txt by the file system. These events won't be
             // handled by `watch` just yet, though, because the semaphore is
