@@ -53,7 +53,7 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
             BiConsumer<EventHandlingWatch, WatchEvent> eventHandler) {
 
         super(root, exec, eventHandler);
-        var internalEventHandler = new ChildWatchesUpdater().andThen(eventHandler);
+        var internalEventHandler = eventHandler.andThen(new ChildWatchesUpdater());
         this.internal = new JDKDirectoryWatch(root, exec, internalEventHandler);
     }
 
@@ -67,31 +67,38 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
     private class ChildWatchesUpdater implements BiConsumer<EventHandlingWatch, WatchEvent> {
         @Override
         public void accept(EventHandlingWatch watch, WatchEvent event) {
-            var kind = event.getKind();
-
-            if (kind == WatchEvent.Kind.OVERFLOW) {
-                forEachChild(JDKFileTreeWatch.this::reportOverflowToChildWatch);
-                return;
+            switch (event.getKind()) {
+                case OVERFLOW:
+                    reportOverflowToChildWatches();
+                    break;
+                case CREATED:
+                    var childWatch = openChildWatch(event.calculateFullPath());
+                    // Events in the newly created directory might have been
+                    // missed between its creation and setting up its watch. So,
+                    // generate an overflow event for the watch.
+                    reportOverflowTo(childWatch);
+                    break;
+                case DELETED:
+                    closeChildWatch(event.calculateFullPath());
+                    break;
+                case MODIFIED:
+                    break;
             }
+        }
 
-            var child = event.calculateFullPath();
-            var directory = child.toFile().isDirectory();
+        private void reportOverflowToChildWatches() {
+            for (var childWatch : childWatches.values()) {
+                reportOverflowTo(childWatch);
+            }
+        }
 
-            if (kind == WatchEvent.Kind.CREATED && directory) {
-                openChildWatch(child);
-                // Events in the newly created directory (`child`) might have
-                // been missed between its creation (`event`) and setting up its
-                // watch. Erring on the side of caution, generate an overflow
-                // event for the watch.
-                reportOverflowToChildWatch(child);
-            }
-            if (kind == WatchEvent.Kind.DELETED && directory) {
-                closeChildWatch(child);
-            }
+        private void reportOverflowTo(EventHandlingWatch childWatch) {
+            var overflow = new WatchEvent(WatchEvent.Kind.OVERFLOW, childWatch.getPath());
+            childWatch.handleEvent(overflow);
         }
     }
 
-    private void openChildWatch(Path child) {
+    private JDKFileTreeWatch openChildWatch(Path child) {
         Function<Path, JDKFileTreeWatch> newChildWatch = p -> new JDKFileTreeWatch(child, exec, (w, e) ->
             // Same as `eventHandler`, except each event is pre-processed such
             // that the last segment of the root path becomes the first segment
@@ -104,13 +111,12 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
         );
 
         var childWatch = childWatches.computeIfAbsent(child, newChildWatch);
-        if (childWatch != null) {
-            try {
-                childWatch.open();
-            } catch (IOException e) {
-                logger.error("Could not open (nested) file tree watch for: {} ({})", child, e);
-            }
+        try {
+            childWatch.open();
+        } catch (IOException e) {
+            logger.error("Could not open (nested) file tree watch for: {} ({})", child, e);
         }
+        return childWatch;
     }
 
     private void closeChildWatch(Path child) {
@@ -121,14 +127,6 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
             } catch (IOException e) {
                 logger.error("Could not close (nested) file tree watch for: {} ({})", child, e);
             }
-        }
-    }
-
-    private void reportOverflowToChildWatch(Path child) {
-        var childWatch = childWatches.get(child);
-        if (childWatch != null) {
-            var overflow = new WatchEvent(WatchEvent.Kind.OVERFLOW, child);
-            childWatch.handleEvent(overflow);
         }
     }
 
