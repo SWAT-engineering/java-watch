@@ -37,7 +37,6 @@ import java.util.function.Function;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.checkerframework.checker.initialization.qual.NotOnlyInitialized;
 
 import engineering.swat.watch.WatchEvent;
 import engineering.swat.watch.WatchScope;
@@ -45,15 +44,54 @@ import engineering.swat.watch.impl.EventHandlingWatch;
 
 public class JDKFileTreeWatch extends JDKBaseWatch {
     private final Logger logger = LogManager.getLogger();
+    private final Path rootPath;
+    private final Path relativePathParent;
     private final Map<Path, JDKFileTreeWatch> childWatches = new ConcurrentHashMap<>();
-    private final @NotOnlyInitialized JDKBaseWatch internal;
+    private final JDKBaseWatch internal;
 
-    public JDKFileTreeWatch(Path root, Executor exec,
+    public JDKFileTreeWatch(Path fullPath, Executor exec,
+            BiConsumer<EventHandlingWatch, WatchEvent> eventHandler) {
+        this(fullPath, Path.of(""), exec, eventHandler);
+    }
+
+    public JDKFileTreeWatch(Path rootPath, Path relativePathParent, Executor exec,
             BiConsumer<EventHandlingWatch, WatchEvent> eventHandler) {
 
-        super(root, exec, eventHandler);
+        super(rootPath.resolve(relativePathParent), exec, eventHandler);
+        this.rootPath = rootPath;
+        this.relativePathParent = relativePathParent;
+
         var internalEventHandler = eventHandler.andThen(new ChildWatchesUpdater());
-        this.internal = new JDKDirectoryWatch(root, exec, internalEventHandler);
+        this.internal = new JDKDirectoryWatch(path, exec, internalEventHandler) {
+
+            // Override to ensure that this watch relativizes events wrt
+            // `rootPath` (instead of `path`, as is the default behavior)
+            @Override
+            public WatchEvent relativize(WatchEvent event) {
+                return new WatchEvent(event.getKind(), rootPath,
+                    rootPath.relativize(event.calculateFullPath()));
+            }
+
+            // Override to ensure that this watch translates JDK events using
+            // `rootPath` (instead of `path`, as is the default behavior).
+            // Events returned by this method do not need to be relativized.
+            @Override
+            protected WatchEvent translate(java.nio.file.WatchEvent<?> jdkEvent) {
+                var kind = translate(jdkEvent.kind());
+
+                Path relativePath = null;
+                if (kind != WatchEvent.Kind.OVERFLOW) {
+                    var child = (Path) jdkEvent.context();
+                    if (child != null) {
+                        relativePath = relativePathParent.resolve(child);
+                    }
+                }
+
+                var event = new WatchEvent(kind, rootPath, relativePath);
+                logger.trace("Translated: {} to {}", jdkEvent, event);
+                return event;
+            }
+        };
     }
 
     /**
@@ -98,27 +136,20 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
             }
         }
 
-        private void reportOverflowTo(EventHandlingWatch childWatch) {
-            var overflow = new WatchEvent(WatchEvent.Kind.OVERFLOW, childWatch.getPath());
+        private void reportOverflowTo(JDKFileTreeWatch childWatch) {
+            var overflow = new WatchEvent(WatchEvent.Kind.OVERFLOW,
+                childWatch.rootPath, childWatch.relativePathParent);
             childWatch.handleEvent(overflow);
         }
     }
 
     private JDKFileTreeWatch openChildWatch(Path child) {
-        Function<Path, JDKFileTreeWatch> newChildWatch = p -> new JDKFileTreeWatch(child, exec, (w, e) ->
-            // Same as `eventHandler`, except each event is pre-processed such
-            // that the last segment of the root path becomes the first segment
-            // of the relative path. For instance, `foo/bar` (root path) and
-            // `baz.txt` (relative path) are pre-processed to `foo` (root path)
-            // and `bar/baz.txt` (relative path). This is to ensure the parent
-            // directory of a child directory is reported as the root directory
-            // of the event.
-            eventHandler.accept(w, relativize(e))
-        );
+        Function<Path, JDKFileTreeWatch> newChildWatch = p -> new JDKFileTreeWatch(
+            rootPath, rootPath.relativize(child), exec, eventHandler);
 
         var childWatch = childWatches.computeIfAbsent(child, newChildWatch);
         try {
-            childWatch.open();
+            childWatch.startIfFirstTime();
         } catch (IOException e) {
             logger.error("Could not open (nested) file tree watch for: {} ({})", child, e);
         }

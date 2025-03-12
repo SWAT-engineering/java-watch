@@ -99,7 +99,7 @@ public abstract class JDKBaseWatch implements EventHandlingWatch {
         return event;
     }
 
-    private WatchEvent.Kind translate(java.nio.file.WatchEvent.Kind<?> jdkKind) {
+    protected WatchEvent.Kind translate(java.nio.file.WatchEvent.Kind<?> jdkKind) {
         if (jdkKind == StandardWatchEventKinds.ENTRY_CREATE) {
             return WatchEvent.Kind.CREATED;
         }
