@@ -76,7 +76,7 @@ public class JDKRecursiveDirectoryWatch extends JDKBaseWatch {
             try {
                 if (Files.isDirectory(fullPath)) {
                     addNewDirectory(fullPath);
-                    triggerOverflow(fullPath);
+                    reportOverflow(fullPath);
                 }
             } catch (IOException ex) {
                 logger.error("Could not locate new sub directories for: {}", ev.calculateFullPath(), ex);
@@ -87,7 +87,7 @@ public class JDKRecursiveDirectoryWatch extends JDKBaseWatch {
     private void handleOverflow(WatchEvent ev) {
         var fullPath = ev.calculateFullPath();
         try (var children = Files.find(fullPath, 1, (p, attrs) -> p != fullPath && attrs.isDirectory())) {
-            children.forEach(JDKRecursiveDirectoryWatch.this::triggerOverflow);
+            children.forEach(JDKRecursiveDirectoryWatch.this::reportOverflow);
         } catch (IOException e) {
             logger.error("Could not handle overflow for: {} ({})", fullPath, e);
         }
@@ -158,10 +158,10 @@ public class JDKRecursiveDirectoryWatch extends JDKBaseWatch {
 
     private void registerInitialWatches(Path dir) throws IOException {
         Files.walkFileTree(dir, new InitialDirectoryScan(dir));
-        triggerOverflow(dir);
+        reportOverflow(dir);
     }
 
-    private void triggerOverflow(Path p) {
+    private void reportOverflow(Path p) {
         var w = activeWatches.get(p);
         if (w != null) {
             var overflow = new WatchEvent(WatchEvent.Kind.OVERFLOW, p);

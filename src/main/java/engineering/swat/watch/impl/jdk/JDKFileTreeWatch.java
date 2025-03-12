@@ -33,7 +33,6 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 import java.util.function.Function;
 
 import org.apache.logging.log4j.LogManager;
@@ -68,27 +67,34 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
         @Override
         public void accept(EventHandlingWatch watch, WatchEvent event) {
             switch (event.getKind()) {
-                case OVERFLOW:
-                    reportOverflowToChildWatches();
-                    break;
-                case CREATED:
-                    var childWatch = openChildWatch(event.calculateFullPath());
-                    // Events in the newly created directory might have been
-                    // missed between its creation and setting up its watch. So,
-                    // generate an overflow event for the watch.
-                    reportOverflowTo(childWatch);
-                    break;
-                case DELETED:
-                    closeChildWatch(event.calculateFullPath());
-                    break;
-                case MODIFIED:
-                    break;
+                case OVERFLOW: acceptOverflow(); break;
+                case CREATED: acceptCreated(event.calculateFullPath()); break;
+                case DELETED: acceptDeleted(event.calculateFullPath()); break;
+                case MODIFIED: break;
             }
         }
 
-        private void reportOverflowToChildWatches() {
+        private void acceptOverflow() {
             for (var childWatch : childWatches.values()) {
                 reportOverflowTo(childWatch);
+            }
+        }
+
+        private void acceptCreated(Path fullPath) {
+            if (Files.isDirectory(fullPath)) {
+                var childWatch = openChildWatch(fullPath);
+                // Events in the newly created directory might have been missed
+                // between its creation and setting up its watch. So, generate
+                // an `OVERFLOW` event for the watch.
+                reportOverflowTo(childWatch);
+            }
+        }
+
+        private void acceptDeleted(Path fullPath) {
+            try {
+                closeChildWatch(fullPath);
+            } catch (IOException e) {
+                logger.error("Could not close (nested) file tree watch for: {} ({})", fullPath, e);
             }
         }
 
@@ -119,22 +125,10 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
         return childWatch;
     }
 
-    private void closeChildWatch(Path child) {
+    private void closeChildWatch(Path child) throws IOException {
         var childWatch = childWatches.remove(child);
         if (childWatch != null) {
-            try {
-                childWatch.close();
-            } catch (IOException e) {
-                logger.error("Could not close (nested) file tree watch for: {} ({})", child, e);
-            }
-        }
-    }
-
-    private void forEachChild(Consumer<Path> action) {
-        try (var children = Files.find(path, 1, (p, attrs) -> p != path && attrs.isDirectory())) {
-            children.forEach(action);
-        } catch (IOException e) {
-            logger.error("File tree watch (for: {}) could not iterate over its children ({})", path, e);
+            childWatch.close();
         }
     }
 
@@ -152,13 +146,45 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
 
     @Override
     public synchronized void close() throws IOException {
-        forEachChild(this::closeChildWatch);
-        internal.close();
+        IOException firstFail = null;
+        var children = childWatches.keySet().iterator();
+        while (true) {
+            try {
+                // First, close all child watches
+                if (children.hasNext()) {
+                    closeChildWatch(children.next());
+                }
+                // Last, close the internal watch
+                else {
+                    internal.close();
+                    break;
+                }
+            } catch (IOException ex) {
+                logger.error("Could not close watch", ex);
+                firstFail = firstFail == null ? ex : firstFail;
+            } catch (Exception ex) {
+                logger.error("Could not close watch", ex);
+                firstFail = firstFail == null ? new IOException("Unexpected exception when closing", ex) : firstFail;
+            }
+        }
+        if (firstFail != null) {
+            throw firstFail;
+        }
     }
 
     @Override
     protected synchronized void start() throws IOException {
         internal.open();
-        forEachChild(this::openChildWatch);
+        try (var children = Files.find(path, 1, (p, attrs) -> p != path && attrs.isDirectory())) {
+            children.forEach(this::openChildWatch);
+        } catch (IOException e) {
+            logger.error("File tree watch (for: {}) could not iterate over its children ({})", path, e);
+        }
+        // There's no need to report an overflow event, because `internal` was
+        // opened *before* the file system was accessed to fetch children. Thus,
+        // if a new directory is created while this method is running, then at
+        // least one of the following is true: (a) the new directory is already
+        // visible by the time the file system is accessed; (b) its `CREATED`
+        // event is handled later, which starts a new child watch if needed.
     }
 }
