@@ -105,6 +105,15 @@ public class WatchEvent {
         return rootPath.resolve(relativePath);
     }
 
+    /**
+     * @return The file name of the full path of this event, but without
+     * calculating the full path. This method is equivalent to, but more
+     * efficient than, <code>calculateFullPath().getFileName()</code>.
+     */
+    public Path getFileName() {
+        return relativePath.getParent() == null ? rootPath.getFileName() : relativePath.getFileName();
+    }
+
     @Override
     public String toString() {
         return String.format("WatchEvent[%s, %s, %s]", this.rootPath, this.kind, this.relativePath);

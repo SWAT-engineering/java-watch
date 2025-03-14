@@ -69,7 +69,7 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
             @Override
             public WatchEvent relativize(WatchEvent event) {
                 return new WatchEvent(event.getKind(), rootPath,
-                    rootPath.relativize(event.calculateFullPath()));
+                    relativePathParent.resolve(event.getFileName()));
             }
 
             // Override to ensure that this watch translates JDK events using
