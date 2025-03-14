@@ -178,17 +178,20 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
     @Override
     public synchronized void close() throws IOException {
         IOException firstFail = null;
+
+        var internalOpen = true;
         var children = childWatches.keySet().iterator();
-        while (true) {
+        do {
             try {
-                // First, close all child watches
-                if (children.hasNext()) {
-                    closeChildWatch(children.next());
-                }
-                // Last, close the internal watch
-                else {
+                // First, close the internal watch to prevent new child watches
+                // from being opened concurrently while this method is running.
+                if (internalOpen) {
                     internal.close();
-                    break;
+                    internalOpen = false;
+                }
+                // Next, close all child watches
+                else {
+                    closeChildWatch(children.next());
                 }
             } catch (IOException ex) {
                 logger.error("Could not close watch", ex);
@@ -197,7 +200,8 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
                 logger.error("Could not close watch", ex);
                 firstFail = firstFail == null ? new IOException("Unexpected exception when closing", ex) : firstFail;
             }
-        }
+        } while (children.hasNext());
+
         if (firstFail != null) {
             throw firstFail;
         }
