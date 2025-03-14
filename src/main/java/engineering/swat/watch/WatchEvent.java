@@ -68,6 +68,8 @@ public class WatchEvent {
     private final Path rootPath;
     private final Path relativePath;
 
+    private static final Path EMPTY_PATH = Path.of("");
+
     public WatchEvent(Kind kind, Path rootPath) {
         this(kind, rootPath, null);
     }
@@ -75,7 +77,7 @@ public class WatchEvent {
     public WatchEvent(Kind kind, Path rootPath, @Nullable Path relativePath) {
         this.kind = kind;
         this.rootPath = rootPath;
-        this.relativePath = relativePath == null ? Path.of("") : relativePath;
+        this.relativePath = relativePath == null ? EMPTY_PATH : relativePath;
     }
 
     public Kind getKind() {
@@ -112,7 +114,11 @@ public class WatchEvent {
      * efficient than, {@code calculateFullPath().getFileName()}.
      */
     public @Nullable Path getFileName() {
-        return relativePath.getParent() == null ? rootPath.getFileName() : relativePath.getFileName();
+        var fileName = relativePath.getFileName();
+        if (fileName == null || fileName.equals(EMPTY_PATH)) {
+            fileName = rootPath.getFileName();
+        }
+        return fileName;
     }
 
     @Override

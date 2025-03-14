@@ -33,6 +33,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 import org.apache.logging.log4j.LogManager;
@@ -107,9 +108,18 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
         public void accept(EventHandlingWatch watch, WatchEvent event) {
             switch (event.getKind()) {
                 case OVERFLOW: acceptOverflow(); break;
-                case CREATED: acceptCreated(event.calculateFullPath()); break;
-                case DELETED: acceptDeleted(event.calculateFullPath()); break;
+                case CREATED: getFileNameAndThen(event, this::acceptCreated); break;
+                case DELETED: getFileNameAndThen(event, this::acceptDeleted); break;
                 case MODIFIED: break;
+            }
+        }
+
+        private void getFileNameAndThen(WatchEvent event, Consumer<Path> consumer) {
+            var child = event.getFileName();
+            if (child != null) {
+                consumer.accept(child);
+            } else {
+                logger.error("Could not get file name of event: {}", event);
             }
         }
 
@@ -119,9 +129,9 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
             }
         }
 
-        private void acceptCreated(Path fullPath) {
-            if (Files.isDirectory(fullPath)) {
-                var childWatch = openChildWatch(fullPath);
+        private void acceptCreated(Path child) {
+            if (Files.isDirectory(path.resolve(child))) {
+                var childWatch = openChildWatch(child);
                 // Events in the newly created directory might have been missed
                 // between its creation and setting up its watch. So, generate
                 // an `OVERFLOW` event for the watch.
@@ -129,11 +139,11 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
             }
         }
 
-        private void acceptDeleted(Path fullPath) {
+        private void acceptDeleted(Path child) {
             try {
-                closeChildWatch(fullPath);
+                closeChildWatch(child);
             } catch (IOException e) {
-                logger.error("Could not close (nested) file tree watch for: {} ({})", fullPath, e);
+                logger.error("Could not close (nested) file tree watch for: {} ({})", path.resolve(child), e);
             }
         }
 
@@ -145,9 +155,10 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
     }
 
     private JDKFileTreeWatch openChildWatch(Path child) {
-        Function<Path, JDKFileTreeWatch> newChildWatch = p -> new JDKFileTreeWatch(
-            rootPath, rootPath.relativize(child), exec, eventHandler);
+        assert !child.isAbsolute();
 
+        Function<Path, JDKFileTreeWatch> newChildWatch = p -> new JDKFileTreeWatch(
+            rootPath, relativePathParent.resolve(child), exec, eventHandler);
         var childWatch = childWatches.computeIfAbsent(child, newChildWatch);
         try {
             childWatch.startIfFirstTime();
@@ -158,6 +169,8 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
     }
 
     private void closeChildWatch(Path child) throws IOException {
+        assert !child.isAbsolute();
+
         var childWatch = childWatches.remove(child);
         if (childWatch != null) {
             childWatch.close();
@@ -212,7 +225,14 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
     protected synchronized void start() throws IOException {
         internal.open();
         try (var children = Files.find(path, 1, (p, attrs) -> p != path && attrs.isDirectory())) {
-            children.forEach(this::openChildWatch);
+            children.forEach(p -> {
+                var child = p.getFileName();
+                if (child != null) {
+                    openChildWatch(child);
+                } else {
+                    logger.error("File tree watch (for: {}) could not open a child watch for: {}", path, p);
+                }
+            });
         } catch (IOException e) {
             logger.error("File tree watch (for: {}) could not iterate over its children ({})", path, e);
         }
