@@ -106,11 +106,12 @@ public class WatchEvent {
     }
 
     /**
-     * @return The file name of the full path of this event, but without
+     * @return The file name of the full path of this event, or {@code null} if
+     * it has zero elements (cf. {@link Path#getFileName()}), but without
      * calculating the full path. This method is equivalent to, but more
-     * efficient than, <code>calculateFullPath().getFileName()</code>.
+     * efficient than, {@code calculateFullPath().getFileName()}.
      */
-    public Path getFileName() {
+    public @Nullable Path getFileName() {
         return relativePath.getParent() == null ? rootPath.getFileName() : relativePath.getFileName();
     }
 
