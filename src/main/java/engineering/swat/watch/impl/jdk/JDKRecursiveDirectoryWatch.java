@@ -27,11 +27,13 @@
 package engineering.swat.watch.impl.jdk;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executor;
@@ -72,25 +74,44 @@ public class JDKRecursiveDirectoryWatch extends JDKBaseWatch {
         // but we don't want to delay the publication of this
         // create till after the processing is done, so we schedule it in the background
         var fullPath = ev.calculateFullPath();
-        if (!activeWatches.containsKey(fullPath)) {
-            try {
-                if (Files.isDirectory(fullPath)) {
-                    addNewDirectory(fullPath);
-                    reportOverflow(fullPath);
-                }
-            } catch (IOException ex) {
-                logger.error("Could not locate new sub directories for: {}", ev.calculateFullPath(), ex);
-            }
+        if (!activeWatches.containsKey(fullPath) && Files.isDirectory(fullPath)) {
+            CompletableFuture
+                .runAsync(() -> {
+                    try {
+                        addNewDirectory(fullPath);
+                    } catch (IOException e) {
+                        throw new UncheckedIOException(e);
+                    }
+                }, exec)
+                .thenRunAsync(() -> reportOverflow(fullPath), exec)
+                .exceptionally(ex -> {
+                    logger.error("Could not locate new sub directories for: {}", fullPath, ex);
+                    return null;
+                });
         }
     }
 
     private void handleOverflow(WatchEvent ev) {
         var fullPath = ev.calculateFullPath();
-        try (var children = Files.find(fullPath, 1, (p, attrs) -> p != fullPath && attrs.isDirectory())) {
-            children.forEach(JDKRecursiveDirectoryWatch.this::reportOverflow);
-        } catch (IOException e) {
-            logger.error("Could not handle overflow for: {} ({})", fullPath, e);
-        }
+        CompletableFuture
+            .supplyAsync(() -> {
+                try {
+                    return Files.find(fullPath, 1, (p, attrs) -> p != fullPath && attrs.isDirectory());
+                } catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                }
+            }, exec)
+            .whenCompleteAsync((children, ex) -> {
+                try {
+                    if (ex == null) {
+                        children.forEach(JDKRecursiveDirectoryWatch.this::reportOverflow);
+                    } else {
+                        logger.error("Could not handle overflow for: {} ({})", fullPath, ex);
+                    }
+                } finally {
+                    children.close();
+                }
+            }, exec);
     }
 
     private void handleDeleteDirectory(WatchEvent ev) {
