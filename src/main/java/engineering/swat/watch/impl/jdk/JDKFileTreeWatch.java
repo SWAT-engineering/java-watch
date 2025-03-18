@@ -62,7 +62,7 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
         this.rootPath = rootPath;
         this.relativePathParent = relativePathParent;
 
-        var internalEventHandler = eventHandler.andThen(new ChildWatchesUpdater());
+        var internalEventHandler = eventHandler.andThen(new AsyncChildWatchesUpdater());
         this.internal = new JDKDirectoryWatch(path, exec, internalEventHandler) {
 
             // Override to ensure that this watch relativizes events wrt
@@ -103,15 +103,17 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
      * is opened for that subdirectory; (c) when a subdirectory deletion
      * happens, an existing child watch is closed for that subdirectory.
      */
-    private class ChildWatchesUpdater implements BiConsumer<EventHandlingWatch, WatchEvent> {
+    private class AsyncChildWatchesUpdater implements BiConsumer<EventHandlingWatch, WatchEvent> {
         @Override
         public void accept(EventHandlingWatch watch, WatchEvent event) {
+            exec.execute(() -> {
             switch (event.getKind()) {
                 case OVERFLOW: acceptOverflow(); break;
                 case CREATED: getFileNameAndThen(event, this::acceptCreated); break;
                 case DELETED: getFileNameAndThen(event, this::acceptDeleted); break;
                 case MODIFIED: break;
             }
+            });
         }
 
         private void getFileNameAndThen(WatchEvent event, Consumer<Path> consumer) {
