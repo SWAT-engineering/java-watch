@@ -124,6 +124,7 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
         }
 
         private void acceptOverflow() {
+            openChildWatches();
             for (var childWatch : childWatches.values()) {
                 reportOverflowTo(childWatch);
             }
@@ -151,6 +152,21 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
             var overflow = new WatchEvent(WatchEvent.Kind.OVERFLOW,
                 childWatch.rootPath, childWatch.relativePathParent);
             childWatch.handleEvent(overflow);
+        }
+    }
+
+    private void openChildWatches() {
+        try (var children = Files.find(path, 1, (p, attrs) -> p != path && attrs.isDirectory())) {
+            children.forEach(p -> {
+                var child = p.getFileName();
+                if (child != null) {
+                    openChildWatch(child);
+                } else {
+                    logger.error("File tree watch (for: {}) could not open a child watch for: {}", path, p);
+                }
+            });
+        } catch (IOException e) {
+            logger.error("File tree watch (for: {}) could not iterate over its children ({})", path, e);
         }
     }
 
@@ -224,18 +240,7 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
     @Override
     protected synchronized void start() throws IOException {
         internal.open();
-        try (var children = Files.find(path, 1, (p, attrs) -> p != path && attrs.isDirectory())) {
-            children.forEach(p -> {
-                var child = p.getFileName();
-                if (child != null) {
-                    openChildWatch(child);
-                } else {
-                    logger.error("File tree watch (for: {}) could not open a child watch for: {}", path, p);
-                }
-            });
-        } catch (IOException e) {
-            logger.error("File tree watch (for: {}) could not iterate over its children ({})", path, e);
-        }
+        openChildWatches();
         // There's no need to report an overflow event, because `internal` was
         // opened *before* the file system was accessed to fetch children. Thus,
         // if a new directory is created while this method is running, then at
