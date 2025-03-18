@@ -29,6 +29,7 @@ package engineering.swat.watch.impl.jdk;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
@@ -97,22 +98,25 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
     }
 
     /**
-     * Event handler that updates the child watches according to the following
-     * rules: (a) when an overflow happens, it's propagated to each existing
-     * child watch; (b) when a subdirectory creation happens, a new child watch
-     * is opened for that subdirectory; (c) when a subdirectory deletion
-     * happens, an existing child watch is closed for that subdirectory.
+     * Event handler that asynchronously (using {@link JDKBaseWatch#exec})
+     * updates the child watches according to the following rules: (a) when an
+     * overflow happens, the directory is rescanned, new child watches for
+     * created subdirectories are opened, existing child watches for deleted
+     * subdirectories are closed, and the overflow is propagated to each child
+     * watch; (b) when a subdirectory creation happens, a new child watch is
+     * opened for that subdirectory; (c) when a subdirectory deletion happens,
+     * an existing child watch is closed for that subdirectory.
      */
     private class AsyncChildWatchesUpdater implements BiConsumer<EventHandlingWatch, WatchEvent> {
         @Override
         public void accept(EventHandlingWatch watch, WatchEvent event) {
             exec.execute(() -> {
-            switch (event.getKind()) {
-                case OVERFLOW: acceptOverflow(); break;
-                case CREATED: getFileNameAndThen(event, this::acceptCreated); break;
-                case DELETED: getFileNameAndThen(event, this::acceptDeleted); break;
-                case MODIFIED: break;
-            }
+                switch (event.getKind()) {
+                    case OVERFLOW: acceptOverflow(); break;
+                    case CREATED: getFileNameAndThen(event, this::acceptCreated); break;
+                    case DELETED: getFileNameAndThen(event, this::acceptDeleted); break;
+                    case MODIFIED: break;
+                }
             });
         }
 
@@ -126,7 +130,7 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
         }
 
         private void acceptOverflow() {
-            openChildWatches();
+            openAndCloseChildWatches();
             for (var childWatch : childWatches.values()) {
                 reportOverflowTo(childWatch);
             }
@@ -143,11 +147,7 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
         }
 
         private void acceptDeleted(Path child) {
-            try {
-                closeChildWatch(child);
-            } catch (IOException e) {
-                logger.error("Could not close (nested) file tree watch for: {} ({})", path.resolve(child), e);
-            }
+            tryCloseChildWatch(child);
         }
 
         private void reportOverflowTo(JDKFileTreeWatch childWatch) {
@@ -157,11 +157,14 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
         }
     }
 
-    private void openChildWatches() {
+    private void openAndCloseChildWatches() {
+        var toBeClosed = new HashSet<>(childWatches.keySet());
+
         try (var children = Files.find(path, 1, (p, attrs) -> p != path && attrs.isDirectory())) {
             children.forEach(p -> {
                 var child = p.getFileName();
                 if (child != null) {
+                    toBeClosed.remove(child);
                     openChildWatch(child);
                 } else {
                     logger.error("File tree watch (for: {}) could not open a child watch for: {}", path, p);
@@ -169,6 +172,10 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
             });
         } catch (IOException e) {
             logger.error("File tree watch (for: {}) could not iterate over its children ({})", path, e);
+        }
+
+        for (var child : toBeClosed) {
+            tryCloseChildWatch(child);
         }
     }
 
@@ -184,6 +191,14 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
             logger.error("Could not open (nested) file tree watch for: {} ({})", child, e);
         }
         return childWatch;
+    }
+
+    private void tryCloseChildWatch(Path child) {
+        try {
+            closeChildWatch(child);
+        } catch (IOException e) {
+            logger.error("Could not close (nested) file tree watch for: {} ({})", path.resolve(child), e);
+        }
     }
 
     private void closeChildWatch(Path child) throws IOException {
@@ -242,7 +257,7 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
     @Override
     protected synchronized void start() throws IOException {
         internal.open();
-        openChildWatches();
+        openAndCloseChildWatches();
         // There's no need to report an overflow event, because `internal` was
         // opened *before* the file system was accessed to fetch children. Thus,
         // if a new directory is created while this method is running, then at
