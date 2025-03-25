@@ -42,7 +42,6 @@ import engineering.swat.watch.impl.EventHandlingWatch;
 import engineering.swat.watch.impl.jdk.JDKDirectoryWatch;
 import engineering.swat.watch.impl.jdk.JDKFileTreeWatch;
 import engineering.swat.watch.impl.jdk.JDKFileWatch;
-import engineering.swat.watch.impl.jdk.JDKRecursiveDirectoryWatch;
 import engineering.swat.watch.impl.overflows.IndexingRescanner;
 import engineering.swat.watch.impl.overflows.MemorylessRescanner;
 
@@ -194,7 +193,6 @@ public class Watcher {
                     // no native support, use the simulation
                     logger.debug("Not possible to register the native watcher, using fallback for {}", path);
                     logger.trace(ex);
-                    // var result = new JDKRecursiveDirectoryWatch(path, executor, h);
                     var result = new JDKFileTreeWatch(path, executor, h);
                     result.open();
                     return result;
