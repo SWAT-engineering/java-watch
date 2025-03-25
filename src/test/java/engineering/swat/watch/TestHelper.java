@@ -30,6 +30,7 @@ import java.time.Duration;
 
 public class TestHelper {
 
+    public static final Duration TINY_WAIT;
     public static final Duration SHORT_WAIT;
     public static final Duration NORMAL_WAIT;
     public static final Duration LONG_WAIT;
@@ -48,9 +49,21 @@ public class TestHelper {
             // especially on small core systems
             delayFactor *= 4;
         }
+        TINY_WAIT = Duration.ofMillis(250 * delayFactor);
         SHORT_WAIT = Duration.ofSeconds(1 * delayFactor);
         NORMAL_WAIT = Duration.ofSeconds(4 * delayFactor);
         LONG_WAIT = Duration.ofSeconds(8 * delayFactor);
     }
 
+    public static void trySleep(Duration duration) {
+        trySleep(duration.toMillis());
+    }
+
+    public static void trySleep(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
 }
