@@ -48,6 +48,7 @@ public class JDKDirectoryWatch extends JDKBaseWatch {
     private final Logger logger = LogManager.getLogger();
     private final boolean nativeRecursive;
     private volatile @MonotonicNonNull Closeable bundledJDKWatcher;
+    private volatile boolean closed = false;
 
     private static final BundledSubscription<SubscriptionKey, List<java.nio.file.WatchEvent<?>>>
         BUNDLED_JDK_WATCHERS = new BundledSubscription<>(JDKPoller::register);
@@ -69,12 +70,14 @@ public class JDKDirectoryWatch extends JDKBaseWatch {
 
     private void handleJDKEvents(List<java.nio.file.WatchEvent<?>> events) {
         exec.execute(() -> {
-            for (var ev : events) {
-                try {
-                    handleEvent(translate(ev));
-                }
-                catch (Throwable ignored) {
-                    logger.error("Ignoring downstream exception:", ignored);
+            if (!closed) {
+                for (var ev : events) {
+                    try {
+                        handleEvent(translate(ev));
+                    }
+                    catch (Throwable ignored) {
+                        logger.error("Ignoring downstream exception:", ignored);
+                    }
                 }
             }
         });
@@ -96,8 +99,9 @@ public class JDKDirectoryWatch extends JDKBaseWatch {
 
     @Override
     public synchronized void close() throws IOException {
-        if (bundledJDKWatcher != null) {
+        if (!closed && bundledJDKWatcher != null) {
             logger.trace("Closing watch for: {}", this.path);
+            closed = true;
             bundledJDKWatcher.close();
         }
     }

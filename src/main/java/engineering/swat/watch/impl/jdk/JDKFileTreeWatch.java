@@ -26,6 +26,7 @@
  */
 package engineering.swat.watch.impl.jdk;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -40,6 +41,7 @@ import java.util.function.Predicate;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import engineering.swat.watch.WatchEvent;
 import engineering.swat.watch.WatchScope;
@@ -214,6 +216,19 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
         }
     }
 
+    private @Nullable IOException tryClose(Closeable c) {
+        try {
+            c.close();
+            return null;
+        } catch (IOException ex) {
+            logger.error("Could not close watch", ex);
+            return ex;
+        } catch (Exception ex) {
+            logger.error("Could not close watch", ex);
+            return new IOException("Unexpected exception when closing", ex);
+        }
+    }
+
     // -- JDKBaseWatch --
 
     @Override
@@ -228,37 +243,19 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
 
     @Override
     public synchronized void close() throws IOException {
-        IOException firstFail = null;
-
-        var internalOpen = true;
-        var children = childWatches.keySet().iterator();
-        do {
-            try {
-                // First, close the internal watch to prevent new child watches
-                // from being opened concurrently while this method is running.
-                if (internalOpen) {
-                    internal.close();
-                    internalOpen = false;
-                }
-                // Next, close all child watches
-                else {
-                    closeChildWatch(children.next());
-                }
-            } catch (IOException ex) {
-                logger.error("Could not close watch", ex);
-                firstFail = firstFail == null ? ex : firstFail;
-            } catch (Exception ex) {
-                logger.error("Could not close watch", ex);
-                firstFail = firstFail == null ? new IOException("Unexpected exception when closing", ex) : firstFail;
+        var firstFail = tryClose(internal);
+        for (var c : childWatches.values()) {
+            var currentFail = tryClose(c);
+            if (currentFail != null && firstFail == null) {
+                firstFail = currentFail;
             }
-        } while (children.hasNext());
-
+        }
         if (firstFail != null) {
             throw firstFail;
         }
     }
 
-    @Override
+   @Override
     protected synchronized void start() throws IOException {
         internal.open();
         openAndCloseChildWatches();
