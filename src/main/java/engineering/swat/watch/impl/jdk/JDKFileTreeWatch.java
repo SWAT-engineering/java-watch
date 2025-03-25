@@ -36,6 +36,7 @@ import java.util.concurrent.Executor;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -52,19 +53,22 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
     private final JDKBaseWatch internal;
 
     public JDKFileTreeWatch(Path fullPath, Executor exec,
-            BiConsumer<EventHandlingWatch, WatchEvent> eventHandler) {
-        this(fullPath, Path.of(""), exec, eventHandler);
+            BiConsumer<EventHandlingWatch, WatchEvent> eventHandler,
+            Predicate<WatchEvent> eventFilter) {
+
+        this(fullPath, Path.of(""), exec, eventHandler, eventFilter);
     }
 
     public JDKFileTreeWatch(Path rootPath, Path relativePathParent, Executor exec,
-            BiConsumer<EventHandlingWatch, WatchEvent> eventHandler) {
+            BiConsumer<EventHandlingWatch, WatchEvent> eventHandler,
+            Predicate<WatchEvent> eventFilter) {
 
-        super(rootPath.resolve(relativePathParent), exec, eventHandler);
+        super(rootPath.resolve(relativePathParent), exec, eventHandler, eventFilter);
         this.rootPath = rootPath;
         this.relativePathParent = relativePathParent;
 
         var internalEventHandler = eventHandler.andThen(new AsyncChildWatchesUpdater());
-        this.internal = new JDKDirectoryWatch(path, exec, internalEventHandler) {
+        this.internal = new JDKDirectoryWatch(path, exec, internalEventHandler, eventFilter) {
 
             // Override to ensure that this watch relativizes events wrt
             // `rootPath` (instead of `path`, as is the default behavior)
@@ -183,7 +187,7 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
         assert !child.isAbsolute();
 
         Function<Path, JDKFileTreeWatch> newChildWatch = p -> new JDKFileTreeWatch(
-            rootPath, relativePathParent.resolve(child), exec, eventHandler);
+            rootPath, relativePathParent.resolve(child), exec, eventHandler, eventFilter);
         var childWatch = childWatches.computeIfAbsent(child, newChildWatch);
         try {
             childWatch.startIfFirstTime();

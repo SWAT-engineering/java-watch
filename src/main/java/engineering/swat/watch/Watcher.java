@@ -34,6 +34,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -61,6 +62,8 @@ public class Watcher {
 
     private static final BiConsumer<EventHandlingWatch, WatchEvent> EMPTY_HANDLER = (w, e) -> {};
     private volatile BiConsumer<EventHandlingWatch, WatchEvent> eventHandler = EMPTY_HANDLER;
+    private static final Predicate<WatchEvent> TRUE_FILTER = e -> true;
+    private volatile Predicate<WatchEvent> eventFilter = TRUE_FILTER;
 
     private Watcher(Path path, WatchScope scope) {
         this.path = path;
@@ -139,6 +142,22 @@ public class Watcher {
     }
 
     /**
+     * Configures the event filter to determine which events should be passed to
+     * the event handler. By default (without calling this method), all events
+     * are passed. This method must be called at most once.
+     * @param predicate The predicate to determine an event should be kept
+     * (`true`) or dropped (`false`)
+     * @return {@code this} (to support method chaining)
+     */
+    Watcher filter(Predicate<WatchEvent> predicate) {
+        if (this.eventFilter != TRUE_FILTER) {
+            throw new IllegalArgumentException("filter cannot be set more than once");
+        }
+        this.eventFilter = predicate;
+        return this;
+    }
+
+    /**
      * Optionally configure the executor in which the {@link #on(Consumer)} callbacks are scheduled.
      * If not defined, every task will be scheduled on the {@link java.util.concurrent.ForkJoinPool#commonPool()}.
      * @param callbackHandler worker pool to use
@@ -180,26 +199,26 @@ public class Watcher {
 
         switch (scope) {
             case PATH_AND_CHILDREN: {
-                var result = new JDKDirectoryWatch(path, executor, h);
+                var result = new JDKDirectoryWatch(path, executor, h, eventFilter);
                 result.open();
                 return result;
             }
             case PATH_AND_ALL_DESCENDANTS: {
                 try {
-                    var result = new JDKDirectoryWatch(path, executor, h, true);
+                    var result = new JDKDirectoryWatch(path, executor, h, eventFilter, true);
                     result.open();
                     return result;
                 } catch (Throwable ex) {
                     // no native support, use the simulation
                     logger.debug("Not possible to register the native watcher, using fallback for {}", path);
                     logger.trace(ex);
-                    var result = new JDKFileTreeWatch(path, executor, h);
+                    var result = new JDKFileTreeWatch(path, executor, h, eventFilter);
                     result.open();
                     return result;
                 }
             }
             case PATH_ONLY: {
-                var result = new JDKFileWatch(path, executor, h);
+                var result = new JDKFileWatch(path, executor, h, eventFilter);
                 result.open();
                 return result;
             }

@@ -30,6 +30,7 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.concurrent.Executor;
 import java.util.function.BiConsumer;
+import java.util.function.Predicate;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -48,8 +49,11 @@ public class JDKFileWatch extends JDKBaseWatch {
     private final Logger logger = LogManager.getLogger();
     private final JDKBaseWatch internal;
 
-    public JDKFileWatch(Path file, Executor exec, BiConsumer<EventHandlingWatch, WatchEvent> eventHandler) {
-        super(file, exec, eventHandler);
+    public JDKFileWatch(Path file, Executor exec,
+            BiConsumer<EventHandlingWatch, WatchEvent> eventHandler,
+            Predicate<WatchEvent> eventFilter) {
+
+        super(file, exec, eventHandler, eventFilter);
 
         var message = "The root path is not a valid path for a file watch";
         var parent = requireNonNull(file.getParent(), message);
@@ -64,7 +68,7 @@ public class JDKFileWatch extends JDKBaseWatch {
             if (fileName.equals(e.getRelativePath())) {
                 eventHandler.accept(w, e);
             }
-        });
+        }, eventFilter);
 
         logger.debug("File watch (for: {}) is in reality a directory watch (for: {}) with a filter (for: {})", file, parent, fileName);
     }
