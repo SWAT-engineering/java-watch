@@ -146,7 +146,7 @@ public class Watcher {
      * the event handler. By default (without calling this method), all events
      * are passed. This method must be called at most once.
      * @param predicate The predicate to determine an event should be kept
-     * (`true`) or dropped (`false`)
+     * ({@code true}) or dropped ({@code false})
      * @return {@code this} (to support method chaining)
      */
     Watcher filter(Predicate<WatchEvent> predicate) {
