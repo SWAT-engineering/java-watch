@@ -150,7 +150,7 @@ public class IndexingRescanner extends MemorylessRescanner {
                     // missed. Just in case, it's issued synthetically here.
                     if (lastModifiedTimeOld == null && kind == WatchEvent.Kind.MODIFIED) {
                         var created = new WatchEvent(WatchEvent.Kind.CREATED, fullPath);
-                        watch.handleEvent(created);
+                        watch.handleEvent(watch.relativize(created));
                     }
                 } catch (IOException e) {
                     logger.error("Could not get modification time of: {} ({})", fullPath, e);

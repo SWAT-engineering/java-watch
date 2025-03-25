@@ -76,9 +76,18 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
             // `rootPath` (instead of `path`, as is the default behavior)
             @Override
             public WatchEvent relativize(WatchEvent event) {
-                var fileName = event.getFileName();
-                return new WatchEvent(event.getKind(), rootPath,
-                    fileName == null ? relativePathParent : relativePathParent.resolve(fileName));
+                var relativePath = relativePathParent;
+
+                // Append a file name to `relativePath` if it exists
+                var fullPath = event.calculateFullPath();
+                if (!fullPath.equals(path)) {
+                    var fileName = fullPath.getFileName();
+                    if (fileName != null) {
+                        relativePath = relativePath.resolve(fileName);
+                    }
+                }
+
+                return new WatchEvent(event.getKind(), rootPath, relativePath);
             }
 
             // Override to ensure that this watch translates JDK events using
