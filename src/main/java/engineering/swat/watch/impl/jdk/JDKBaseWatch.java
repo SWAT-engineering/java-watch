@@ -125,13 +125,6 @@ public abstract class JDKBaseWatch implements EventHandlingWatch {
     // -- EventHandlingWatch --
 
     @Override
-    public void handleEvent(WatchEvent e) {
-        if (eventFilter.test(e)) {
-            eventHandler.accept(this, e);
-        }
-    }
-
-    @Override
     public Path getPath() {
         return path;
     }

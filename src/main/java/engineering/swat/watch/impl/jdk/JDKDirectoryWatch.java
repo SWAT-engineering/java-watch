@@ -88,6 +88,13 @@ public class JDKDirectoryWatch extends JDKBaseWatch {
     }
 
     @Override
+    public void handleEvent(WatchEvent e) {
+        if (eventFilter.test(e)) {
+            eventHandler.accept(this, e);
+        }
+    }
+
+    @Override
     public synchronized void close() throws IOException {
         if (bundledJDKWatcher != null) {
             logger.trace("Closing watch for: {}", this.path);
