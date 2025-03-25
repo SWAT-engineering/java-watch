@@ -120,7 +120,7 @@ class JDKFileTreeWatchTests {
         var watch = new JDKFileTreeWatch(root, exec, (w, e) -> {
             events.add(e);
             rescanner.accept(w, e);
-        });
+        }, e -> true);
 
         watch.open();
 
