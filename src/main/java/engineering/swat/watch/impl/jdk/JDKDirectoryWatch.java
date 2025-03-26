@@ -70,14 +70,12 @@ public class JDKDirectoryWatch extends JDKBaseWatch {
 
     private void handleJDKEvents(List<java.nio.file.WatchEvent<?>> events) {
         exec.execute(() -> {
-            if (!closed) {
-                for (var ev : events) {
-                    try {
-                        handleEvent(translate(ev));
-                    }
-                    catch (Throwable ignored) {
-                        logger.error("Ignoring downstream exception:", ignored);
-                    }
+            for (var ev : events) {
+                try {
+                    handleEvent(translate(ev));
+                }
+                catch (Throwable ignored) {
+                    logger.error("Ignoring downstream exception:", ignored);
                 }
             }
         });
@@ -92,7 +90,7 @@ public class JDKDirectoryWatch extends JDKBaseWatch {
 
     @Override
     public void handleEvent(WatchEvent e) {
-        if (eventFilter.test(e)) {
+        if (!closed && eventFilter.test(e)) {
             eventHandler.accept(this, e);
         }
     }
