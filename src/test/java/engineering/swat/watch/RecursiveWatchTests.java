@@ -140,5 +140,4 @@ class RecursiveWatchTests {
                 .untilTrue(seen);
         }
     }
-
 }
