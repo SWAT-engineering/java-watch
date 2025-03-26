@@ -32,6 +32,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileTime;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -82,20 +84,29 @@ public class IndexingRescanner extends MemorylessRescanner {
     }
 
     protected class Generator extends MemorylessRescanner.Generator {
-        // Field to keep track of the paths that are visited during the current
-        // rescan. After the visit, the `DELETED` events that happened since the
-        // previous rescan can be approximated.
-        private Set<Path> visited = new HashSet<>();
+        // Field to keep track of (a stack of) the paths that are visited during
+        // the current rescan (one frame for each nested subdirectory), to
+        // approximate `DELETED` events that happened since the previous rescan.
+        // Instances of this class are supposed to be used non-concurrently, so
+        // no synchronization to access this field is needed.
+        private final Deque<Set<Path>> visited = new ArrayDeque<>();
 
         public Generator(Path path, WatchScope scope) {
             super(path, scope);
+            this.visited.push(new HashSet<>()); // Initial set for content of `path`
+        }
+
+        private <T> void addToPeeked(Deque<Set<T>> deque, T t) {
+            var peeked = deque.peek();
+            if (peeked != null) {
+                peeked.add(t);
+            }
         }
 
         // -- MemorylessRescanner.Generator --
 
         @Override
         protected void generateEvents(Path path, BasicFileAttributes attrs) {
-            visited.add(path);
             var lastModifiedTimeOld = index.get(path);
             var lastModifiedTimeNew = attrs.lastModifiedTime();
 
@@ -112,13 +123,25 @@ public class IndexingRescanner extends MemorylessRescanner {
         }
 
         @Override
+        public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+            addToPeeked(visited, dir);
+            visited.push(new HashSet<>());
+            return super.preVisitDirectory(dir, attrs);
+        }
+
+        @Override
+        public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+            addToPeeked(visited, file);
+            return super.visitFile(file, attrs);
+        }
+
+        @Override
         public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
-            // If the visitor is back at the root of the rescan, then the time
-            // is right to issue `DELETED` events based on the set of `visited`
-            // paths.
-            if (dir.equals(path)) {
+            // Issue `DELETED` events based on the set of paths visited in `dir`
+            var visitedInDir = visited.pop();
+            if (visitedInDir != null) {
                 for (var p : index.keySet()) {
-                    if (p.startsWith(path) && !visited.contains(p)) {
+                    if (dir.equals(p.getParent()) && !visitedInDir.contains(p)) {
                         events.add(new WatchEvent(WatchEvent.Kind.DELETED, p));
                     }
                 }

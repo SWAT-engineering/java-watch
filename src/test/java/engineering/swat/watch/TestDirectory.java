@@ -41,7 +41,6 @@ public class TestDirectory implements Closeable {
     private final Path testDirectory;
     private final List<Path> testFiles;
 
-
     public TestDirectory() throws IOException {
         testDirectory = Files.createTempDirectory("java-watch-test");
         List<Path> testFiles = new ArrayList<>();
