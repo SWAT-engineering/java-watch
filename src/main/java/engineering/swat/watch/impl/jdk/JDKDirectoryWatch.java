@@ -90,8 +90,8 @@ public class JDKDirectoryWatch extends JDKBaseWatch {
 
     @Override
     public void handleEvent(WatchEvent e) {
-        if (!closed && eventFilter.test(e)) {
-            eventHandler.accept(this, e);
+        if (!closed) {
+            super.handleEvent(e);
         }
     }
 

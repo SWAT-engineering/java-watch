@@ -128,4 +128,11 @@ public abstract class JDKBaseWatch implements EventHandlingWatch {
     public Path getPath() {
         return path;
     }
+
+    @Override
+    public void handleEvent(WatchEvent e) {
+        if (eventFilter.test(e)) {
+            eventHandler.accept(this, e);
+        }
+    }
 }
