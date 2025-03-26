@@ -68,6 +68,10 @@ public class JDKDirectoryWatch extends JDKBaseWatch {
         this.nativeRecursive = nativeRecursive;
     }
 
+    public boolean isClosed() {
+        return closed;
+    }
+
     private void handleJDKEvents(List<java.nio.file.WatchEvent<?>> events) {
         exec.execute(() -> {
             for (var ev : events) {

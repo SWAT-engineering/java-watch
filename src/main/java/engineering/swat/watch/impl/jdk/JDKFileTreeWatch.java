@@ -53,7 +53,7 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
     private final Path rootPath;
     private final Path relativePathParent;
     private final Map<Path, JDKFileTreeWatch> childWatches = new ConcurrentHashMap<>();
-    private final JDKBaseWatch internal;
+    private final JDKDirectoryWatch internal;
 
     public JDKFileTreeWatch(Path fullPath, Executor exec,
             BiConsumer<EventHandlingWatch, WatchEvent> eventHandler,
@@ -156,7 +156,9 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
                 // Events in the newly created directory might have been missed
                 // between its creation and setting up its watch. So, generate
                 // an `OVERFLOW` event for the watch.
-                reportOverflowTo(childWatch);
+                if (childWatch != null) {
+                    reportOverflowTo(childWatch);
+                }
             }
         }
 
@@ -193,12 +195,36 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
         }
     }
 
-    private JDKFileTreeWatch openChildWatch(Path child) {
+    /**
+     * @return A child watch for {@code child} when the parent watch is still
+     * open, or {@code null} when it is already closed.
+     */
+    private @Nullable JDKFileTreeWatch openChildWatch(Path child) {
         assert !child.isAbsolute();
 
         Function<Path, JDKFileTreeWatch> newChildWatch = p -> new JDKFileTreeWatch(
             rootPath, relativePathParent.resolve(child), exec, eventHandler, eventFilter);
         var childWatch = childWatches.computeIfAbsent(child, newChildWatch);
+
+        // The following may have happened at this point:
+        //  1. Thread A: Reads `closed` at the beginning of an event handler,
+        //     sees it's `false`, runs the event handler, and reaches the
+        //     beginning of this method (but doesn't execute it yet).
+        //  2. Thread B: Writes `true` to `closed`, gets all child watches from
+        //     the map, and closes them.
+        //  3. Thread A: Creates a new child watch and puts it into the map.
+        //
+        // Without additional synchronization, which is costly, there will
+        // always be a small window between the end of (1) and the beginning of
+        // (2) that causes a "dangling" child watch to remain open when the
+        // parent watch is closed. To mitigate this, after optimistically
+        // putting a child watch into the map, we immediately close it when
+        // needed.
+        if (internal.isClosed()) {
+            tryClose(childWatch);
+            return null;
+        }
+
         try {
             childWatch.startIfFirstTime();
         } catch (IOException e) {
