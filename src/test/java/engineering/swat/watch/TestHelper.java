@@ -54,16 +54,4 @@ public class TestHelper {
         NORMAL_WAIT = Duration.ofSeconds(4 * delayFactor);
         LONG_WAIT = Duration.ofSeconds(8 * delayFactor);
     }
-
-    public static void trySleep(Duration duration) {
-        trySleep(duration.toMillis());
-    }
-
-    public static void trySleep(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
-    }
 }

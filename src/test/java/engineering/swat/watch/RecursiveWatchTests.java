@@ -150,7 +150,7 @@ class RecursiveWatchTests {
 
     @ParameterizedTest
     @EnumSource // Repeat test for each `OnOverflow` value
-    void overflowsAreRecoveredFrom(OnOverflow whichFiles) throws IOException {
+    void overflowsAreRecoveredFrom(OnOverflow whichFiles) throws IOException, InterruptedException {
         var parent = testDir.getTestDirectory();
         var descendants = new Path[] {
             Path.of("foo"),
@@ -215,7 +215,7 @@ class RecursiveWatchTests {
             } else {
                 // Give the watch some time to process the `OVERFLOW` event and
                 // do internal bookkeeping
-                TestHelper.trySleep(TestHelper.TINY_WAIT);
+                Thread.sleep(TestHelper.TINY_WAIT.toMillis());
             }
 
             // Create more files. They *should* be observed (regardless of
