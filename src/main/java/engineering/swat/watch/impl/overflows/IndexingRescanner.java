@@ -93,7 +93,6 @@ public class IndexingRescanner extends MemorylessRescanner {
 
         public Generator(Path path, WatchScope scope) {
             super(path, scope);
-            this.visited.push(new HashSet<>());
         }
 
         private <T> void addToPeeked(Deque<Set<T>> deque, T t) {

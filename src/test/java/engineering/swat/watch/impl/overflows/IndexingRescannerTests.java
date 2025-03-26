@@ -1,3 +1,29 @@
+/*
+ * BSD 2-Clause License
+ *
+ * Copyright (c) 2023, Swat.engineering
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 package engineering.swat.watch.impl.overflows;
 
 import static org.awaitility.Awaitility.await;
@@ -45,8 +71,8 @@ class IndexingRescannerTests {
     void onlyEventsForFilesInScopeAreIssued() throws IOException, InterruptedException {
         var path = testDir.getTestDirectory();
 
-        // Prepare a watch that monitors only the children (not all descendants)
-        // of `path`
+        // Configure a non-recursive directory watch that monitors only the
+        // children (not all descendants) of `path`
         var eventsOnlyForChildren = new AtomicBoolean(true);
         var watchConfig = Watcher.watch(path, WatchScope.PATH_AND_CHILDREN)
             .approximate(OnOverflow.NONE) // Disable the auto-handler here; we'll have an explicit one below
@@ -58,14 +84,16 @@ class IndexingRescannerTests {
 
         try (var watch = (EventHandlingWatch) watchConfig.start()) {
             // Create a rescanner that initially indexes all descendants (not
-            // only the children) of `path`
+            // only the children) of `path`. The resulting initial index is an
+            // overestimation of the files monitored by the watch.
             var rescanner = new IndexingRescanner(
                 ForkJoinPool.commonPool(), path,
                 WatchScope.PATH_AND_ALL_DESCENDANTS);
 
-            // Trigger a rescan. As only the children (not all descendants) of
-            // `path` are watched, the rescan should issue events only for those
-            // children.
+            // Trigger a rescan. Because only the children (not all descendants)
+            // of `path` are watched, the rescan should issue events only for
+            // those children (even though the initial index contains entries
+            // for all descendants).
             var overflow = new WatchEvent(WatchEvent.Kind.OVERFLOW, path);
             rescanner.accept(watch, overflow);
             Thread.sleep(TestHelper.SHORT_WAIT.toMillis());
