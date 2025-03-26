@@ -89,7 +89,7 @@ public class IndexingRescanner extends MemorylessRescanner {
         // approximate `DELETED` events that happened since the previous rescan.
         // Instances of this class are supposed to be used non-concurrently, so
         // no synchronization to access this field is needed.
-        private Deque<Set<Path>> visited = new ArrayDeque<>();
+        private final Deque<Set<Path>> visited = new ArrayDeque<>();
 
         public Generator(Path path, WatchScope scope) {
             super(path, scope);
