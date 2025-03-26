@@ -32,6 +32,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.function.BiConsumer;
@@ -76,18 +77,16 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
             // `rootPath` (instead of `path`, as is the default behavior)
             @Override
             public WatchEvent relativize(WatchEvent event) {
-                var relativePath = relativePathParent;
+                // Assumption: The parent of the full path of `event` and the
+                // path of this watch are the same, so we only need to append
+                // the file name of `event` to relativize.
+                assert Objects.equals(
+                    event.calculateFullPath().getParent(),
+                    rootPath.resolve(relativePathParent));
 
-                // Append a file name to `relativePath` if it exists
-                var fullPath = event.calculateFullPath();
-                if (!fullPath.equals(path)) {
-                    var fileName = fullPath.getFileName();
-                    if (fileName != null) {
-                        relativePath = relativePath.resolve(fileName);
-                    }
-                }
-
-                return new WatchEvent(event.getKind(), rootPath, relativePath);
+                var fileName = event.getFileName();
+                return new WatchEvent(event.getKind(), rootPath,
+                    fileName == null ? relativePathParent : relativePathParent.resolve(fileName));
             }
 
             // Override to ensure that this watch translates JDK events using
