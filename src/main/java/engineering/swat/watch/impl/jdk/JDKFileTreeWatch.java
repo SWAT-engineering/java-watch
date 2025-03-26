@@ -145,7 +145,7 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
         }
 
         private void acceptOverflow() {
-            openAndCloseChildWatches();
+            syncChildWatchesWithFileSystem();
             for (var childWatch : childWatches.values()) {
                 reportOverflowTo(childWatch);
             }
@@ -172,7 +172,7 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
         }
     }
 
-    private void openAndCloseChildWatches() {
+    private void syncChildWatchesWithFileSystem() {
         var toBeClosed = new HashSet<>(childWatches.keySet());
 
         try (var children = Files.find(path, 1, (p, attrs) -> p != path && attrs.isDirectory())) {
@@ -267,7 +267,7 @@ public class JDKFileTreeWatch extends JDKBaseWatch {
    @Override
     protected synchronized void start() throws IOException {
         internal.open();
-        openAndCloseChildWatches();
+        syncChildWatchesWithFileSystem();
         // There's no need to report an overflow event, because `internal` was
         // opened *before* the file system was accessed to fetch children. Thus,
         // if a new directory is created while this method is running, then at
