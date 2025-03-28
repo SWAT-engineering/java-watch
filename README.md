@@ -21,6 +21,8 @@ Planned features:
 - Support single file watches natively in linux (see [#11](https://github.com/SWAT-engineering/java-watch/issues/11))
 - Monitor only specific events (such as only CREATE events)
 
+[![codecov](https://codecov.io/gh/SWAT-engineering/java-watch/graph/badge.svg?token=XL29SDYAF0)](https://codecov.io/gh/SWAT-engineering/java-watch)
+
 ## Usage
 
 Import dependency in pom.xml:
