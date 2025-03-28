@@ -31,27 +31,33 @@ import java.nio.file.Path;
 import java.nio.file.StandardWatchEventKinds;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
+import java.util.function.Predicate;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
-import engineering.swat.watch.ActiveWatch;
 import engineering.swat.watch.WatchEvent;
+import engineering.swat.watch.impl.EventHandlingWatch;
 
-public abstract class JDKBaseWatch implements ActiveWatch {
+public abstract class JDKBaseWatch implements EventHandlingWatch {
     private final Logger logger = LogManager.getLogger();
 
     protected final Path path;
     protected final Executor exec;
-    protected final Consumer<WatchEvent> eventHandler;
+    protected final BiConsumer<EventHandlingWatch, WatchEvent> eventHandler;
+    protected final Predicate<WatchEvent> eventFilter;
     protected final AtomicBoolean started = new AtomicBoolean();
 
-    protected JDKBaseWatch(Path path, Executor exec, Consumer<WatchEvent> eventHandler) {
+    protected JDKBaseWatch(Path path, Executor exec,
+            BiConsumer<EventHandlingWatch, WatchEvent> eventHandler,
+            Predicate<WatchEvent> eventFilter) {
+
         this.path = path;
         this.exec = exec;
         this.eventHandler = eventHandler;
+        this.eventFilter = eventFilter;
     }
 
     public void open() throws IOException {
@@ -90,27 +96,43 @@ public abstract class JDKBaseWatch implements ActiveWatch {
     }
 
     protected WatchEvent translate(java.nio.file.WatchEvent<?> jdkEvent) {
-        WatchEvent.Kind kind;
-        if (jdkEvent.kind() == StandardWatchEventKinds.ENTRY_CREATE) {
-            kind = WatchEvent.Kind.CREATED;
-        }
-        else if (jdkEvent.kind() == StandardWatchEventKinds.ENTRY_MODIFY) {
-            kind = WatchEvent.Kind.MODIFIED;
-        }
-        else if (jdkEvent.kind() == StandardWatchEventKinds.ENTRY_DELETE) {
-            kind = WatchEvent.Kind.DELETED;
-        }
-        else if (jdkEvent.kind() == StandardWatchEventKinds.OVERFLOW) {
-            kind = WatchEvent.Kind.OVERFLOW;
-        }
-        else {
-            throw new IllegalArgumentException("Unexpected watch event: " + jdkEvent);
-        }
+        var kind = translate(jdkEvent.kind());
         var rootPath = path;
-        var relativePath = kind == WatchEvent.Kind.OVERFLOW ? Path.of("") : (@Nullable Path)jdkEvent.context();
+        var relativePath = kind == WatchEvent.Kind.OVERFLOW ? null : (@Nullable Path) jdkEvent.context();
 
         var event = new WatchEvent(kind, rootPath, relativePath);
         logger.trace("Translated: {} to {}", jdkEvent, event);
         return event;
+    }
+
+    protected WatchEvent.Kind translate(java.nio.file.WatchEvent.Kind<?> jdkKind) {
+        if (jdkKind == StandardWatchEventKinds.ENTRY_CREATE) {
+            return WatchEvent.Kind.CREATED;
+        }
+        if (jdkKind == StandardWatchEventKinds.ENTRY_MODIFY) {
+            return WatchEvent.Kind.MODIFIED;
+        }
+        if (jdkKind == StandardWatchEventKinds.ENTRY_DELETE) {
+            return WatchEvent.Kind.DELETED;
+        }
+        if (jdkKind == StandardWatchEventKinds.OVERFLOW) {
+            return WatchEvent.Kind.OVERFLOW;
+        }
+
+        throw new IllegalArgumentException("Unexpected watch kind: " + jdkKind);
+    }
+
+    // -- EventHandlingWatch --
+
+    @Override
+    public Path getPath() {
+        return path;
+    }
+
+    @Override
+    public void handleEvent(WatchEvent e) {
+        if (eventFilter.test(e)) {
+            eventHandler.accept(this, e);
+        }
     }
 }

@@ -161,6 +161,10 @@ class TortureTests {
                     case MODIFIED:
                         // platform specific if this comes by or not
                         break;
+                    case OVERFLOW:
+                        // Overflows might happen, but they're auto-handled, so
+                        // they can be ignored here
+                        break;
                     default:
                         logger.error("Unexpected event: {}", ev);
                         break;

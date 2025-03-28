@@ -37,12 +37,11 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
-class TestDirectory implements Closeable {
+public class TestDirectory implements Closeable {
     private final Path testDirectory;
     private final List<Path> testFiles;
 
-
-    TestDirectory() throws IOException {
+    public TestDirectory() throws IOException {
         testDirectory = Files.createTempDirectory("java-watch-test");
         List<Path> testFiles = new ArrayList<>();
         add3Files(testFiles, testDirectory);

@@ -24,34 +24,50 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package engineering.swat.watch;
+package engineering.swat.watch.impl;
 
-import java.time.Duration;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class TestHelper {
+import java.io.IOException;
+import java.nio.file.Path;
 
-    public static final Duration TINY_WAIT;
-    public static final Duration SHORT_WAIT;
-    public static final Duration NORMAL_WAIT;
-    public static final Duration LONG_WAIT;
+import org.junit.jupiter.api.Test;
 
-    static {
-        var delayFactorConfig = System.getenv("DELAY_FACTOR");
-        int delayFactor = delayFactorConfig == null ? 1 : Integer.parseInt(delayFactorConfig);
-        var os = System.getProperty("os.name", "?").toLowerCase();
-        if (os.contains("mac")) {
-            // OSX is SLOW on it's watches
-            delayFactor *= 2;
-        }
-        else if (os.contains("win")) {
-            // windows watches can be slow to get everything
-            // published
-            // especially on small core systems
-            delayFactor *= 4;
-        }
-        TINY_WAIT = Duration.ofMillis(250 * delayFactor);
-        SHORT_WAIT = Duration.ofSeconds(1 * delayFactor);
-        NORMAL_WAIT = Duration.ofSeconds(4 * delayFactor);
-        LONG_WAIT = Duration.ofSeconds(8 * delayFactor);
+import engineering.swat.watch.WatchEvent;
+import engineering.swat.watch.WatchScope;
+
+class EventHandlingWatchTests {
+
+    private static EventHandlingWatch emptyFileWatch(Path path) {
+        return new EventHandlingWatch() {
+            @Override
+            public void handleEvent(WatchEvent event) {
+                // Nothing to handle
+            }
+
+            @Override
+            public void close() throws IOException {
+                // Nothing to close
+            }
+
+            @Override
+            public WatchScope getScope() {
+                return WatchScope.PATH_ONLY;
+            }
+
+            @Override
+            public Path getPath() {
+                return path;
+            }
+        };
+    }
+
+    @Test
+    void relativizeTest() {
+        var e1 = new WatchEvent(WatchEvent.Kind.OVERFLOW, Path.of("foo"), Path.of("bar", "baz.txt"));
+        var e2 = new WatchEvent(WatchEvent.Kind.OVERFLOW, Path.of("foo", "bar", "baz.txt"));
+        var e3 = emptyFileWatch(Path.of("foo")).relativize(e2);
+        assertEquals(e1.getRootPath(), e3.getRootPath());
+        assertEquals(e1.getRelativePath(), e3.getRelativePath());
     }
 }

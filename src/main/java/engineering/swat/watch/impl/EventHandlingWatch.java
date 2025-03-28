@@ -24,34 +24,32 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package engineering.swat.watch;
+package engineering.swat.watch.impl;
 
-import java.time.Duration;
+import engineering.swat.watch.ActiveWatch;
+import engineering.swat.watch.WatchEvent;
 
-public class TestHelper {
+public interface EventHandlingWatch extends ActiveWatch {
 
-    public static final Duration TINY_WAIT;
-    public static final Duration SHORT_WAIT;
-    public static final Duration NORMAL_WAIT;
-    public static final Duration LONG_WAIT;
+    /**
+     * Handles `event`. The purpose of this method is to trigger the event
+     * handler of this watch "from the outside" (in addition to having native
+     * file system libraries trigger the event handler "from the inside"). This
+     * is useful to report synthetic events (e.g., while handling overflows).
+     */
+    void handleEvent(WatchEvent event);
 
-    static {
-        var delayFactorConfig = System.getenv("DELAY_FACTOR");
-        int delayFactor = delayFactorConfig == null ? 1 : Integer.parseInt(delayFactorConfig);
-        var os = System.getProperty("os.name", "?").toLowerCase();
-        if (os.contains("mac")) {
-            // OSX is SLOW on it's watches
-            delayFactor *= 2;
-        }
-        else if (os.contains("win")) {
-            // windows watches can be slow to get everything
-            // published
-            // especially on small core systems
-            delayFactor *= 4;
-        }
-        TINY_WAIT = Duration.ofMillis(250 * delayFactor);
-        SHORT_WAIT = Duration.ofSeconds(1 * delayFactor);
-        NORMAL_WAIT = Duration.ofSeconds(4 * delayFactor);
-        LONG_WAIT = Duration.ofSeconds(8 * delayFactor);
+    /**
+     * Relativizes the full path of `event` against the path watched by this
+     * watch (as per `getPath()`). Returns a new event whose root path and
+     * relative path are set in accordance with the relativization.
+     */
+    default WatchEvent relativize(WatchEvent event) {
+        var fullPath = event.calculateFullPath();
+
+        var kind = event.getKind();
+        var rootPath = getPath();
+        var relativePath = rootPath.relativize(fullPath);
+        return new WatchEvent(kind, rootPath, relativePath);
     }
 }
