@@ -32,6 +32,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.function.BiConsumer;
+import java.util.function.Predicate;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -47,17 +48,28 @@ public class JDKDirectoryWatch extends JDKBaseWatch {
     private final Logger logger = LogManager.getLogger();
     private final boolean nativeRecursive;
     private volatile @MonotonicNonNull Closeable bundledJDKWatcher;
+    private volatile boolean closed = false;
 
     private static final BundledSubscription<SubscriptionKey, List<java.nio.file.WatchEvent<?>>>
         BUNDLED_JDK_WATCHERS = new BundledSubscription<>(JDKPoller::register);
 
-    public JDKDirectoryWatch(Path directory, Executor exec, BiConsumer<EventHandlingWatch, WatchEvent> eventHandler) {
-        this(directory, exec, eventHandler, false);
+    public JDKDirectoryWatch(Path directory, Executor exec,
+            BiConsumer<EventHandlingWatch, WatchEvent> eventHandler,
+            Predicate<WatchEvent> eventFilter) {
+
+        this(directory, exec, eventHandler, eventFilter, false);
     }
 
-    public JDKDirectoryWatch(Path directory, Executor exec, BiConsumer<EventHandlingWatch, WatchEvent> eventHandler, boolean nativeRecursive) {
-        super(directory, exec, eventHandler);
+    public JDKDirectoryWatch(Path directory, Executor exec,
+            BiConsumer<EventHandlingWatch, WatchEvent> eventHandler,
+            Predicate<WatchEvent> eventFilter, boolean nativeRecursive) {
+
+        super(directory, exec, eventHandler, eventFilter);
         this.nativeRecursive = nativeRecursive;
+    }
+
+    public boolean isClosed() {
+        return closed;
     }
 
     private void handleJDKEvents(List<java.nio.file.WatchEvent<?>> events) {
@@ -81,9 +93,17 @@ public class JDKDirectoryWatch extends JDKBaseWatch {
     }
 
     @Override
+    public void handleEvent(WatchEvent e) {
+        if (!closed) {
+            super.handleEvent(e);
+        }
+    }
+
+    @Override
     public synchronized void close() throws IOException {
-        if (bundledJDKWatcher != null) {
+        if (!closed && bundledJDKWatcher != null) {
             logger.trace("Closing watch for: {}", this.path);
+            closed = true;
             bundledJDKWatcher.close();
         }
     }

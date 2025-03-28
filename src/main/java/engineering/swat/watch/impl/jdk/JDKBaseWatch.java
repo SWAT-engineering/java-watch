@@ -32,6 +32,7 @@ import java.nio.file.StandardWatchEventKinds;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiConsumer;
+import java.util.function.Predicate;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -46,12 +47,17 @@ public abstract class JDKBaseWatch implements EventHandlingWatch {
     protected final Path path;
     protected final Executor exec;
     protected final BiConsumer<EventHandlingWatch, WatchEvent> eventHandler;
+    protected final Predicate<WatchEvent> eventFilter;
     protected final AtomicBoolean started = new AtomicBoolean();
 
-    protected JDKBaseWatch(Path path, Executor exec, BiConsumer<EventHandlingWatch, WatchEvent> eventHandler) {
+    protected JDKBaseWatch(Path path, Executor exec,
+            BiConsumer<EventHandlingWatch, WatchEvent> eventHandler,
+            Predicate<WatchEvent> eventFilter) {
+
         this.path = path;
         this.exec = exec;
         this.eventHandler = eventHandler;
+        this.eventFilter = eventFilter;
     }
 
     public void open() throws IOException {
@@ -99,7 +105,7 @@ public abstract class JDKBaseWatch implements EventHandlingWatch {
         return event;
     }
 
-    private WatchEvent.Kind translate(java.nio.file.WatchEvent.Kind<?> jdkKind) {
+    protected WatchEvent.Kind translate(java.nio.file.WatchEvent.Kind<?> jdkKind) {
         if (jdkKind == StandardWatchEventKinds.ENTRY_CREATE) {
             return WatchEvent.Kind.CREATED;
         }
@@ -119,12 +125,14 @@ public abstract class JDKBaseWatch implements EventHandlingWatch {
     // -- EventHandlingWatch --
 
     @Override
-    public void handleEvent(WatchEvent e) {
-        eventHandler.accept(this, e);
+    public Path getPath() {
+        return path;
     }
 
     @Override
-    public Path getPath() {
-        return path;
+    public void handleEvent(WatchEvent e) {
+        if (eventFilter.test(e)) {
+            eventHandler.accept(this, e);
+        }
     }
 }
