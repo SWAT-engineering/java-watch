@@ -141,7 +141,10 @@ public class IndexingRescanner extends MemorylessRescanner {
             var visitedInDir = visited.pop();
             if (visitedInDir != null) {
                 for (var p : index.keySet()) {
-                    if (dir.equals(p.getParent()) && !visitedInDir.contains(p)) {
+                    if (dir.equals(p.getParent()) && !visitedInDir.contains(p) && !Files.exists(p)) {
+                        // Note: The third subcondition is needed because the
+                        // index may have been updated during the visit. In that
+                        // case, `p` might not be in `visitedInDir`, but exist.
                         events.add(new WatchEvent(WatchEvent.Kind.DELETED, p));
                     }
                 }
