@@ -46,6 +46,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
+import java.util.stream.Stream;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -53,9 +54,10 @@ import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.RepeatedTest;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 class TortureTests {
 
@@ -141,17 +143,18 @@ class TortureTests {
 
     private static final int THREADS = 4;
 
-    @Test
-    void pressureOnFSShouldNotMissNewFilesAnything() throws InterruptedException, IOException {
+    @ParameterizedTest
+    @EnumSource(names = { "ALL", "DIRTY" })
+    void pressureOnFSShouldNotMissNewFilesAnything(OnOverflow whichFiles) throws InterruptedException, IOException {
         final var root = testDir.getTestDirectory();
         var pool = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 4);
 
         var io = new IOGenerator(THREADS, root, pool);
 
-
         var seenCreates = ConcurrentHashMap.<Path>newKeySet();
         var watchConfig = Watcher.watch(testDir.getTestDirectory(), WatchScope.PATH_AND_ALL_DESCENDANTS)
             .withExecutor(pool)
+            .approximate(whichFiles)
             .on(ev -> {
                 var fullPath = ev.calculateFullPath();
                 switch (ev.getKind()) {
@@ -206,8 +209,14 @@ class TortureTests {
 
     private final int TORTURE_REGISTRATION_THREADS = THREADS * 500;
 
-    @RepeatedTest(failureThreshold=1, value = 20)
-    void manyRegistrationsForSamePath() throws InterruptedException, IOException {
+    static Stream<OnOverflow> manyRegistrationsForSamePathSource() {
+        OnOverflow[] values = { OnOverflow.ALL, OnOverflow.DIRTY };
+        return TestHelper.streamOf(values, 5);
+    }
+
+    @ParameterizedTest
+    @MethodSource("manyRegistrationsForSamePathSource")
+    void manyRegistrationsForSamePath(OnOverflow whichFiles) throws InterruptedException, IOException {
         var startRegistering = new Semaphore(0);
         var startedWatching = new Semaphore(0);
         var startDeregistring = new Semaphore(0);
@@ -220,6 +229,7 @@ class TortureTests {
                 try {
                     var watcher = Watcher
                         .watch(testDir.getTestDirectory(), WatchScope.PATH_AND_CHILDREN)
+                        .approximate(whichFiles)
                         .on(e -> seen.add(e.calculateFullPath()));
                     startRegistering.acquire();
                     try (var c = watcher.start()) {
@@ -263,8 +273,14 @@ class TortureTests {
         }
     }
 
-    @RepeatedTest(failureThreshold=1, value = 20)
-    void manyRegisterAndUnregisterSameTime() throws InterruptedException, IOException {
+    static Stream<OnOverflow> manyRegisterAndUnregisterSameTimeSource() {
+        OnOverflow[] values = { OnOverflow.ALL, OnOverflow.DIRTY };
+        return TestHelper.streamOf(values, 5);
+    }
+
+    @ParameterizedTest
+    @MethodSource("manyRegisterAndUnregisterSameTimeSource")
+    void manyRegisterAndUnregisterSameTime(OnOverflow whichFiles) throws InterruptedException, IOException {
         var startRegistering = new Semaphore(0);
         var startedWatching = new Semaphore(0);
         var stopAll = new Semaphore(0);
@@ -286,6 +302,7 @@ class TortureTests {
                         for (int k = 0; k < 1000; k++) {
                             var watcher = Watcher
                                 .watch(testDir.getTestDirectory(), WatchScope.PATH_AND_CHILDREN)
+                                .approximate(whichFiles)
                                 .on(e -> {
                                     if (e.calculateFullPath().equals(target)) {
                                         seen.add(id);
@@ -328,13 +345,13 @@ class TortureTests {
         finally {
             stopAll.release(amountOfWatchersActive);
         }
-
     }
 
-    @Test
+    @ParameterizedTest
+    @EnumSource(names = { "ALL", "DIRTY" })
     //Deletes can race the filesystem, so you might miss a few files in a dir, if that dir is already deleted
     @EnabledIfEnvironmentVariable(named="TORTURE_DELETE", matches="true")
-    void pressureOnFSShouldNotMissDeletes() throws InterruptedException, IOException {
+    void pressureOnFSShouldNotMissDeletes(OnOverflow whichFiles) throws InterruptedException, IOException {
         final var root = testDir.getTestDirectory();
         var pool = Executors.newCachedThreadPool();
 
@@ -350,6 +367,7 @@ class TortureTests {
             final var happened = new Semaphore(0);
             var watchConfig = Watcher.watch(testDir.getTestDirectory(), WatchScope.PATH_AND_ALL_DESCENDANTS)
                 .withExecutor(pool)
+                .approximate(whichFiles)
                 .on(ev -> {
                     events.getAndIncrement();
                     happened.release();
@@ -392,8 +410,6 @@ class TortureTests {
             assertTrue(seenDeletes.contains(f), () -> "Missing delete event for: " + f);
         }
     }
-
-
 
     private void waitForStable(final AtomicInteger events, final Semaphore happened) throws InterruptedException {
         int lastEventCount = events.get();
