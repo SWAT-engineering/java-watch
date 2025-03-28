@@ -179,7 +179,16 @@ public class IndexingRescanner extends MemorylessRescanner {
                         watch.handleEvent(watch.relativize(created));
                     }
                 } catch (IOException e) {
-                    logger.error("Could not get modification time of: {} ({})", fullPath, e);
+                    // It can happen that, by the time a `CREATED`/`MODIFIED`
+                    // event is handled above, getting the last-modified-time
+                    // fails because the file has already been deleted. That's
+                    // fine: we can just ignore the event. (The corresponding
+                    // `DELETED` event will later be handled and remove the file
+                    // from the index.) If the file exists, though, something
+                    // went legitimately wrong, so it needs to be reported.
+                    if (Files.exists(fullPath)) {
+                        logger.error("Could not get modification time of: {} ({})", fullPath, e);
+                    }
                 }
                 break;
             case DELETED:
