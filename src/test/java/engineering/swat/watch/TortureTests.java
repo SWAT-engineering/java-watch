@@ -54,6 +54,7 @@ import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -209,14 +210,8 @@ class TortureTests {
 
     private final int TORTURE_REGISTRATION_THREADS = THREADS * 500;
 
-    static Stream<OnOverflow> manyRegistrationsForSamePathSource() {
-        OnOverflow[] values = { OnOverflow.ALL, OnOverflow.DIRTY };
-        return TestHelper.streamOf(values, 5);
-    }
-
-    @ParameterizedTest
-    @MethodSource("manyRegistrationsForSamePathSource")
-    void manyRegistrationsForSamePath(OnOverflow whichFiles) throws InterruptedException, IOException {
+    @RepeatedTest(failureThreshold=1, value = 20)
+    void manyRegistrationsForSamePath() throws InterruptedException, IOException {
         var startRegistering = new Semaphore(0);
         var startedWatching = new Semaphore(0);
         var startDeregistring = new Semaphore(0);
@@ -229,7 +224,6 @@ class TortureTests {
                 try {
                     var watcher = Watcher
                         .watch(testDir.getTestDirectory(), WatchScope.PATH_AND_CHILDREN)
-                        .approximate(whichFiles)
                         .on(e -> seen.add(e.calculateFullPath()));
                     startRegistering.acquire();
                     try (var c = watcher.start()) {
