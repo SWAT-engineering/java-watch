@@ -40,10 +40,10 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
+import java.util.function.BiFunction;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.checkerframework.checker.nullness.qual.KeyFor;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import engineering.swat.watch.WatchEvent;
@@ -52,78 +52,89 @@ import engineering.swat.watch.impl.EventHandlingWatch;
 
 public class IndexingRescanner extends MemorylessRescanner {
     private final Logger logger = LogManager.getLogger();
-    private final Index index = new Index();
+    private final PathMap<FileTime> index = new PathMap<>();
 
     public IndexingRescanner(Executor exec, Path path, WatchScope scope) {
         super(exec);
         new Indexer(path, scope).walkFileTree(); // Make an initial scan to populate the index
     }
 
-    private static class Index {
-        private final Map<Path, Map<Path, FileTime>> lastModifiedTimes = new ConcurrentHashMap<>();
+    private static class PathMap<V> {
+        private final Map<Path, Map<Path, V>> values = new ConcurrentHashMap<>();
         //                ^^^^      ^^^^
         //                Parent    File name (possibly a directory itself)
 
-        public @Nullable FileTime putLastModifiedTime(Path p, FileTime time) {
-            var parent = p.getParent();
-            var fileName = p.getFileName();
-            if (parent != null && fileName != null) {
-                return putLastModifiedTime(parent, fileName, time);
-            } else {
-                throw new IllegalArgumentException("A path key should have both a parent and a file name");
-            }
+        public @Nullable V put(Path p, V value) {
+            return apply((parent, fileName) -> put(parent, fileName, value), p);
         }
 
-        public @Nullable FileTime putLastModifiedTime(Path parent, Path fileName, FileTime time) {
-            var nested = lastModifiedTimes.computeIfAbsent(parent, x -> new ConcurrentHashMap<>());
-            return nested.put(fileName, time);
+        public @Nullable V get(Path p) {
+            return apply(this::get, p);
         }
 
-        public @Nullable FileTime getLastModifiedTime(Path p) {
-            var parent = p.getParent();
-            var fileName = p.getFileName();
-            if (parent != null && fileName != null) {
-                return getLastModifiedTime(parent, fileName);
-            } else {
-                throw new IllegalArgumentException("A path key should have both a parent and a file name");
-            }
-        }
-
-        public @Nullable FileTime getLastModifiedTime(Path parent, Path fileName) {
-            var nested = lastModifiedTimes.get(parent);
-            return nested == null ? null : nested.get(fileName);
+        public Set<Path> getParents() {
+            return values.keySet();
         }
 
         public Set<Path> getFileNames(Path parent) {
-            var nested = lastModifiedTimes.get(parent);
+            var nested = values.get(parent);
             return nested == null ? Collections.emptySet() : (Set<Path>) nested.keySet();
         }
 
-        public @Nullable FileTime remove(Path p) {
+        public @Nullable V remove(Path p) {
+            return apply(this::remove, p);
+        }
+
+        private V apply(BiFunction<Path, Path, V> action, Path p) {
             var parent = p.getParent();
             var fileName = p.getFileName();
             if (parent != null && fileName != null) {
-                return remove(parent, fileName);
+                return action.apply(parent, fileName);
             } else {
-                throw new IllegalArgumentException("A path key should have both a parent and a file name");
+                throw new IllegalArgumentException("The path should have both a parent and a file name");
             }
         }
 
-        public @Nullable FileTime remove(Path parent, Path fileName) {
-            var nested = lastModifiedTimes.get(parent);
+        private @Nullable V put(Path parent, Path fileName, V value) {
+            // Let "here" and "there" refer to threads that perform this method
+            // (here) and a concurrent `remove` (there).
+            var nested = values.computeIfAbsent(parent, x -> new ConcurrentHashMap<>());
+            var previous = nested.put(fileName, value);
+            // <-- At this point, if a concurrent `values.remove(...)` has
+            //     happened there, then `values.get(parent) != nested` is true
+            //     here, so the put is retried here.
+            if (values.get(parent) != nested) {
+                return put(parent, fileName, value);
+            }
+            // <-- At this point, if a concurrent `values.remove(...)` has
+            //     happened there, then `!nested.isEmpty()` is true there, so
+            //     the new entry is re-put there.
+            return previous;
+        }
+
+        private @Nullable V get(Path parent, Path fileName) {
+            var nested = values.get(parent);
+            return nested == null ? null : nested.get(fileName);
+        }
+
+        private @Nullable V remove(Path parent, Path fileName) {
+            // Let "here" and "there" refer to threads that perform this method
+            // (here) and a concurrent `put` (there).
+            var nested = values.get(parent);
             if (nested != null) {
                 var removed = nested.remove(fileName);
-                if (nested.isEmpty()) {
-                    lastModifiedTimes.remove(parent, nested);
-                    // Note: Between checking `nested` for non-emptiness and
-                    // removing it from `lastModifiedTimes`, other threads may
-                    // have put new entries in it. After the removal, these
-                    // entries are lost, so the index doesn't completely reflect
-                    // the file system anymore, and redundant events may be
-                    // issued. This doesn't break the contract with the client,
-                    // though (because this rescanner still provides an
-                    // over-approximation). Avoiding this race would be costly
-                    // in terms of synchronization.
+                if (nested.isEmpty() && values.remove(parent, nested)) {
+                    // <-- At this point, if a concurrent `nested.put(...)` has
+                    //     happened there, then `!nested.isEmpty()` is true
+                    //     here, so the new entry is re-put here.
+                    if (!nested.isEmpty()) {
+                        for (var e : nested.entrySet()) {
+                            put(parent, e.getKey(), e.getValue());
+                        }
+                    }
+                    // <-- At this point, if a concurrent `nested.put(...)` has
+                    //     happened there, then `values.get(parent) != nested`
+                    //     is true there, so the put is retried.
                 }
                 return removed;
             } else {
@@ -140,14 +151,14 @@ public class IndexingRescanner extends MemorylessRescanner {
         @Override
         public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
             if (!path.equals(dir)) {
-                index.putLastModifiedTime(dir, attrs.lastModifiedTime());
+                index.put(dir, attrs.lastModifiedTime());
             }
             return FileVisitResult.CONTINUE;
         }
 
         @Override
         public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-            index.putLastModifiedTime(file, attrs.lastModifiedTime());
+            index.put(file, attrs.lastModifiedTime());
             return FileVisitResult.CONTINUE;
         }
     }
@@ -185,7 +196,7 @@ public class IndexingRescanner extends MemorylessRescanner {
 
         @Override
         protected void generateEvents(Path path, BasicFileAttributes attrs) {
-            var lastModifiedTimeOld = index.getLastModifiedTime(path);
+            var lastModifiedTimeOld = index.get(path);
             var lastModifiedTimeNew = attrs.lastModifiedTime();
 
             // The path isn't indexed yet
@@ -250,7 +261,7 @@ public class IndexingRescanner extends MemorylessRescanner {
             case MODIFIED:
                 try {
                     var lastModifiedTimeNew = Files.getLastModifiedTime(fullPath);
-                    var lastModifiedTimeOld = index.putLastModifiedTime(fullPath, lastModifiedTimeNew);
+                    var lastModifiedTimeOld = index.put(fullPath, lastModifiedTimeNew);
 
                     // If a `MODIFIED` event happens for a path that wasn't in
                     // the index yet, then a `CREATED` event has somehow been
