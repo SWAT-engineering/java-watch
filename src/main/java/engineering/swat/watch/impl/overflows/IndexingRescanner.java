@@ -33,6 +33,7 @@ import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileTime;
 import java.util.ArrayDeque;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.Map;
@@ -42,6 +43,7 @@ import java.util.concurrent.Executor;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.checkerframework.checker.nullness.qual.KeyFor;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import engineering.swat.watch.WatchEvent;
@@ -92,9 +94,9 @@ public class IndexingRescanner extends MemorylessRescanner {
             return nested == null ? null : nested.get(fileName);
         }
 
-        public @Nullable Set<Path> getFileNames(Path parent) {
+        public Set<Path> getFileNames(Path parent) {
             var nested = lastModifiedTimes.get(parent);
-            return nested == null ? null : nested.keySet();
+            return nested == null ? Collections.emptySet() : (Set<Path>) nested.keySet();
         }
 
         public @Nullable FileTime remove(Path p) {
@@ -214,10 +216,9 @@ public class IndexingRescanner extends MemorylessRescanner {
         @Override
         public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
             // Issue `DELETED` events based on the set of paths visited in `dir`
-            var indexedInDir = index.getFileNames(dir);
             var visitedInDir = visited.pop();
-            if (indexedInDir != null && visitedInDir != null) {
-                for (var p : indexedInDir) {
+            if (visitedInDir != null) {
+                for (var p : index.getFileNames(dir)) {
                     if (!visitedInDir.contains(p)) {
                         var fullPath = dir.resolve(p);
                         // The index may have been updated during the visit, so
