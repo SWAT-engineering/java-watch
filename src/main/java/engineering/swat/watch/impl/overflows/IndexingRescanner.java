@@ -33,6 +33,7 @@ import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileTime;
 import java.util.ArrayDeque;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashSet;
 import java.util.Map;
@@ -42,6 +43,8 @@ import java.util.concurrent.Executor;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.checkerframework.checker.nullness.qual.KeyFor;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
 import engineering.swat.watch.WatchEvent;
 import engineering.swat.watch.WatchScope;
@@ -49,11 +52,84 @@ import engineering.swat.watch.impl.EventHandlingWatch;
 
 public class IndexingRescanner extends MemorylessRescanner {
     private final Logger logger = LogManager.getLogger();
-    private final Map<Path, FileTime> index = new ConcurrentHashMap<>();
+    private final Index index = new Index();
 
     public IndexingRescanner(Executor exec, Path path, WatchScope scope) {
         super(exec);
         new Indexer(path, scope).walkFileTree(); // Make an initial scan to populate the index
+    }
+
+    private static class Index {
+        private final Map<Path, Map<Path, FileTime>> lastModifiedTimes = new ConcurrentHashMap<>();
+        //                ^^^^      ^^^^
+        //                Parent    File name (possibly a directory itself)
+
+        public @Nullable FileTime putLastModifiedTime(Path p, FileTime time) {
+            var parent = p.getParent();
+            var fileName = p.getFileName();
+            if (parent != null && fileName != null) {
+                return putLastModifiedTime(parent, fileName, time);
+            } else {
+                throw new IllegalArgumentException("A path key should have both a parent and a file name");
+            }
+        }
+
+        public @Nullable FileTime putLastModifiedTime(Path parent, Path fileName, FileTime time) {
+            var nested = lastModifiedTimes.computeIfAbsent(parent, x -> new ConcurrentHashMap<>());
+            return nested.put(fileName, time);
+        }
+
+        public @Nullable FileTime getLastModifiedTime(Path p) {
+            var parent = p.getParent();
+            var fileName = p.getFileName();
+            if (parent != null && fileName != null) {
+                return getLastModifiedTime(parent, fileName);
+            } else {
+                throw new IllegalArgumentException("A path key should have both a parent and a file name");
+            }
+        }
+
+        public @Nullable FileTime getLastModifiedTime(Path parent, Path fileName) {
+            var nested = lastModifiedTimes.get(parent);
+            return nested == null ? null : nested.get(fileName);
+        }
+
+        public Set<Path> getFileNames(Path parent) {
+            var nested = lastModifiedTimes.get(parent);
+            return nested == null ? Collections.emptySet() : (Set<Path>) nested.keySet();
+        }
+
+        public @Nullable FileTime remove(Path p) {
+            var parent = p.getParent();
+            var fileName = p.getFileName();
+            if (parent != null && fileName != null) {
+                return remove(parent, fileName);
+            } else {
+                throw new IllegalArgumentException("A path key should have both a parent and a file name");
+            }
+        }
+
+        public @Nullable FileTime remove(Path parent, Path fileName) {
+            var nested = lastModifiedTimes.get(parent);
+            if (nested != null) {
+                var removed = nested.remove(fileName);
+                if (nested.isEmpty()) {
+                    lastModifiedTimes.remove(parent, nested);
+                    // Note: Between checking `nested` for non-emptiness and
+                    // removing it from `lastModifiedTimes`, other threads may
+                    // have put new entries in it. After the removal, these
+                    // entries are lost, so the index doesn't completely reflect
+                    // the file system anymore, and redundant events may be
+                    // issued. This doesn't break the contract with the client,
+                    // though (because this rescanner still provides an
+                    // over-approximation). Avoiding this race would be costly
+                    // in terms of synchronization.
+                }
+                return removed;
+            } else {
+                return null;
+            }
+        }
     }
 
     private class Indexer extends BaseFileVisitor {
@@ -64,14 +140,14 @@ public class IndexingRescanner extends MemorylessRescanner {
         @Override
         public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
             if (!path.equals(dir)) {
-                index.put(dir, attrs.lastModifiedTime());
+                index.putLastModifiedTime(dir, attrs.lastModifiedTime());
             }
             return FileVisitResult.CONTINUE;
         }
 
         @Override
         public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-            index.put(file, attrs.lastModifiedTime());
+            index.putLastModifiedTime(file, attrs.lastModifiedTime());
             return FileVisitResult.CONTINUE;
         }
     }
@@ -84,11 +160,12 @@ public class IndexingRescanner extends MemorylessRescanner {
     }
 
     protected class Generator extends MemorylessRescanner.Generator {
-        // Field to keep track of (a stack of) the paths that are visited during
-        // the current rescan (one frame for each nested subdirectory), to
-        // approximate `DELETED` events that happened since the previous rescan.
-        // Instances of this class are supposed to be used non-concurrently, so
-        // no synchronization to access this field is needed.
+        // Field to keep track of (a stack of sets, of file names, of) the paths
+        // that are visited during the current rescan (one frame for each nested
+        // subdirectory), to approximate `DELETED` events that happened since
+        // the previous rescan. Instances of this class are supposed to be used
+        // non-concurrently, so no synchronization to access this field is
+        // needed.
         private final Deque<Set<Path>> visited = new ArrayDeque<>();
 
         public Generator(Path path, WatchScope scope) {
@@ -96,10 +173,11 @@ public class IndexingRescanner extends MemorylessRescanner {
             this.visited.push(new HashSet<>()); // Initial set for content of `path`
         }
 
-        private <T> void addToPeeked(Deque<Set<T>> deque, T t) {
+        private void addToPeeked(Deque<Set<Path>> deque, Path p) {
             var peeked = deque.peek();
-            if (peeked != null) {
-                peeked.add(t);
+            var fileName = p.getFileName();
+            if (peeked != null && fileName != null) {
+                peeked.add(fileName);
             }
         }
 
@@ -107,7 +185,7 @@ public class IndexingRescanner extends MemorylessRescanner {
 
         @Override
         protected void generateEvents(Path path, BasicFileAttributes attrs) {
-            var lastModifiedTimeOld = index.get(path);
+            var lastModifiedTimeOld = index.getLastModifiedTime(path);
             var lastModifiedTimeNew = attrs.lastModifiedTime();
 
             // The path isn't indexed yet
@@ -140,12 +218,15 @@ public class IndexingRescanner extends MemorylessRescanner {
             // Issue `DELETED` events based on the set of paths visited in `dir`
             var visitedInDir = visited.pop();
             if (visitedInDir != null) {
-                for (var p : index.keySet()) {
-                    if (dir.equals(p.getParent()) && !visitedInDir.contains(p) && !Files.exists(p)) {
-                        // Note: The third subcondition is needed because the
-                        // index may have been updated during the visit. In that
-                        // case, `p` might not be in `visitedInDir`, but exist.
-                        events.add(new WatchEvent(WatchEvent.Kind.DELETED, p));
+                for (var p : index.getFileNames(dir)) {
+                    if (!visitedInDir.contains(p)) {
+                        var fullPath = dir.resolve(p);
+                        // The index may have been updated during the visit, so
+                        // even if `p` isn't contained in `visitedInDir`, by
+                        // now, it might have come into existance.
+                        if (!Files.exists(fullPath)) {
+                            events.add(new WatchEvent(WatchEvent.Kind.DELETED, fullPath));
+                        }
                     }
                 }
             }
@@ -169,7 +250,7 @@ public class IndexingRescanner extends MemorylessRescanner {
             case MODIFIED:
                 try {
                     var lastModifiedTimeNew = Files.getLastModifiedTime(fullPath);
-                    var lastModifiedTimeOld = index.put(fullPath, lastModifiedTimeNew);
+                    var lastModifiedTimeOld = index.putLastModifiedTime(fullPath, lastModifiedTimeNew);
 
                     // If a `MODIFIED` event happens for a path that wasn't in
                     // the index yet, then a `CREATED` event has somehow been
