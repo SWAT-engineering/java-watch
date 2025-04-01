@@ -185,12 +185,11 @@ public class IndexingRescanner extends MemorylessRescanner {
     }
 
     protected class Generator extends MemorylessRescanner.Generator {
-        // Field to keep track of (a stack of sets, of file names, of) the paths
-        // that are visited during the current rescan (one frame for each nested
-        // subdirectory), to approximate `DELETED` events that happened since
-        // the previous rescan. Instances of this class are supposed to be used
-        // non-concurrently, so no synchronization to access this field is
-        // needed.
+        // Field to keep track of (a stack of) the paths that are visited during
+        // the current rescan (one frame for each nested subdirectory), to
+        // approximate `DELETED` events that happened since the previous rescan.
+        // Instances of this class are supposed to be used non-concurrently, so
+        // no synchronization to access this field is needed.
         private final Deque<Set<Path>> visited = new ArrayDeque<>();
 
         public Generator(Path path, WatchScope scope) {
