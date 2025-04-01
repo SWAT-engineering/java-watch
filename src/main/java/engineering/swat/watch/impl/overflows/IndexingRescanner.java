@@ -73,12 +73,12 @@ public class IndexingRescanner extends MemorylessRescanner {
         }
 
         public Set<Path> getParents() {
-            return (Set<Path>) values.keySet();
+            return (Set<Path>) values.keySet(); // Cast for Checker Framework
         }
 
         public Set<Path> getFileNames(Path parent) {
             var inner = values.get(parent);
-            return inner == null ? Collections.emptySet() : (Set<Path>) inner.keySet();
+            return inner == null ? Collections.emptySet() : (Set<Path>) inner.keySet(); // Cast for Checker Framework
         }
 
         public @Nullable V remove(Path p) {
@@ -247,7 +247,7 @@ public class IndexingRescanner extends MemorylessRescanner {
                         var fullPath = dir.resolve(p);
                         // The index may have been updated during the visit, so
                         // even if `p` isn't contained in `visitedInDir`, by
-                        // now, it might have come into existance.
+                        // now, it may have come into existence.
                         if (!Files.exists(fullPath)) {
                             events.add(new WatchEvent(WatchEvent.Kind.DELETED, fullPath));
                         }
