@@ -62,10 +62,10 @@ public class IndexingRescanner extends MemorylessRescanner {
     private static class PathMap<V> {
         private final Map<Path, Map<Path, V>> values = new ConcurrentHashMap<>();
         //                ^^^^      ^^^^
-        //                Parent    File name (possibly a directory itself)
+        //                Parent    File name (regular file or directory)
 
         public @Nullable V put(Path p, V value) {
-            return apply((parent, fileName) -> put(parent, fileName, value), p);
+            return apply(put(value), p);
         }
 
         public @Nullable V get(Path p) {
@@ -77,15 +77,15 @@ public class IndexingRescanner extends MemorylessRescanner {
         }
 
         public Set<Path> getFileNames(Path parent) {
-            var nested = values.get(parent);
-            return nested == null ? Collections.emptySet() : (Set<Path>) nested.keySet();
+            var inner = values.get(parent);
+            return inner == null ? Collections.emptySet() : (Set<Path>) inner.keySet();
         }
 
         public @Nullable V remove(Path p) {
             return apply(this::remove, p);
         }
 
-        private @Nullable V apply(BiFunction<Path, Path, @Nullable V> action, Path p) {
+        private static <V> @Nullable V apply(BiFunction<Path, Path, @Nullable V> action, Path p) {
             var parent = p.getParent();
             var fileName = p.getFileName();
             if (parent != null && fileName != null) {
@@ -95,46 +95,60 @@ public class IndexingRescanner extends MemorylessRescanner {
             }
         }
 
+        private BiFunction<Path, Path, @Nullable V> put(V value) {
+            return (parent, fileName) -> put(parent, fileName, value);
+        }
+
         private @Nullable V put(Path parent, Path fileName, V value) {
-            // Let "here" and "there" refer to threads that perform this method
-            // (here) and a concurrent `remove` (there).
-            var nested = values.computeIfAbsent(parent, x -> new ConcurrentHashMap<>());
-            var previous = nested.put(fileName, value);
-            // <-- At this point, if a concurrent `values.remove(...)` has
-            //     happened there, then `values.get(parent) != nested` is true
-            //     here, so the put is retried here.
-            if (values.get(parent) != nested) {
-                return put(parent, fileName, value);
+            var inner = values.computeIfAbsent(parent, x -> new ConcurrentHashMap<>());
+
+            // This thread (henceforth: "here") optimistically puts a new entry
+            // in `inner`. However, another thread (henceforth: "there") may
+            // concurrently remove `inner` from `values`. Thus, the new entry
+            // may be lost. The comments below explain the countermeasures.
+            var previous = inner.put(fileName, value);
+
+            // <-- At this point "here", if `values.remove(parent)` happens
+            //     "there", then `values.get(parent) != inner` becomes true
+            //     "here", so the new entry will be re-put "here".
+            if (values.get(parent) != inner) {
+                previous = put(parent, fileName, value);
             }
-            // <-- At this point, if a concurrent `values.remove(...)` has
-            //     happened there, then `!nested.isEmpty()` is true there, so
-            //     the new entry is re-put there.
+            // <-- At this point "here", `!inner.isEmpty()` has become true
+            //     "there", so if `values.remove(parent)` happens "there", then
+            //     the new entry will be re-put "there".
             return previous;
         }
 
         private @Nullable V get(Path parent, Path fileName) {
-            var nested = values.get(parent);
-            return nested == null ? null : nested.get(fileName);
+            var inner = values.get(parent);
+            return inner == null ? null : inner.get(fileName);
         }
 
         private @Nullable V remove(Path parent, Path fileName) {
-            // Let "here" and "there" refer to threads that perform this method
-            // (here) and a concurrent `put` (there).
-            var nested = values.get(parent);
-            if (nested != null) {
-                var removed = nested.remove(fileName);
-                if (nested.isEmpty() && values.remove(parent, nested)) {
-                    // <-- At this point, if a concurrent `nested.put(...)` has
-                    //     happened there, then `!nested.isEmpty()` is true
-                    //     here, so the new entry is re-put here.
-                    if (!nested.isEmpty()) {
-                        for (var e : nested.entrySet()) {
+            var inner = values.get(parent);
+            if (inner != null) {
+                var removed = inner.remove(fileName);
+
+                // This thread (henceforth: "here") optimistically removes
+                // `inner` from `values` when it has become empty. However,
+                // another thread (henceforth: "there") may concurrently put a
+                // new entry in `inner`. Thus, the new entry may be lost. The
+                // comments below explain the countermeasures.
+                if (inner.isEmpty() && values.remove(parent, inner)) {
+
+                    // <-- At this point "here", if `inner.put(...)` happens
+                    //     "there", then `!inner.isEmpty()` becomes true "here",
+                    //     so the new entry is re-put "here".
+                    if (!inner.isEmpty()) {
+                        for (var e : inner.entrySet()) {
                             put(parent, e.getKey(), e.getValue());
                         }
                     }
-                    // <-- At this point, if a concurrent `nested.put(...)` has
-                    //     happened there, then `values.get(parent) != nested`
-                    //     is true there, so the put is retried.
+                    // <-- At this point "here", `values.get(parent) != inner`
+                    //     has become true "there", so if `inner.put(...)`
+                    //     happens "there", then the new entry will be re-put
+                    //     "there".
                 }
                 return removed;
             } else {
