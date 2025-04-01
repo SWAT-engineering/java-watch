@@ -73,7 +73,7 @@ public class IndexingRescanner extends MemorylessRescanner {
         }
 
         public Set<Path> getParents() {
-            return values.keySet();
+            return (Set<Path>) values.keySet();
         }
 
         public Set<Path> getFileNames(Path parent) {
@@ -85,7 +85,7 @@ public class IndexingRescanner extends MemorylessRescanner {
             return apply(this::remove, p);
         }
 
-        private V apply(BiFunction<Path, Path, V> action, Path p) {
+        private @Nullable V apply(BiFunction<Path, Path, @Nullable V> action, Path p) {
             var parent = p.getParent();
             var fileName = p.getFileName();
             if (parent != null && fileName != null) {
