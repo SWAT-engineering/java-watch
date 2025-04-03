@@ -27,6 +27,9 @@
 package engineering.swat.watch;
 
 import java.time.Duration;
+import java.util.Arrays;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 public class TestHelper {
 
@@ -53,5 +56,22 @@ public class TestHelper {
         SHORT_WAIT = Duration.ofSeconds(1 * delayFactor);
         NORMAL_WAIT = Duration.ofSeconds(4 * delayFactor);
         LONG_WAIT = Duration.ofSeconds(8 * delayFactor);
+    }
+
+    public static <T> Stream<T> streamOf(T[] values, int repetitions) {
+        return streamOf(values, repetitions, false);
+    }
+
+    public static <T> Stream<T> streamOf(T[] values, int repetitions, boolean sortByRepetition) {
+        if (sortByRepetition) {
+            return IntStream
+                .range(0, repetitions)
+                .boxed()
+                .flatMap(i -> Arrays.stream(values));
+        }
+        else { // Sort by value
+            return Arrays.stream(values).flatMap(v ->
+                IntStream.range(0, repetitions).mapToObj(i -> v));
+        }
     }
 }
