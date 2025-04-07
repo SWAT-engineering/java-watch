@@ -14,7 +14,7 @@ Features:
   - multiple watches for the same directory are merged to avoid overloading the kernel
   - events are processed in a configurable worker pool
   - when an overflow happens, automatically approximate the events that were
-    missed using a configurable auto-handler
+    missed using a configurable approximation policy
 
 Planned features:
 
