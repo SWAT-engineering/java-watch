@@ -26,19 +26,33 @@
  */
 package engineering.swat.watch;
 
+import static engineering.swat.watch.WatchEvent.Kind.CREATED;
+import static engineering.swat.watch.WatchEvent.Kind.DELETED;
+import static engineering.swat.watch.WatchEvent.Kind.MODIFIED;
+import static engineering.swat.watch.WatchEvent.Kind.OVERFLOW;
 import static org.awaitility.Awaitility.await;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
+import java.util.stream.Stream;
 
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import engineering.swat.watch.impl.EventHandlingWatch;
 
 class SingleFileTests {
     private TestDirectory testDir;
@@ -115,6 +129,74 @@ class SingleFileTests {
                 .pollDelay(TestHelper.NORMAL_WAIT.minusMillis(10))
                 .failFast("No others should be notified", others::get)
                 .untilTrue(seen);
+        }
+    }
+
+    @Test
+    void noRescanOnOverflow() throws IOException, InterruptedException {
+        var bookkeeper = new Bookkeeper();
+        try (var watch = startWatchAndTriggerOverflow(Approximation.NONE, bookkeeper)) {
+            Thread.sleep(TestHelper.SHORT_WAIT.toMillis());
+
+            await("Overflow shouldn't trigger created, modified, or deleted events")
+                .until(() -> bookkeeper.fullPaths(CREATED, MODIFIED, DELETED).count() == 0);
+            await("Overflow should be visible to user-defined event handler")
+                .until(() -> bookkeeper.fullPaths(OVERFLOW).count() == 1);
+        }
+    }
+
+    @Test
+    void memorylessRescanOnOverflow() throws IOException, InterruptedException {
+        var bookkeeper = new Bookkeeper();
+        try (var watch = startWatchAndTriggerOverflow(Approximation.ALL, bookkeeper)) {
+            Thread.sleep(TestHelper.SHORT_WAIT.toMillis());
+
+            var isFile = Predicate.isEqual(watch.getPath());
+            var isNotFile = Predicate.not(isFile);
+
+            await("Overflow should trigger created event for `file`")
+                .until(() -> bookkeeper.fullPaths(CREATED).filter(isFile).count() == 1);
+            await("Overflow shouldn't trigger created events for other files")
+                .until(() -> bookkeeper.fullPaths(CREATED).filter(isNotFile).count() == 0);
+            await("Overflow shouldn't trigger modified events (`file` is empty)")
+                .until(() -> bookkeeper.fullPaths(MODIFIED).count() == 0);
+            await("Overflow shouldn't trigger deleted events")
+                .until(() -> bookkeeper.fullPaths(DELETED).count() == 0);
+            await("Overflow should be visible to user-defined event handler")
+                .until(() -> bookkeeper.fullPaths(OVERFLOW).count() == 1);
+        }
+    }
+
+    private ActiveWatch startWatchAndTriggerOverflow(Approximation whichFiles, Bookkeeper bookkeeper) throws IOException {
+        var parent = testDir.getTestDirectory();
+        var file = parent.resolve("a.txt");
+
+        var watch = Watcher
+            .watch(file, WatchScope.PATH_ONLY)
+            .onOverflow(whichFiles)
+            .on(bookkeeper)
+            .start();
+
+        var overflow = new WatchEvent(WatchEvent.Kind.OVERFLOW, parent);
+        ((EventHandlingWatch) watch).handleEvent(overflow);
+        return watch;
+    }
+
+    private static class Bookkeeper implements Consumer<WatchEvent> {
+        private final List<WatchEvent> events = Collections.synchronizedList(new ArrayList<>());
+
+        public Stream<WatchEvent> events(WatchEvent.Kind... kinds) {
+            var list = Arrays.asList(kinds.length == 0 ? WatchEvent.Kind.values() : kinds);
+            return events.stream().filter(e -> list.contains(e.getKind()));
+        }
+
+        public Stream<Path> fullPaths(WatchEvent.Kind... kinds) {
+            return events(kinds).map(WatchEvent::calculateFullPath);
+        }
+
+        @Override
+        public void accept(WatchEvent e) {
+            events.add(e);
         }
     }
 }

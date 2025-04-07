@@ -31,8 +31,12 @@ import static org.awaitility.Awaitility.await;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiPredicate;
+import java.util.function.Consumer;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -41,8 +45,11 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import engineering.swat.watch.WatchEvent.Kind;
+import engineering.swat.watch.impl.EventHandlingWatch;
 
 class RecursiveWatchTests {
     private final Logger logger = LogManager.getLogger();
@@ -141,4 +148,85 @@ class RecursiveWatchTests {
         }
     }
 
+    @ParameterizedTest
+    @EnumSource // Repeat test for each `Approximation` value
+    void overflowsAreRecoveredFrom(Approximation whichFiles) throws IOException, InterruptedException {
+        var parent = testDir.getTestDirectory();
+        var descendants = new Path[] {
+            Path.of("foo"),
+            Path.of("bar"),
+            Path.of("bar", "x", "y", "z")
+        };
+
+        // Define a bunch of helper functions to test which events have happened
+        var events = ConcurrentHashMap.<WatchEvent> newKeySet(); // Stores all incoming events
+
+        BiPredicate<WatchEvent.Kind, Path> eventsContains = (kind, descendant) ->
+            events.stream().anyMatch(e ->
+                e.getKind().equals(kind) &&
+                e.getRootPath().equals(parent) &&
+                e.getRelativePath().equals(descendant));
+
+        Consumer<Path> awaitCreation = p ->
+            await("Creation of `" + p + "` should be observed").until(
+                () -> eventsContains.test(Kind.CREATED, p));
+
+        Consumer<Path> awaitNotCreation = p ->
+            await("Creation of `" + p + "` shouldn't be observed: " + events)
+                .pollDelay(TestHelper.TINY_WAIT)
+                .until(() -> !eventsContains.test(Kind.CREATED, p));
+
+        // Configure and start watch
+        var dropEvents = new AtomicBoolean(false); // Toggles overflow simulation
+        var watchConfig = Watcher.watch(parent, WatchScope.PATH_AND_ALL_DESCENDANTS)
+            .withExecutor(ForkJoinPool.commonPool())
+            .onOverflow(whichFiles)
+            .filter(e -> !dropEvents.get())
+            .on(events::add);
+
+        try (var watch = (EventHandlingWatch) watchConfig.start()) {
+            // Begin overflow simulation
+            dropEvents.set(true);
+
+            // Create descendants and files. They *shouldn't* be observed yet.
+            var file1 = Path.of("file1.txt");
+            for (var descendant : descendants) {
+                Files.createDirectories(parent.resolve(descendant));
+                Files.createFile(parent.resolve(descendant).resolve(file1));
+            }
+            for (var descendant : descendants) {
+                awaitNotCreation.accept(descendant);
+                awaitNotCreation.accept(descendant.resolve(file1));
+            }
+
+            // End overflow simulation, and generate the `OVERFLOW` event. The
+            // previous creation of descendants and files *should* now be
+            // observed, unless no auto-handler for `OVERFLOW` events is
+            // configured.
+            dropEvents.set(false);
+            var overflow = new WatchEvent(WatchEvent.Kind.OVERFLOW, parent);
+            watch.handleEvent(overflow);
+
+            if (whichFiles != Approximation.NONE) { // Auto-handler is configured
+                for (var descendant : descendants) {
+                    awaitCreation.accept(descendant);
+                    awaitCreation.accept(descendant.resolve(file1));
+                }
+            } else {
+                // Give the watch some time to process the `OVERFLOW` event and
+                // do internal bookkeeping
+                Thread.sleep(TestHelper.TINY_WAIT.toMillis());
+            }
+
+            // Create more files. They *should* be observed (regardless of
+            // whether an auto-handler for `OVERFLOW` events is configured).
+            var file2 = Path.of("file2.txt");
+            for (var descendant : descendants) {
+                Files.createFile(parent.resolve(descendant).resolve(file2));
+            }
+            for (var descendant : descendants) {
+                awaitCreation.accept(descendant.resolve(file2));
+            }
+        }
+    }
 }

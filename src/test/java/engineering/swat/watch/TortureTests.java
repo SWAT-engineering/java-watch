@@ -46,6 +46,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
+import java.util.stream.Stream;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -54,8 +55,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.RepeatedTest;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 class TortureTests {
 
@@ -141,17 +144,18 @@ class TortureTests {
 
     private static final int THREADS = 4;
 
-    @Test
-    void pressureOnFSShouldNotMissNewFilesAnything() throws InterruptedException, IOException {
+    @ParameterizedTest
+    @EnumSource(names = { "ALL", "DIFF" })
+    void pressureOnFSShouldNotMissNewFilesAnything(Approximation whichFiles) throws InterruptedException, IOException {
         final var root = testDir.getTestDirectory();
         var pool = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 4);
 
         var io = new IOGenerator(THREADS, root, pool);
 
-
         var seenCreates = ConcurrentHashMap.<Path>newKeySet();
         var watchConfig = Watcher.watch(testDir.getTestDirectory(), WatchScope.PATH_AND_ALL_DESCENDANTS)
             .withExecutor(pool)
+            .onOverflow(whichFiles)
             .on(ev -> {
                 var fullPath = ev.calculateFullPath();
                 switch (ev.getKind()) {
@@ -160,6 +164,10 @@ class TortureTests {
                         break;
                     case MODIFIED:
                         // platform specific if this comes by or not
+                        break;
+                    case OVERFLOW:
+                        // Overflows might happen, but they're auto-handled, so
+                        // they can be ignored here
                         break;
                     default:
                         logger.error("Unexpected event: {}", ev);
@@ -259,8 +267,14 @@ class TortureTests {
         }
     }
 
-    @RepeatedTest(failureThreshold=1, value = 20)
-    void manyRegisterAndUnregisterSameTime() throws InterruptedException, IOException {
+    static Stream<Approximation> manyRegisterAndUnregisterSameTimeSource() {
+        Approximation[] values = { Approximation.ALL, Approximation.DIFF };
+        return TestHelper.streamOf(values, 5);
+    }
+
+    @ParameterizedTest
+    @MethodSource("manyRegisterAndUnregisterSameTimeSource")
+    void manyRegisterAndUnregisterSameTime(Approximation whichFiles) throws InterruptedException, IOException {
         var startRegistering = new Semaphore(0);
         var startedWatching = new Semaphore(0);
         var stopAll = new Semaphore(0);
@@ -282,6 +296,7 @@ class TortureTests {
                         for (int k = 0; k < 1000; k++) {
                             var watcher = Watcher
                                 .watch(testDir.getTestDirectory(), WatchScope.PATH_AND_CHILDREN)
+                                .onOverflow(whichFiles)
                                 .on(e -> {
                                     if (e.calculateFullPath().equals(target)) {
                                         seen.add(id);
@@ -324,13 +339,13 @@ class TortureTests {
         finally {
             stopAll.release(amountOfWatchersActive);
         }
-
     }
 
-    @Test
+    @ParameterizedTest
+    @EnumSource(names = { "ALL", "DIFF" })
     //Deletes can race the filesystem, so you might miss a few files in a dir, if that dir is already deleted
     @EnabledIfEnvironmentVariable(named="TORTURE_DELETE", matches="true")
-    void pressureOnFSShouldNotMissDeletes() throws InterruptedException, IOException {
+    void pressureOnFSShouldNotMissDeletes(Approximation whichFiles) throws InterruptedException, IOException {
         final var root = testDir.getTestDirectory();
         var pool = Executors.newCachedThreadPool();
 
@@ -346,6 +361,7 @@ class TortureTests {
             final var happened = new Semaphore(0);
             var watchConfig = Watcher.watch(testDir.getTestDirectory(), WatchScope.PATH_AND_ALL_DESCENDANTS)
                 .withExecutor(pool)
+                .onOverflow(whichFiles)
                 .on(ev -> {
                     events.getAndIncrement();
                     happened.release();
@@ -388,8 +404,6 @@ class TortureTests {
             assertTrue(seenDeletes.contains(f), () -> "Missing delete event for: " + f);
         }
     }
-
-
 
     private void waitForStable(final AtomicInteger events, final Semaphore happened) throws InterruptedException {
         int lastEventCount = events.get();
