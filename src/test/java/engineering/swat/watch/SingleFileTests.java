@@ -135,7 +135,7 @@ class SingleFileTests {
     @Test
     void noRescanOnOverflow() throws IOException, InterruptedException {
         var bookkeeper = new Bookkeeper();
-        try (var watch = startWatchAndTriggerOverflow(OnOverflow.NONE, bookkeeper)) {
+        try (var watch = startWatchAndTriggerOverflow(Approximation.NONE, bookkeeper)) {
             Thread.sleep(TestHelper.SHORT_WAIT.toMillis());
 
             await("Overflow shouldn't trigger created, modified, or deleted events")
@@ -148,7 +148,7 @@ class SingleFileTests {
     @Test
     void memorylessRescanOnOverflow() throws IOException, InterruptedException {
         var bookkeeper = new Bookkeeper();
-        try (var watch = startWatchAndTriggerOverflow(OnOverflow.ALL, bookkeeper)) {
+        try (var watch = startWatchAndTriggerOverflow(Approximation.ALL, bookkeeper)) {
             Thread.sleep(TestHelper.SHORT_WAIT.toMillis());
 
             var isFile = Predicate.isEqual(watch.getPath());
@@ -167,13 +167,13 @@ class SingleFileTests {
         }
     }
 
-    private ActiveWatch startWatchAndTriggerOverflow(OnOverflow whichFiles, Bookkeeper bookkeeper) throws IOException {
+    private ActiveWatch startWatchAndTriggerOverflow(Approximation whichFiles, Bookkeeper bookkeeper) throws IOException {
         var parent = testDir.getTestDirectory();
         var file = parent.resolve("a.txt");
 
         var watch = Watcher
             .watch(file, WatchScope.PATH_ONLY)
-            .approximate(whichFiles)
+            .onOverflow(whichFiles)
             .on(bookkeeper)
             .start();
 

@@ -146,7 +146,7 @@ class TortureTests {
 
     @ParameterizedTest
     @EnumSource(names = { "ALL", "DIRTY" })
-    void pressureOnFSShouldNotMissNewFilesAnything(OnOverflow whichFiles) throws InterruptedException, IOException {
+    void pressureOnFSShouldNotMissNewFilesAnything(Approximation whichFiles) throws InterruptedException, IOException {
         final var root = testDir.getTestDirectory();
         var pool = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 4);
 
@@ -155,7 +155,7 @@ class TortureTests {
         var seenCreates = ConcurrentHashMap.<Path>newKeySet();
         var watchConfig = Watcher.watch(testDir.getTestDirectory(), WatchScope.PATH_AND_ALL_DESCENDANTS)
             .withExecutor(pool)
-            .approximate(whichFiles)
+            .onOverflow(whichFiles)
             .on(ev -> {
                 var fullPath = ev.calculateFullPath();
                 switch (ev.getKind()) {
@@ -267,14 +267,14 @@ class TortureTests {
         }
     }
 
-    static Stream<OnOverflow> manyRegisterAndUnregisterSameTimeSource() {
-        OnOverflow[] values = { OnOverflow.ALL, OnOverflow.DIRTY };
+    static Stream<Approximation> manyRegisterAndUnregisterSameTimeSource() {
+        Approximation[] values = { Approximation.ALL, Approximation.DIRTY };
         return TestHelper.streamOf(values, 5);
     }
 
     @ParameterizedTest
     @MethodSource("manyRegisterAndUnregisterSameTimeSource")
-    void manyRegisterAndUnregisterSameTime(OnOverflow whichFiles) throws InterruptedException, IOException {
+    void manyRegisterAndUnregisterSameTime(Approximation whichFiles) throws InterruptedException, IOException {
         var startRegistering = new Semaphore(0);
         var startedWatching = new Semaphore(0);
         var stopAll = new Semaphore(0);
@@ -296,7 +296,7 @@ class TortureTests {
                         for (int k = 0; k < 1000; k++) {
                             var watcher = Watcher
                                 .watch(testDir.getTestDirectory(), WatchScope.PATH_AND_CHILDREN)
-                                .approximate(whichFiles)
+                                .onOverflow(whichFiles)
                                 .on(e -> {
                                     if (e.calculateFullPath().equals(target)) {
                                         seen.add(id);
@@ -345,7 +345,7 @@ class TortureTests {
     @EnumSource(names = { "ALL", "DIRTY" })
     //Deletes can race the filesystem, so you might miss a few files in a dir, if that dir is already deleted
     @EnabledIfEnvironmentVariable(named="TORTURE_DELETE", matches="true")
-    void pressureOnFSShouldNotMissDeletes(OnOverflow whichFiles) throws InterruptedException, IOException {
+    void pressureOnFSShouldNotMissDeletes(Approximation whichFiles) throws InterruptedException, IOException {
         final var root = testDir.getTestDirectory();
         var pool = Executors.newCachedThreadPool();
 
@@ -361,7 +361,7 @@ class TortureTests {
             final var happened = new Semaphore(0);
             var watchConfig = Watcher.watch(testDir.getTestDirectory(), WatchScope.PATH_AND_ALL_DESCENDANTS)
                 .withExecutor(pool)
-                .approximate(whichFiles)
+                .onOverflow(whichFiles)
                 .on(ev -> {
                     events.getAndIncrement();
                     happened.release();

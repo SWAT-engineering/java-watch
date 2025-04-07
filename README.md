@@ -40,7 +40,7 @@ Start using java-watch:
 var directory = Path.of("tmp", "test-dir");
 var watcherSetup = Watcher.watch(directory, WatchScope.PATH_AND_CHILDREN)
     .withExecutor(Executors.newCachedThreadPool()) // optionally configure a custom thread pool
-    .approximate(OnOverflow.DIRTY) // optionally configure an auto-handler for overflows
+    .onOverflow(Approximation.DIRTY) // optionally configure a handler for overflows
     .on(watchEvent -> {
         System.err.println(watchEvent);
     });
