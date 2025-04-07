@@ -149,8 +149,8 @@ class RecursiveWatchTests {
     }
 
     @ParameterizedTest
-    @EnumSource // Repeat test for each `OnOverflow` value
-    void overflowsAreRecoveredFrom(OnOverflow whichFiles) throws IOException, InterruptedException {
+    @EnumSource // Repeat test for each `Approximation` value
+    void overflowsAreRecoveredFrom(Approximation whichFiles) throws IOException, InterruptedException {
         var parent = testDir.getTestDirectory();
         var descendants = new Path[] {
             Path.of("foo"),
@@ -180,7 +180,7 @@ class RecursiveWatchTests {
         var dropEvents = new AtomicBoolean(false); // Toggles overflow simulation
         var watchConfig = Watcher.watch(parent, WatchScope.PATH_AND_ALL_DESCENDANTS)
             .withExecutor(ForkJoinPool.commonPool())
-            .approximate(whichFiles)
+            .onOverflow(whichFiles)
             .filter(e -> !dropEvents.get())
             .on(events::add);
 
@@ -207,7 +207,7 @@ class RecursiveWatchTests {
             var overflow = new WatchEvent(WatchEvent.Kind.OVERFLOW, parent);
             watch.handleEvent(overflow);
 
-            if (whichFiles != OnOverflow.NONE) { // Auto-handler is configured
+            if (whichFiles != Approximation.NONE) { // Auto-handler is configured
                 for (var descendant : descendants) {
                     awaitCreation.accept(descendant);
                     awaitCreation.accept(descendant.resolve(file1));

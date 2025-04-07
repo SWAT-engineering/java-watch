@@ -134,7 +134,7 @@ class SingleDirectoryTests {
         var nModified = new AtomicInteger();
         var nOverflow = new AtomicInteger();
         var watchConfig = Watcher.watch(directory, WatchScope.PATH_AND_CHILDREN)
-            .approximate(OnOverflow.ALL)
+            .onOverflow(Approximation.ALL)
             .on(e -> {
                 switch (e.getKind()) {
                     case CREATED:
@@ -179,7 +179,7 @@ class SingleDirectoryTests {
         var nDeleted = new AtomicInteger();
 
         var watchConfig = Watcher.watch(directory, WatchScope.PATH_AND_CHILDREN)
-            .approximate(OnOverflow.DIRTY)
+            .onOverflow(Approximation.DIFF)
             .on(e -> {
                 var kind = e.getKind();
                 if (kind != OVERFLOW) {

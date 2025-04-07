@@ -38,7 +38,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import engineering.swat.watch.OnOverflow;
+import engineering.swat.watch.Approximation;
 import engineering.swat.watch.TestDirectory;
 import engineering.swat.watch.TestHelper;
 import engineering.swat.watch.WatchEvent;
@@ -75,7 +75,7 @@ class IndexingRescannerTests {
         // children (not all descendants) of `path`
         var eventsOnlyForChildren = new AtomicBoolean(true);
         var watchConfig = Watcher.watch(path, WatchScope.PATH_AND_CHILDREN)
-            .approximate(OnOverflow.NONE) // Disable the auto-handler here; we'll have an explicit one below
+            .onOverflow(Approximation.NONE) // Disable the auto-handler here; we'll have an explicit one below
             .on(e -> {
                 if (e.getRelativePath().getNameCount() > 1) {
                     eventsOnlyForChildren.set(false);

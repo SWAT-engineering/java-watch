@@ -38,7 +38,7 @@ package engineering.swat.watch;
  * overflow issue), but it doesn't have to (e.g., it may carry out additional
  * overflow bookkeeping).
  */
-public enum OnOverflow {
+public enum Approximation {
 
     /**
      * Synthetic events are issued for <b>no regular files/directories</b> in
@@ -66,8 +66,8 @@ public enum OnOverflow {
      *
      * <p>
      * This approach is relatively cheap in terms of memory usage (cf.
-     * {@link #DIRTY}), but it results in a large over/underapproximation of the
-     * actual events (cf. DIRTY).
+     * {@link #DIFF}), but it results in a large over/underapproximation of the
+     * actual events (cf. DIFF).
      */
     ALL,
 
@@ -76,7 +76,8 @@ public enum OnOverflow {
      * <p>
      * Synthetic events of kinds {@link WatchEvent.Kind#CREATED},
      * {@link WatchEvent.Kind#MODIFIED}, and {@link WatchEvent.Kind#DELETED} are
-     * issued for dirty regular files/directories in the scope of the watch, as
+     * issued for regular files/directories in the scope of the watch, when
+     * their current versions are different from their previous versions, as
      * determined using <i>last-modified-times</i>. Specifically, when an
      * overflow event happens:
      *
@@ -103,5 +104,5 @@ public enum OnOverflow {
      * but it is relatively expensive in terms of memory usage (cf. ALL), as the
      * watch needs to keep track of last-modified-times.
      */
-    DIRTY
+    DIFF
 }

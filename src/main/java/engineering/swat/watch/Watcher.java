@@ -57,7 +57,7 @@ public class Watcher {
     private final Logger logger = LogManager.getLogger();
     private final Path path;
     private final WatchScope scope;
-    private volatile OnOverflow approximateOnOverflow = OnOverflow.ALL;
+    private volatile Approximation approximateOnOverflow = Approximation.ALL;
     private volatile Executor executor = CompletableFuture::runAsync;
 
     private static final BiConsumer<EventHandlingWatch, WatchEvent> EMPTY_HANDLER = (w, e) -> {};
@@ -174,12 +174,12 @@ public class Watcher {
      * {@link WatchEvent.Kind#CREATED}, {@link WatchEvent.Kind#MODIFIED}, and/or
      * {@link WatchEvent.Kind#DELETED}) should be issued when an overflow event
      * happens. If not defined before this watcher is started, the
-     * {@link engineering.swat.watch.OnOverflow#ALL} approach will be used.
+     * {@link Approximation#ALL} approach will be used.
      * @param whichFiles Constant to indicate for which regular
      * files/directories to approximate
      * @return This watcher for optional method chaining
      */
-    public Watcher approximate(OnOverflow whichFiles) {
+    public Watcher onOverflow(Approximation whichFiles) {
         this.approximateOnOverflow = whichFiles;
         return this;
     }
@@ -233,7 +233,7 @@ public class Watcher {
                 return eventHandler;
             case ALL:
                 return eventHandler.andThen(new MemorylessRescanner(executor));
-            case DIRTY:
+            case DIFF:
                 return eventHandler.andThen(new IndexingRescanner(executor, path, scope));
             default:
                 throw new UnsupportedOperationException("No event handler has been defined yet for this overflow policy");
