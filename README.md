@@ -7,13 +7,14 @@ a java file watcher that works across platforms and supports recursion, single f
 Features:
 
 - monitor a single file (or directory) for changes
-- monitor a directory for changes to it's direct descendants
-- monitor a directory for changes for all it's descendants (aka recursive directory watch)
+- monitor a directory for changes to its direct descendants
+- monitor a directory for changes for all its descendants (aka recursive directory watch)
 - edge cases dealt with:
-  - in case of overflow we will still generate events for new descendants
   - recursive watches will also continue in new directories
   - multiple watches for the same directory are merged to avoid overloading the kernel
   - events are processed in a configurable worker pool
+  - when an overflow happens, automatically approximate the events that were
+    missed using a configurable auto-handler
 
 Planned features:
 
@@ -39,6 +40,7 @@ Start using java-watch:
 var directory = Path.of("tmp", "test-dir");
 var watcherSetup = Watcher.watch(directory, WatchScope.PATH_AND_CHILDREN)
     .withExecutor(Executors.newCachedThreadPool()) // optionally configure a custom thread pool
+    .approximate(OnOverflow.DIRTY) // optionally configure an auto-handler for overflows
     .on(watchEvent -> {
         System.err.println(watchEvent);
     });
