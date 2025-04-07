@@ -38,7 +38,7 @@ package engineering.swat.watch;
  * overflow issue), but it doesn't have to (e.g., it may carry out additional
  * overflow bookkeeping).
  */
-public enum OnOverflow {
+public enum Approximation {
 
     /**
      * Synthetic events are issued for <b>no regular files/directories</b> in
