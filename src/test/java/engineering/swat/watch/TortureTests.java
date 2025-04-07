@@ -145,7 +145,7 @@ class TortureTests {
     private static final int THREADS = 4;
 
     @ParameterizedTest
-    @EnumSource(names = { "ALL", "DIRTY" })
+    @EnumSource(names = { "ALL", "DIFF" })
     void pressureOnFSShouldNotMissNewFilesAnything(Approximation whichFiles) throws InterruptedException, IOException {
         final var root = testDir.getTestDirectory();
         var pool = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors() * 4);
@@ -268,7 +268,7 @@ class TortureTests {
     }
 
     static Stream<Approximation> manyRegisterAndUnregisterSameTimeSource() {
-        Approximation[] values = { Approximation.ALL, Approximation.DIRTY };
+        Approximation[] values = { Approximation.ALL, Approximation.DIFF };
         return TestHelper.streamOf(values, 5);
     }
 
@@ -342,7 +342,7 @@ class TortureTests {
     }
 
     @ParameterizedTest
-    @EnumSource(names = { "ALL", "DIRTY" })
+    @EnumSource(names = { "ALL", "DIFF" })
     //Deletes can race the filesystem, so you might miss a few files in a dir, if that dir is already deleted
     @EnabledIfEnvironmentVariable(named="TORTURE_DELETE", matches="true")
     void pressureOnFSShouldNotMissDeletes(Approximation whichFiles) throws InterruptedException, IOException {

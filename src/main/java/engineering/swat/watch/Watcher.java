@@ -233,7 +233,7 @@ public class Watcher {
                 return eventHandler;
             case ALL:
                 return eventHandler.andThen(new MemorylessRescanner(executor));
-            case DIRTY:
+            case DIFF:
                 return eventHandler.andThen(new IndexingRescanner(executor, path, scope));
             default:
                 throw new UnsupportedOperationException("No event handler has been defined yet for this overflow policy");

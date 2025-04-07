@@ -179,7 +179,7 @@ class SingleDirectoryTests {
         var nDeleted = new AtomicInteger();
 
         var watchConfig = Watcher.watch(directory, WatchScope.PATH_AND_CHILDREN)
-            .onOverflow(Approximation.DIRTY)
+            .onOverflow(Approximation.DIFF)
             .on(e -> {
                 var kind = e.getKind();
                 if (kind != OVERFLOW) {
