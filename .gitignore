@@ -24,3 +24,7 @@ hs_err_pid*
 replay_pid*
 
 /target
+
+# release plugin state files
+/pom.xml.releaseBackup
+/release.properties
