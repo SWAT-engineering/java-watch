@@ -32,7 +32,7 @@
 
   <groupId>engineering.swat</groupId>
   <artifactId>java-watch</artifactId>
-  <version>0.5.0-RC3-SNAPSHOT</version>
+  <version>0.5.0-RC3</version>
   <packaging>jar</packaging>
 
   <name>${project.groupId}:${project.artifactId}</name>
@@ -66,7 +66,7 @@
     <connection>scm:git:git://github.com/SWAT-engineering/java-watch.git</connection>
     <developerConnection>scm:git:ssh://git@github.com/SWAT-engineering/java-watch.git</developerConnection>
     <url>https://github.com/SWAT-engineering/java-watch/tree/main/</url>
-    <tag>HEAD</tag>
+    <tag>v0.5.0-RC3</tag>
   </scm>
 
   <properties>
@@ -173,7 +173,7 @@
           <execution>
             <id>enforce-maven</id>
             <goals>
-            <goal>enforce</goal>
+              <goal>enforce</goal>
             </goals>
             <configuration>
               <rules>
