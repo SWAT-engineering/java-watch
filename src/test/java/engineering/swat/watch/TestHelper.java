@@ -26,8 +26,12 @@
  */
 package engineering.swat.watch;
 
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.function.Consumer;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -72,6 +76,31 @@ public class TestHelper {
         else { // Sort by value
             return Arrays.stream(values).flatMap(v ->
                 IntStream.range(0, repetitions).mapToObj(i -> v));
+        }
+    }
+
+    public static class Bookkeeper implements Consumer<WatchEvent> {
+        private final Queue<WatchEvent> events = new ConcurrentLinkedQueue<>();
+
+        @Override
+        public void accept(WatchEvent event) {
+            events.offer(event);
+        }
+
+        public boolean contains(WatchEvent event) {
+            return contains(event.getKind(), event.getRootPath(), event.getRelativePath());
+        }
+
+        public boolean contains(WatchEvent.Kind kind, Path rootPath, Path relativePath) {
+            return events.stream().anyMatch(e ->
+                e.getKind().equals(kind) &&
+                e.getRootPath().equals(rootPath) &&
+                e.getRelativePath().equals(relativePath));
+        }
+
+        @Override
+        public String toString() {
+            return events.toString();
         }
     }
 }

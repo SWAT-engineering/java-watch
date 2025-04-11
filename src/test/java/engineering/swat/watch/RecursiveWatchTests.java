@@ -31,11 +31,9 @@ import static org.awaitility.Awaitility.await;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 
 import org.apache.logging.log4j.LogManager;
@@ -159,22 +157,16 @@ class RecursiveWatchTests {
         };
 
         // Define a bunch of helper functions to test which events have happened
-        var events = ConcurrentHashMap.<WatchEvent> newKeySet(); // Stores all incoming events
-
-        BiPredicate<WatchEvent.Kind, Path> eventsContains = (kind, descendant) ->
-            events.stream().anyMatch(e ->
-                e.getKind().equals(kind) &&
-                e.getRootPath().equals(parent) &&
-                e.getRelativePath().equals(descendant));
+        var bookkeeper = new TestHelper.Bookkeeper();
 
         Consumer<Path> awaitCreation = p ->
             await("Creation of `" + p + "` should be observed").until(
-                () -> eventsContains.test(Kind.CREATED, p));
+                () -> bookkeeper.contains(Kind.CREATED, parent, p));
 
         Consumer<Path> awaitNotCreation = p ->
-            await("Creation of `" + p + "` shouldn't be observed: " + events)
+            await("Creation of `" + p + "` shouldn't be observed: " + bookkeeper)
                 .pollDelay(TestHelper.TINY_WAIT)
-                .until(() -> !eventsContains.test(Kind.CREATED, p));
+                .until(() -> !bookkeeper.contains(Kind.CREATED, parent, p));
 
         // Configure and start watch
         var dropEvents = new AtomicBoolean(false); // Toggles overflow simulation
@@ -182,7 +174,7 @@ class RecursiveWatchTests {
             .withExecutor(ForkJoinPool.commonPool())
             .onOverflow(whichFiles)
             .filter(e -> !dropEvents.get())
-            .on(events::add);
+            .on(bookkeeper);
 
         try (var watch = (EventHandlingWatch) watchConfig.start()) {
             // Begin overflow simulation

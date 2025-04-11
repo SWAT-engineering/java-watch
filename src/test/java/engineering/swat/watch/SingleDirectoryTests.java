@@ -26,11 +26,12 @@
  */
 package engineering.swat.watch;
 
-import static engineering.swat.watch.WatchEvent.Kind.OVERFLOW;
+import static engineering.swat.watch.WatchEvent.Kind.*;
 import static org.awaitility.Awaitility.await;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -130,38 +131,35 @@ class SingleDirectoryTests {
         Files.writeString(directory.resolve("a.txt"), "foo");
         Files.writeString(directory.resolve("b.txt"), "bar");
 
-        var nCreated = new AtomicInteger();
-        var nModified = new AtomicInteger();
-        var nOverflow = new AtomicInteger();
+        var bookkeeper = new TestHelper.Bookkeeper();
         var watchConfig = Watcher.watch(directory, WatchScope.PATH_AND_CHILDREN)
             .onOverflow(Approximation.ALL)
-            .on(e -> {
-                switch (e.getKind()) {
-                    case CREATED:
-                        nCreated.incrementAndGet();
-                        break;
-                    case MODIFIED:
-                        nModified.incrementAndGet();
-                        break;
-                    case OVERFLOW:
-                        nOverflow.incrementAndGet();
-                        break;
-                    default:
-                        break;
-                }
-            });
+            .on(bookkeeper);
 
         try (var watch = watchConfig.start()) {
-            var overflow = new WatchEvent(WatchEvent.Kind.OVERFLOW, directory);
+            var overflow = new WatchEvent(OVERFLOW, directory);
             ((EventHandlingWatch) watch).handleEvent(overflow);
-            Thread.sleep(TestHelper.SHORT_WAIT.toMillis());
 
-            await("Overflow should trigger created events")
-                .until(nCreated::get, Predicate.isEqual(6)); // 3 directories + 3 files
-            await("Overflow should trigger modified events")
-                .until(nModified::get, Predicate.isEqual(2)); // 2 files (c.txt is still empty)
             await("Overflow should be visible to user-defined event handler")
-                .until(nOverflow::get, Predicate.isEqual(1));
+                .until(() -> bookkeeper.contains(overflow));
+
+            for (var event : new WatchEvent[] {
+                new WatchEvent(CREATED, directory, Path.of("d1")),
+                new WatchEvent(CREATED, directory, Path.of("d2")),
+                new WatchEvent(CREATED, directory, Path.of("d3")),
+                new WatchEvent(CREATED, directory, Path.of("a.txt")),
+                new WatchEvent(CREATED, directory, Path.of("b.txt")),
+                new WatchEvent(CREATED, directory, Path.of("c.txt")),
+                new WatchEvent(MODIFIED, directory, Path.of("a.txt")),
+                new WatchEvent(MODIFIED, directory, Path.of("b.txt"))
+            }) {
+                await("Overflow should trigger event: " + event)
+                    .until(() -> bookkeeper.contains(event));
+            }
+
+            var event = new WatchEvent(MODIFIED, directory, Path.of("c.txt"));
+            await("Overflow shouldn't trigger event: " + event)
+                .until(() -> !bookkeeper.contains(event));
         }
     }
 
