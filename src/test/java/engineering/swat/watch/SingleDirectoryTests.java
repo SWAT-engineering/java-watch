@@ -206,7 +206,7 @@ class SingleDirectoryTests {
             });
 
         try (var watch = watchConfig.start()) {
-            Thread.sleep(TestHelper.SHORT_WAIT.toMillis());
+            Thread.sleep(TestHelper.NORMAL_WAIT.toMillis());
             // At this point, the index of last-modified-times inside `watch` is
             // populated with initial values.
 
@@ -214,7 +214,7 @@ class SingleDirectoryTests {
             Files.writeString(directory.resolve("b.txt"), "bar");
             Files.delete(directory.resolve("c.txt"));
             Files.createFile(directory.resolve("d.txt"));
-            Thread.sleep(TestHelper.SHORT_WAIT.toMillis());
+            Thread.sleep(TestHelper.NORMAL_WAIT.toMillis());
             // At this point, regular events have been generated for a.txt,
             // b.txt, c.txt, and d.txt by the file system. These events won't be
             // handled by `watch` just yet, though, because the semaphore is
@@ -227,7 +227,7 @@ class SingleDirectoryTests {
 
             var overflow = new WatchEvent(WatchEvent.Kind.OVERFLOW, directory);
             ((EventHandlingWatch) watch).handleEvent(overflow);
-            Thread.sleep(TestHelper.SHORT_WAIT.toMillis());
+            Thread.sleep(TestHelper.NORMAL_WAIT.toMillis());
             // At this point, the current thread has presumably slept long
             // enough for the `OVERFLOW` event to have been handled by the
             // rescanner. This means that synthetic events must have been issued
@@ -236,7 +236,7 @@ class SingleDirectoryTests {
 
             // Readiness achieved: Threads can now start handling non-`OVERFLOW`
             // events.
-            semaphore.release(99);
+            semaphore.release();
 
             await("Overflow should trigger created events")
                 .until(nCreated::get, n -> n >= 2); // 1 synthetic event + >=1 regular event
@@ -270,6 +270,7 @@ class SingleDirectoryTests {
             var nDeletedBeforeOverflow = nDeleted.get();
 
             ((EventHandlingWatch) watch).handleEvent(overflow);
+            Thread.sleep(TestHelper.NORMAL_WAIT.toMillis());
 
             await("Overflow shouldn't trigger synthetic created event after file create (and index updated)")
                 .until(nCreated::get, Predicate.isEqual(nCreatedBeforeOverflow));
