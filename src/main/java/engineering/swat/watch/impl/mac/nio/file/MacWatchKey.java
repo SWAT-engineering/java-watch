@@ -12,7 +12,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -24,75 +23,47 @@ public class MacWatchKey implements Runnable, WatchKey {
 
     private final MacWatchable watchable;
     private final MacWatchService service;
+    private final AtomicReference<JNAFacade> facade;
     private final AtomicReference<Configuration> configuration;
-    private final BlockingQueue<WatchEvent<Path>> pendingEvents;
+    private final BlockingQueue<WatchEvent<?>> pendingEvents;
 
-    private volatile JNAFacade facade;
     private volatile State state;
 
     public MacWatchKey(MacWatchable watchable, MacWatchService service, Kind<?>[] kinds, Modifier[] modifiers) {
         this.watchable = watchable;
         this.service = service;
-        this.configuration = new AtomicReference<>(new Configuration(kinds, modifiers, false));
+        this.facade = new AtomicReference<>();
+        this.configuration = new AtomicReference<>(new Configuration(kinds, modifiers));
         this.pendingEvents = new LinkedBlockingQueue<>();
 
         this.state = State.READY;
     }
 
     public void update(Kind<?>[] kinds, Modifier[] modifiers) {
-        configuration.set(new Configuration(kinds, modifiers, true));
+        configuration.set(new Configuration(kinds, modifiers));
     }
 
-    private static enum State {
-        READY, SIGNALLED, CANCELLED
-    }
-
-    private static class Configuration {
-        private final Set<Kind<?>> kinds;
-        private final Set<Modifier> modifiers;
-
-        private Configuration(Kind<?>[] kinds, Modifier[] modifiers, boolean addOverflow) {
-            this.kinds = new HashSet<>(Arrays.asList(kinds));
-            this.modifiers = new HashSet<>(Arrays.asList(modifiers));
-
-            if (addOverflow) {
-                this.kinds.add(OVERFLOW);
-            }
-        }
-    }
-
-    // -- Runnable --
-
-    @Override
-    public synchronized void run() {
-        if (facade == null) {
-            facade = new JNAFacade(this::handle, watchable);
-        }
-    }
-
-    private void handle(Iterable<MacWatchEvent> events) {
+    private void handle(Iterable<WatchEvent<?>> events) {
         switch (state) {
 
             case READY:
                 state = State.SIGNALLED;
                 service.offer(this);
-                // Fall through, intentionally
+                // Fallthrough intended
 
             case SIGNALLED:
                 var c = configuration.get();
                 for (var e : events) {
 
-                    // Ignore `e` when we're not watching its kind
+                    // Ignore `e` when we're not watching its kind or location
+                    // (i.e., we're watching only direct children of the root,
+                    // and `e` is a descendant, but it's not a direct child)
                     if (!c.kinds.contains(e.kind())) {
                         continue;
                     }
-
-                    // Ignore `e` when we're not watching its location (i.e.,
-                    // we're watching only direct children of the root, and `e`
-                    // is a descendant, but it's not a direct child)
                     if (!c.modifiers.contains(ExtendedWatchEventModifier.FILE_TREE)) {
                         var context = e.context();
-                        if (!Objects.equals(context, context.getFileName())) {
+                        if (context instanceof Path && ((Path) context).getNameCount() > 1) {
                             continue;
                         }
                     }
@@ -107,11 +78,33 @@ public class MacWatchKey implements Runnable, WatchKey {
         }
     }
 
+    private static class Configuration {
+        private final Set<Kind<?>> kinds;
+        private final Set<Modifier> modifiers;
+
+        private Configuration(Kind<?>[] kinds, Modifier[] modifiers) {
+            this.kinds = new HashSet<>();
+            this.kinds.addAll(Arrays.asList(kinds));
+            this.kinds.add(OVERFLOW);
+            this.modifiers = new HashSet<>(Arrays.asList(modifiers));
+        }
+    }
+
+    private static enum State {
+        READY, SIGNALLED, CANCELLED
+    }
+
+    // -- Runnable --
+
+    @Override
+    public void run() {
+        facade.compareAndSet(null, new JNAFacade(this::handle, watchable));
+    }
+
     // -- WatchKey --
 
     @Override
     public boolean isValid() {
-        // TODO: Also check if "the object is no longer accessible"
         return state != State.CANCELLED && !service.isClosed();
     }
 
@@ -125,27 +118,27 @@ public class MacWatchKey implements Runnable, WatchKey {
     @Override
     public boolean reset() {
         switch (state) {
+            case CANCELLED:
             case READY:
                 break;
+
             case SIGNALLED:
                 if (!pendingEvents.isEmpty()) {
                     service.offer(this);
                 } else {
-                    state = State.SIGNALLED;
+                    state = State.READY;
                 }
                 break;
-            case CANCELLED:
-                break;
         }
-
-        return !isValid();
+        return isValid();
     }
 
     @Override
     public synchronized void cancel() {
         state = State.CANCELLED;
-        if (facade != null) {
-            facade.close();
+        var closeable = facade.get();
+        if (closeable != null) {
+            closeable.close();
         }
     }
 

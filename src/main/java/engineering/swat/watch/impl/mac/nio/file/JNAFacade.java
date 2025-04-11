@@ -10,6 +10,8 @@ import static engineering.swat.watch.impl.mac.jna.FileSystemEvents.FSEventStream
 import static engineering.swat.watch.impl.mac.jna.FileSystemEvents.FSEventStreamCreateFlags.kFSEventStreamCreateFlagWatchRoot;
 import static engineering.swat.watch.impl.mac.jna.FileSystemEvents.FSEventStreamCreateFlags.kFSEventStreamCreateWithDocID;
 
+import java.nio.file.StandardWatchEventKinds;
+import java.nio.file.WatchEvent;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Map;
@@ -43,7 +45,7 @@ public class JNAFacade implements AutoCloseable {
     private Pointer queue;
     private boolean closed;
 
-    public JNAFacade(Consumer<Collection<MacWatchEvent>> handler, MacWatchable watchable) {
+    public JNAFacade(Consumer<Collection<WatchEvent<?>>> handler, MacWatchable watchable) {
         try (
             var pathsToWatch = new JNAFacade.PathsToWatch(watchable);
         ) {
@@ -95,10 +97,10 @@ public class JNAFacade implements AutoCloseable {
     }
 
     private static class Callback implements FSEventStreamCallback {
-        private final Consumer<Collection<MacWatchEvent>> handler;
+        private final Consumer<Collection<WatchEvent<?>>> handler;
         private final MacWatchable watchable;
 
-        private Callback(Consumer<Collection<MacWatchEvent>> handler, MacWatchable watchable) {
+        private Callback(Consumer<Collection<WatchEvent<?>>> handler, MacWatchable watchable) {
             this.handler = handler;
             this.watchable = watchable;
         }
@@ -112,11 +114,30 @@ public class JNAFacade implements AutoCloseable {
             var flags = eventFlags.getIntArray(offset, length);
             var ids = eventIds.getLongArray(offset, length);
 
-            var events = new ArrayList<MacWatchEvent>();
+            var events = new ArrayList<WatchEvent<?>>();
             for (var i = 0; i < length; i++) {
                 var size = events.size();
 
-                System.err.println(new MacWatchEvent(watchable, paths[i], flags[i], ids[i]));
+                if (MacWatchEvent.Flag.MUST_SCAN_SUB_DIRS.check(flags[i])) {
+                    var overflow = new WatchEvent<Object>() {
+                        @Override
+                        public Kind<Object> kind() {
+                            return StandardWatchEventKinds.OVERFLOW;
+                        }
+                        @Override
+                        public int count() {
+                            return 1;
+                        }
+                        @Override
+                        public Object context() {
+                            return null;
+                        }
+                    };
+
+                    events.add(overflow);
+                }
+
+                // System.err.println(new MacWatchEvent(watchable, paths[i], flags[i], ids[i]));
 
                 // TODO: Generalize/rethink this approach... The problem to be
                 // solved is that multiple "physical" events seem to be merged
