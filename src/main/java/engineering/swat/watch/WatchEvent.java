@@ -68,10 +68,16 @@ public class WatchEvent {
     private final Path rootPath;
     private final Path relativePath;
 
+    private static final Path EMPTY_PATH = Path.of("");
+
+    public WatchEvent(Kind kind, Path rootPath) {
+        this(kind, rootPath, null);
+    }
+
     public WatchEvent(Kind kind, Path rootPath, @Nullable Path relativePath) {
         this.kind = kind;
         this.rootPath = rootPath;
-        this.relativePath = relativePath == null ? Path.of("") : relativePath;
+        this.relativePath = relativePath == null ? EMPTY_PATH : relativePath;
     }
 
     public Kind getKind() {
@@ -99,6 +105,20 @@ public class WatchEvent {
      */
     public Path calculateFullPath() {
         return rootPath.resolve(relativePath);
+    }
+
+    /**
+     * @return The file name of the full path of this event, or {@code null} if
+     * it has zero elements (cf. {@link Path#getFileName()}), but without
+     * calculating the full path. This method is equivalent to, but more
+     * efficient than, {@code calculateFullPath().getFileName()}.
+     */
+    public @Nullable Path getFileName() {
+        var fileName = relativePath.getFileName();
+        if (fileName == null || fileName.equals(EMPTY_PATH)) {
+            fileName = rootPath.getFileName();
+        }
+        return fileName;
     }
 
     @Override

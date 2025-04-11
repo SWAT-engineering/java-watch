@@ -26,80 +26,79 @@
  */
 package engineering.swat.watch.impl.jdk;
 
-import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.concurrent.Executor;
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
+import java.util.function.Predicate;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
+import org.checkerframework.checker.nullness.qual.Nullable;
 
-import engineering.swat.watch.ActiveWatch;
 import engineering.swat.watch.WatchEvent;
+import engineering.swat.watch.WatchScope;
+import engineering.swat.watch.impl.EventHandlingWatch;
 
 /**
  * It's not possible to monitor a single file (or directory), so we have to find a directory watcher, and connect to that
  *
  * Note that you should take care to call start only once.
  */
-public class JDKFileWatcher implements ActiveWatch {
+public class JDKFileWatch extends JDKBaseWatch {
     private final Logger logger = LogManager.getLogger();
-    private final Path file;
-    private final Path fileName;
-    private final Executor exec;
-    private final Consumer<WatchEvent> eventHandler;
-    private volatile @MonotonicNonNull Closeable activeWatch;
+    private final JDKBaseWatch internal;
 
-    public JDKFileWatcher(Path file, Executor exec, Consumer<WatchEvent> eventHandler) {
-        this.file = file;
-        Path filename= file.getFileName();
-        if (filename == null) {
-            throw new IllegalArgumentException("Cannot pass in a root path");
-        }
-        this.fileName = filename;
-        this.exec = exec;
-        this.eventHandler = eventHandler;
+    public JDKFileWatch(Path file, Executor exec,
+            BiConsumer<EventHandlingWatch, WatchEvent> eventHandler,
+            Predicate<WatchEvent> eventFilter) {
+
+        super(file, exec, eventHandler, eventFilter);
+
+        var message = "The root path is not a valid path for a file watch";
+        var parent = requireNonNull(file.getParent(), message);
+        var fileName = requireNonNull(file.getFileName(), message);
+        assert !parent.equals(file);
+
+        this.internal = new JDKDirectoryWatch(parent, exec, (w, e) -> {
+            if (e.getKind() == WatchEvent.Kind.OVERFLOW) {
+                var overflow = new WatchEvent(WatchEvent.Kind.OVERFLOW, file);
+                eventHandler.accept(w, overflow);
+            }
+            if (fileName.equals(e.getRelativePath())) {
+                eventHandler.accept(w, e);
+            }
+        }, eventFilter);
+
+        logger.debug("File watch (for: {}) is in reality a directory watch (for: {}) with a filter (for: {})", file, parent, fileName);
     }
 
-    /**
-     * Start the file watcher, but only do it once
-     * @throws IOException
-     */
-    public void start() throws IOException {
-        try {
-            var dir = file.getParent();
-            if (dir == null) {
-                throw new IllegalArgumentException("cannot watch a single entry that is on the root");
-
-            }
-            assert !dir.equals(file);
-            JDKDirectoryWatcher parentWatch;
-            synchronized(this) {
-                if (activeWatch != null) {
-                    throw new IOException("Cannot start an already started watch");
-                }
-                activeWatch = parentWatch = new JDKDirectoryWatcher(dir, exec, this::filter);
-                parentWatch.start();
-            }
-            logger.debug("Started file watch for {} (in reality a watch on {}): {}", file, dir, parentWatch);
-
-        } catch (IOException e) {
-            throw new IOException("Could not register file watcher for: " + file, e);
+    private static Path requireNonNull(@Nullable Path p, String message) {
+        if (p == null) {
+            throw new IllegalArgumentException(message);
         }
+        return p;
     }
 
-    private void filter(WatchEvent event) {
-        if (fileName.equals(event.getRelativePath())) {
-            eventHandler.accept(event);
-        }
+    // -- JDKBaseWatch --
+
+    @Override
+    public WatchScope getScope() {
+        return WatchScope.PATH_ONLY;
+    }
+
+    @Override
+    public void handleEvent(WatchEvent event) {
+        internal.handleEvent(event);
     }
 
     @Override
     public synchronized void close() throws IOException {
-        if (activeWatch != null) {
-            activeWatch.close();
-        }
+        internal.close();
+    }
+
+    @Override
+    protected synchronized void start() throws IOException {
+        internal.open();
     }
 }

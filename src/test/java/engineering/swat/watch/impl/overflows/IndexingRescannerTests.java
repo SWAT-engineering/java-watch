@@ -24,14 +24,12 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package engineering.swat.watch;
+package engineering.swat.watch.impl.overflows;
 
-
-import static engineering.swat.watch.WatchEvent.Kind.*;
 import static org.awaitility.Awaitility.await;
 
 import java.io.IOException;
-import java.nio.file.Files;
+import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.awaitility.Awaitility;
@@ -40,8 +38,16 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import engineering.swat.watch.Approximation;
+import engineering.swat.watch.TestDirectory;
+import engineering.swat.watch.TestHelper;
+import engineering.swat.watch.WatchEvent;
+import engineering.swat.watch.WatchScope;
+import engineering.swat.watch.Watcher;
+import engineering.swat.watch.impl.EventHandlingWatch;
 
-class SmokeTests {
+class IndexingRescannerTests {
+
     private TestDirectory testDir;
 
     @BeforeEach
@@ -62,54 +68,38 @@ class SmokeTests {
     }
 
     @Test
-    void watchDirectory() throws IOException {
-        var changed = new AtomicBoolean(false);
-        var target = testDir.getTestFiles().get(0);
-        var watchConfig = Watcher.watch(testDir.getTestDirectory(), WatchScope.PATH_AND_CHILDREN)
-            .on(ev -> {if (ev.getKind() == MODIFIED && ev.calculateFullPath().equals(target)) { changed.set(true); }})
-            ;
+    void onlyEventsForFilesInScopeAreIssued() throws IOException, InterruptedException {
+        var path = testDir.getTestDirectory();
 
-        try (var activeWatch = watchConfig.start() ) {
-            Files.writeString(target, "Hello world");
-            await("Target file change").untilTrue(changed);
-        }
-    }
-
-    @Test
-    void watchRecursiveDirectory() throws IOException {
-        var changed = new AtomicBoolean(false);
-        var target = testDir.getTestFiles().stream()
-            .filter(p -> !p.getParent().equals(testDir.getTestDirectory()))
-            .findFirst()
-            .orElseThrow();
-        var watchConfig = Watcher.watch(testDir.getTestDirectory(), WatchScope.PATH_AND_ALL_DESCENDANTS)
-            .on(ev -> { if (ev.getKind() == MODIFIED && ev.calculateFullPath().equals(target)) { changed.set(true);}})
-            ;
-
-        try (var activeWatch = watchConfig.start() ) {
-            Files.writeString(target, "Hello world");
-            await("Nested file change").untilTrue(changed);
-        }
-    }
-
-    @Test
-    void watchSingleFile() throws IOException {
-        var changed = new AtomicBoolean(false);
-        var target = testDir.getTestFiles().stream()
-            .filter(p -> p.getParent().equals(testDir.getTestDirectory()))
-            .findFirst()
-            .orElseThrow();
-
-        var watchConfig = Watcher.watch(target, WatchScope.PATH_ONLY)
-            .on(ev -> {
-                if (ev.calculateFullPath().equals(target)) {
-                    changed.set(true);
+        // Configure a non-recursive directory watch that monitors only the
+        // children (not all descendants) of `path`
+        var eventsOnlyForChildren = new AtomicBoolean(true);
+        var watchConfig = Watcher.watch(path, WatchScope.PATH_AND_CHILDREN)
+            .onOverflow(Approximation.NONE) // Disable the auto-handler here; we'll have an explicit one below
+            .on(e -> {
+                if (e.getRelativePath().getNameCount() > 1) {
+                    eventsOnlyForChildren.set(false);
                 }
             });
 
-        try (var watch = watchConfig.start()) {
-            Files.writeString(target, "Hello world");
-            await("Single file change").untilTrue(changed);
+        try (var watch = (EventHandlingWatch) watchConfig.start()) {
+            // Create a rescanner that initially indexes all descendants (not
+            // only the children) of `path`. The resulting initial index is an
+            // overestimation of the files monitored by the watch.
+            var rescanner = new IndexingRescanner(
+                ForkJoinPool.commonPool(), path,
+                WatchScope.PATH_AND_ALL_DESCENDANTS);
+
+            // Trigger a rescan. Because only the children (not all descendants)
+            // of `path` are watched, the rescan should issue events only for
+            // those children (even though the initial index contains entries
+            // for all descendants).
+            var overflow = new WatchEvent(WatchEvent.Kind.OVERFLOW, path);
+            rescanner.accept(watch, overflow);
+            Thread.sleep(TestHelper.SHORT_WAIT.toMillis());
+
+            await("No events for non-children descendants should have been issued")
+                .until(eventsOnlyForChildren::get);
         }
     }
 }

@@ -24,25 +24,32 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package engineering.swat.watch;
+package engineering.swat.watch.impl;
 
-import java.io.Closeable;
-import java.nio.file.Path;
+import engineering.swat.watch.ActiveWatch;
+import engineering.swat.watch.WatchEvent;
 
-/**
- * <p>Marker interface for an active watch, in the future might get more properties you can inspect.</p>
- *
- * <p>For now, make sure to close the watch when not interested in new events.</p>
- */
-public interface ActiveWatch extends Closeable {
+public interface EventHandlingWatch extends ActiveWatch {
 
     /**
-     * Gets the path watched by this watch.
+     * Handles `event`. The purpose of this method is to trigger the event
+     * handler of this watch "from the outside" (in addition to having native
+     * file system libraries trigger the event handler "from the inside"). This
+     * is useful to report synthetic events (e.g., while handling overflows).
      */
-    Path getPath();
+    void handleEvent(WatchEvent event);
 
     /**
-     * Gets the scope of this watch.
+     * Relativizes the full path of `event` against the path watched by this
+     * watch (as per `getPath()`). Returns a new event whose root path and
+     * relative path are set in accordance with the relativization.
      */
-    WatchScope getScope();
+    default WatchEvent relativize(WatchEvent event) {
+        var fullPath = event.calculateFullPath();
+
+        var kind = event.getKind();
+        var rootPath = getPath();
+        var relativePath = rootPath.relativize(fullPath);
+        return new WatchEvent(kind, rootPath, relativePath);
+    }
 }

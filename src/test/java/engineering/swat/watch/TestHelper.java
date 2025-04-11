@@ -27,9 +27,13 @@
 package engineering.swat.watch;
 
 import java.time.Duration;
+import java.util.Arrays;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 public class TestHelper {
 
+    public static final Duration TINY_WAIT;
     public static final Duration SHORT_WAIT;
     public static final Duration NORMAL_WAIT;
     public static final Duration LONG_WAIT;
@@ -37,7 +41,7 @@ public class TestHelper {
     static {
         var delayFactorConfig = System.getenv("DELAY_FACTOR");
         int delayFactor = delayFactorConfig == null ? 1 : Integer.parseInt(delayFactorConfig);
-        var os = System.getProperty("os", "?").toLowerCase();
+        var os = System.getProperty("os.name", "?").toLowerCase();
         if (os.contains("mac")) {
             // OSX is SLOW on it's watches
             delayFactor *= 2;
@@ -48,9 +52,26 @@ public class TestHelper {
             // especially on small core systems
             delayFactor *= 4;
         }
+        TINY_WAIT = Duration.ofMillis(250 * delayFactor);
         SHORT_WAIT = Duration.ofSeconds(1 * delayFactor);
         NORMAL_WAIT = Duration.ofSeconds(4 * delayFactor);
         LONG_WAIT = Duration.ofSeconds(8 * delayFactor);
     }
 
+    public static <T> Stream<T> streamOf(T[] values, int repetitions) {
+        return streamOf(values, repetitions, false);
+    }
+
+    public static <T> Stream<T> streamOf(T[] values, int repetitions, boolean sortByRepetition) {
+        if (sortByRepetition) {
+            return IntStream
+                .range(0, repetitions)
+                .boxed()
+                .flatMap(i -> Arrays.stream(values));
+        }
+        else { // Sort by value
+            return Arrays.stream(values).flatMap(v ->
+                IntStream.range(0, repetitions).mapToObj(i -> v));
+        }
+    }
 }

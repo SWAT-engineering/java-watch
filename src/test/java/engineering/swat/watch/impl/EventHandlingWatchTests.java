@@ -24,25 +24,50 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package engineering.swat.watch;
+package engineering.swat.watch.impl;
 
-import java.io.Closeable;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import java.io.IOException;
 import java.nio.file.Path;
 
-/**
- * <p>Marker interface for an active watch, in the future might get more properties you can inspect.</p>
- *
- * <p>For now, make sure to close the watch when not interested in new events.</p>
- */
-public interface ActiveWatch extends Closeable {
+import org.junit.jupiter.api.Test;
 
-    /**
-     * Gets the path watched by this watch.
-     */
-    Path getPath();
+import engineering.swat.watch.WatchEvent;
+import engineering.swat.watch.WatchScope;
 
-    /**
-     * Gets the scope of this watch.
-     */
-    WatchScope getScope();
+class EventHandlingWatchTests {
+
+    private static EventHandlingWatch emptyFileWatch(Path path) {
+        return new EventHandlingWatch() {
+            @Override
+            public void handleEvent(WatchEvent event) {
+                // Nothing to handle
+            }
+
+            @Override
+            public void close() throws IOException {
+                // Nothing to close
+            }
+
+            @Override
+            public WatchScope getScope() {
+                return WatchScope.PATH_ONLY;
+            }
+
+            @Override
+            public Path getPath() {
+                return path;
+            }
+        };
+    }
+
+    @Test
+    void relativizeTest() {
+        var e1 = new WatchEvent(WatchEvent.Kind.OVERFLOW, Path.of("foo"), Path.of("bar", "baz.txt"));
+        var e2 = new WatchEvent(WatchEvent.Kind.OVERFLOW, Path.of("foo", "bar", "baz.txt"));
+        var e3 = emptyFileWatch(Path.of("foo")).relativize(e2);
+        assertEquals(e1.getRootPath(), e3.getRootPath());
+        assertEquals(e1.getRelativePath(), e3.getRelativePath());
+    }
 }

@@ -32,14 +32,19 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import engineering.swat.watch.impl.jdk.JDKDirectoryWatcher;
-import engineering.swat.watch.impl.jdk.JDKFileWatcher;
-import engineering.swat.watch.impl.jdk.JDKRecursiveDirectoryWatcher;
+import engineering.swat.watch.impl.EventHandlingWatch;
+import engineering.swat.watch.impl.jdk.JDKDirectoryWatch;
+import engineering.swat.watch.impl.jdk.JDKFileTreeWatch;
+import engineering.swat.watch.impl.jdk.JDKFileWatch;
+import engineering.swat.watch.impl.overflows.IndexingRescanner;
+import engineering.swat.watch.impl.overflows.MemorylessRescanner;
 
 /**
  * <p>Watch a path for changes.</p>
@@ -50,17 +55,19 @@ import engineering.swat.watch.impl.jdk.JDKRecursiveDirectoryWatcher;
  */
 public class Watcher {
     private final Logger logger = LogManager.getLogger();
-    private final WatchScope scope;
     private final Path path;
+    private final WatchScope scope;
+    private volatile Approximation approximateOnOverflow = Approximation.ALL;
     private volatile Executor executor = CompletableFuture::runAsync;
 
-    private static final Consumer<WatchEvent> EMPTY_HANDLER = p -> {};
-    private volatile Consumer<WatchEvent> eventHandler = EMPTY_HANDLER;
+    private static final BiConsumer<EventHandlingWatch, WatchEvent> EMPTY_HANDLER = (w, e) -> {};
+    private volatile BiConsumer<EventHandlingWatch, WatchEvent> eventHandler = EMPTY_HANDLER;
+    private static final Predicate<WatchEvent> TRUE_FILTER = e -> true;
+    private volatile Predicate<WatchEvent> eventFilter = TRUE_FILTER;
 
-
-    private Watcher(WatchScope scope, Path path) {
-        this.scope = scope;
+    private Watcher(Path path, WatchScope scope) {
         this.path = path;
+        this.scope = scope;
     }
 
     /**
@@ -87,9 +94,8 @@ public class Watcher {
                 break;
             default:
                 throw new IllegalArgumentException("Unsupported scope: " + scope);
-
         }
-        return new Watcher(scope, path);
+        return new Watcher(path, scope);
     }
 
     /**
@@ -103,7 +109,7 @@ public class Watcher {
         if (this.eventHandler != EMPTY_HANDLER) {
             throw new IllegalArgumentException("on handler cannot be set more than once");
         }
-        this.eventHandler = eventHandler;
+        this.eventHandler = (w, e) -> eventHandler.accept(e);
         return this;
     }
 
@@ -114,7 +120,7 @@ public class Watcher {
         if (this.eventHandler != EMPTY_HANDLER) {
             throw new IllegalArgumentException("on handler cannot be set more than once");
         }
-        this.eventHandler = ev -> {
+        this.eventHandler = (w, ev) -> {
             switch (ev.getKind()) {
                 case CREATED:
                     listener.onCreated(ev);
@@ -136,6 +142,22 @@ public class Watcher {
     }
 
     /**
+     * Configures the event filter to determine which events should be passed to
+     * the event handler. By default (without calling this method), all events
+     * are passed. This method must be called at most once.
+     * @param predicate The predicate to determine an event should be kept
+     * ({@code true}) or dropped ({@code false})
+     * @return {@code this} (to support method chaining)
+     */
+    Watcher filter(Predicate<WatchEvent> predicate) {
+        if (this.eventFilter != TRUE_FILTER) {
+            throw new IllegalArgumentException("filter cannot be set more than once");
+        }
+        this.eventFilter = predicate;
+        return this;
+    }
+
+    /**
      * Optionally configure the executor in which the {@link #on(Consumer)} callbacks are scheduled.
      * If not defined, every task will be scheduled on the {@link java.util.concurrent.ForkJoinPool#commonPool()}.
      * @param callbackHandler worker pool to use
@@ -143,6 +165,22 @@ public class Watcher {
      */
     public Watcher withExecutor(Executor callbackHandler) {
         this.executor = callbackHandler;
+        return this;
+    }
+
+    /**
+     * Optionally configure which regular files/directories in the scope of the
+     * watch an <i>approximation</i> of synthetic events (of kinds
+     * {@link WatchEvent.Kind#CREATED}, {@link WatchEvent.Kind#MODIFIED}, and/or
+     * {@link WatchEvent.Kind#DELETED}) should be issued when an overflow event
+     * happens. If not defined before this watcher is started, the
+     * {@link Approximation#ALL} approach will be used.
+     * @param whichFiles Constant to indicate for which regular
+     * files/directories to approximate
+     * @return This watcher for optional method chaining
+     */
+    public Watcher onOverflow(Approximation whichFiles) {
+        this.approximateOnOverflow = whichFiles;
         return this;
     }
 
@@ -156,35 +194,49 @@ public class Watcher {
         if (this.eventHandler == EMPTY_HANDLER) {
             throw new IllegalStateException("There is no onEvent handler defined");
         }
+
+        var h = applyApproximateOnOverflow();
+
         switch (scope) {
             case PATH_AND_CHILDREN: {
-                var result = new JDKDirectoryWatcher(path, executor, this.eventHandler, false);
-                result.start();
+                var result = new JDKDirectoryWatch(path, executor, h, eventFilter);
+                result.open();
                 return result;
             }
             case PATH_AND_ALL_DESCENDANTS: {
                 try {
-                    var result = new JDKDirectoryWatcher(path, executor, this.eventHandler, true);
-                    result.start();
+                    var result = new JDKDirectoryWatch(path, executor, h, eventFilter, true);
+                    result.open();
                     return result;
                 } catch (Throwable ex) {
                     // no native support, use the simulation
                     logger.debug("Not possible to register the native watcher, using fallback for {}", path);
                     logger.trace(ex);
-                    var result = new JDKRecursiveDirectoryWatcher(path, executor, this.eventHandler);
-                    result.start();
+                    var result = new JDKFileTreeWatch(path, executor, h, eventFilter);
+                    result.open();
                     return result;
                 }
             }
             case PATH_ONLY: {
-                var result = new JDKFileWatcher(path, executor, this.eventHandler);
-                result.start();
+                var result = new JDKFileWatch(path, executor, h, eventFilter);
+                result.open();
                 return result;
             }
-
             default:
                 throw new IllegalStateException("Not supported yet");
         }
     }
 
+    private BiConsumer<EventHandlingWatch, WatchEvent> applyApproximateOnOverflow() {
+        switch (approximateOnOverflow) {
+            case NONE:
+                return eventHandler;
+            case ALL:
+                return eventHandler.andThen(new MemorylessRescanner(executor));
+            case DIFF:
+                return eventHandler.andThen(new IndexingRescanner(executor, path, scope));
+            default:
+                throw new UnsupportedOperationException("No event handler has been defined yet for this overflow policy");
+        }
+    }
 }
