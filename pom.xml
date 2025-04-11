@@ -83,7 +83,7 @@
       <plugin> <!-- configure java compiler -->
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
-        <version>3.10.1</version>
+        <version>3.14.0</version>
         <configuration>
           <release>11</release>
           <compilerArgument>-parameters</compilerArgument>
@@ -102,12 +102,12 @@
       <plugin> <!-- unit test integration -->
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
-        <version>2.22.2</version>
+        <version>3.5.3</version>
       </plugin>
       <plugin> <!-- code coverage -->
         <groupId>org.jacoco</groupId>
         <artifactId>jacoco-maven-plugin</artifactId>
-        <version>0.8.8</version>
+        <version>0.8.13</version>
         <executions>
           <execution>
             <goals>
@@ -127,7 +127,7 @@
         <groupId>com.mycila</groupId>
         <artifactId>license-maven-plugin</artifactId>
         <!-- mvn license:format adds/updates all license headers -->
-        <version>4.6</version>
+        <version>5.0.0</version>
         <configuration>
           <licenseSets>
             <licenseSet>
@@ -162,6 +162,26 @@
             <goals>
               <goal>check</goal>
             </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin> <!-- use a new version of maven  -->
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-enforcer-plugin</artifactId>
+        <version>3.5.0</version>
+        <executions>
+          <execution>
+            <id>enforce-maven</id>
+            <goals>
+            <goal>enforce</goal>
+            </goals>
+            <configuration>
+              <rules>
+                <requireMavenVersion>
+                  <version>(3.9,)</version>
+                </requireMavenVersion>
+              </rules>
+            </configuration>
           </execution>
         </executions>
       </plugin>
@@ -221,7 +241,7 @@
           <plugin> <!-- sign jar for maven central-->
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-gpg-plugin</artifactId>
-            <version>1.5</version>
+            <version>3.2.7</version>
             <executions>
               <execution>
                 <id>sign-artifacts</id>
@@ -235,7 +255,7 @@
           <plugin> <!-- generate java-doc -->
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-javadoc-plugin</artifactId>
-            <version>3.4.0</version>
+            <version>3.11.2</version>
             <executions>
               <execution>
                 <id>attach-javadocs</id>
@@ -248,7 +268,7 @@
           <plugin> <!-- generate sources jar -->
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-source-plugin</artifactId>
-            <version>3.2.1</version>
+            <version>3.3.1</version>
             <executions>
               <execution>
                 <id>attach-sources</id>
@@ -271,6 +291,7 @@
             <!-- This plugin will set properties values using dependency information -->
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-dependency-plugin</artifactId>
+            <version>3.8.1</version>
             <executions>
               <execution>
                 <goals>
@@ -282,7 +303,7 @@
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-compiler-plugin</artifactId>
-            <version>3.10.1</version>
+            <version>3.14.0</version>
             <configuration>
               <fork>true</fork>
               <release>11</release>
