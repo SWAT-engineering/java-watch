@@ -65,7 +65,7 @@
 
   <scm>
     <connection>scm:git:git://github.com/SWAT-engineering/java-watch.git</connection>
-    <developerConnection>scm:git:ssh://github.com:SWAT-engineering/java-watch.git</developerConnection>
+    <developerConnection>scm:git:ssh://git@github.com/SWAT-engineering/java-watch.git</developerConnection>
     <url>https://github.com/SWAT-engineering/java-watch/tree/main/</url>
   </scm>
 
