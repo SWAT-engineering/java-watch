@@ -82,6 +82,10 @@ public class TestHelper {
     public static class Bookkeeper implements Consumer<WatchEvent> {
         private final Queue<WatchEvent> events = new ConcurrentLinkedQueue<>();
 
+        public void reset() {
+            events.clear();
+        }
+
         public Events events() {
             return new Events(events.stream());
         }

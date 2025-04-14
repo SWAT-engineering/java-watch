@@ -26,15 +26,16 @@
  */
 package engineering.swat.watch;
 
+import static engineering.swat.watch.WatchEvent.Kind.CREATED;
+import static engineering.swat.watch.WatchEvent.Kind.DELETED;
+import static engineering.swat.watch.WatchEvent.Kind.MODIFIED;
 import static engineering.swat.watch.WatchEvent.Kind.OVERFLOW;
 import static org.awaitility.Awaitility.await;
 
 import java.io.IOException;
 import java.nio.file.Files;
-import java.util.concurrent.Semaphore;
+import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Predicate;
 
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
@@ -130,154 +131,105 @@ class SingleDirectoryTests {
         Files.writeString(directory.resolve("a.txt"), "foo");
         Files.writeString(directory.resolve("b.txt"), "bar");
 
-        var nCreated = new AtomicInteger();
-        var nModified = new AtomicInteger();
-        var nOverflow = new AtomicInteger();
+        var bookkeeper = new TestHelper.Bookkeeper();
         var watchConfig = Watcher.watch(directory, WatchScope.PATH_AND_CHILDREN)
             .onOverflow(Approximation.ALL)
-            .on(e -> {
-                switch (e.getKind()) {
-                    case CREATED:
-                        nCreated.incrementAndGet();
-                        break;
-                    case MODIFIED:
-                        nModified.incrementAndGet();
-                        break;
-                    case OVERFLOW:
-                        nOverflow.incrementAndGet();
-                        break;
-                    default:
-                        break;
-                }
-            });
+            .on(bookkeeper);
 
         try (var watch = watchConfig.start()) {
-            var overflow = new WatchEvent(WatchEvent.Kind.OVERFLOW, directory);
+            var overflow = new WatchEvent(OVERFLOW, directory);
             ((EventHandlingWatch) watch).handleEvent(overflow);
-            Thread.sleep(TestHelper.SHORT_WAIT.toMillis());
 
-            await("Overflow should trigger created events")
-                .until(nCreated::get, Predicate.isEqual(6)); // 3 directories + 3 files
-            await("Overflow should trigger modified events")
-                .until(nModified::get, Predicate.isEqual(2)); // 2 files (c.txt is still empty)
             await("Overflow should be visible to user-defined event handler")
-                .until(nOverflow::get, Predicate.isEqual(1));
+                .until(() -> bookkeeper.events().kind(OVERFLOW).any());
+
+            for (var e : new WatchEvent[] {
+                new WatchEvent(CREATED, directory, Path.of("d1")),
+                new WatchEvent(CREATED, directory, Path.of("d2")),
+                new WatchEvent(CREATED, directory, Path.of("d3")),
+                new WatchEvent(CREATED, directory, Path.of("a.txt")),
+                new WatchEvent(CREATED, directory, Path.of("b.txt")),
+                new WatchEvent(CREATED, directory, Path.of("c.txt")),
+                new WatchEvent(MODIFIED, directory, Path.of("a.txt")),
+                new WatchEvent(MODIFIED, directory, Path.of("b.txt"))
+            }) {
+                await("Overflow should trigger event: " + e)
+                    .until(() -> bookkeeper.events().any(e));
+            }
+
+            var event = new WatchEvent(MODIFIED, directory, Path.of("c.txt"));
+            await("Overflow shouldn't trigger event: " + event)
+                .until(() -> bookkeeper.events().none(event));
         }
     }
 
     @Test
     void indexingRescanOnOverflow() throws IOException, InterruptedException {
-        // Preface: This test looks a bit hacky because there's no API to
-        // directly manipulate, or prevent the auto-manipulation of, the index
-        // inside a watch. I've added some comments below to make it make sense.
-
         var directory = testDir.getTestDirectory();
-        var semaphore = new Semaphore(0);
 
-        var nCreated = new AtomicInteger();
-        var nModified = new AtomicInteger();
-        var nDeleted = new AtomicInteger();
-
+        var bookkeeper = new TestHelper.Bookkeeper();
+        var dropEvents = new AtomicBoolean(false); // Toggles overflow simulation
         var watchConfig = Watcher.watch(directory, WatchScope.PATH_AND_CHILDREN)
+            .filter(e -> !dropEvents.get())
             .onOverflow(Approximation.DIFF)
-            .on(e -> {
-                var kind = e.getKind();
-                if (kind != OVERFLOW) {
-                    // Threads can handle non-`OVERFLOW` events *only after*
-                    // everything is "ready" for that (in which case a token is
-                    // released to the semaphore, which is initially empty). See
-                    // below for an explanation of "readiness".
-                    semaphore.acquireUninterruptibly();
-                    switch (e.getKind()) {
-                        case CREATED:
-                            nCreated.incrementAndGet();
-                            break;
-                        case MODIFIED:
-                            nModified.incrementAndGet();
-                            break;
-                        case DELETED:
-                            nDeleted.incrementAndGet();
-                            break;
-                        default:
-                            break;
-                    }
-                    semaphore.release();
-                }
-            });
+            .on(bookkeeper);
 
         try (var watch = watchConfig.start()) {
-            Thread.sleep(TestHelper.NORMAL_WAIT.toMillis());
-            // At this point, the index of last-modified-times inside `watch` is
-            // populated with initial values.
 
+            // Begin overflow simulation
+            dropEvents.set(true);
+
+            // Do some file operations. No events should be observed (because
+            // the overflow simulation is running).
             Files.writeString(directory.resolve("a.txt"), "foo");
             Files.writeString(directory.resolve("b.txt"), "bar");
             Files.delete(directory.resolve("c.txt"));
             Files.createFile(directory.resolve("d.txt"));
-            Thread.sleep(TestHelper.NORMAL_WAIT.toMillis());
-            // At this point, regular events have been generated for a.txt,
-            // b.txt, c.txt, and d.txt by the file system. These events won't be
-            // handled by `watch` just yet, though, because the semaphore is
-            // still empty (i.e., event-handling threads are blocked from making
-            // progress). Thus, the index inside `watch` still contains the
-            // initial last-modified-times. (Warning: The blockade works only
-            // when the rescanner runs after the user-defined event-handler.
-            // Currently, this is the case, but changing their order probably
-            // breaks this test.)
 
+            await("No events should have been triggered")
+                .pollDelay(TestHelper.SHORT_WAIT)
+                .until(() -> bookkeeper.events().none());
+
+            // End overflow simulation, and generate an `OVERFLOW` event.
+            // Synthetic events should now be issued and observed.
+            dropEvents.set(false);
             var overflow = new WatchEvent(WatchEvent.Kind.OVERFLOW, directory);
             ((EventHandlingWatch) watch).handleEvent(overflow);
-            Thread.sleep(TestHelper.NORMAL_WAIT.toMillis());
-            // At this point, the current thread has presumably slept long
-            // enough for the `OVERFLOW` event to have been handled by the
-            // rescanner. This means that synthetic events must have been issued
-            // (because the index still contained the initial last-modified
-            // times).
 
-            // Readiness achieved: Threads can now start handling non-`OVERFLOW`
-            // events.
-            semaphore.release();
+            for (var e : new WatchEvent[] {
+                new WatchEvent(MODIFIED, directory, Path.of("a.txt")),
+                new WatchEvent(MODIFIED, directory, Path.of("b.txt")),
+                new WatchEvent(DELETED, directory, Path.of("c.txt")),
+                new WatchEvent(CREATED, directory, Path.of("d.txt"))
+            }) {
+                await("Overflow should trigger event: " + e)
+                    .until(() -> bookkeeper.events().any(e));
+            }
 
-            await("Overflow should trigger created events")
-                .until(nCreated::get, n -> n >= 2); // 1 synthetic event + >=1 regular event
-            await("Overflow should trigger modified events")
-                .until(nModified::get, n -> n >= 4); // 2 synthetic events + >=2 regular events
-            await("Overflow should trigger deleted events")
-                .until(nDeleted::get, n -> n >= 2); // 1 synthetic event + >=1 regular event
-
-            // Reset counters for next phase of the test
-            nCreated.set(0);
-            nModified.set(0);
-            nDeleted.set(0);
-
-            // Let's do some more file operations, trigger another `OVERFLOW`
-            // event, and observe that synthetic events *aren't* issued this
-            // time (because the index was already updated when the regular
-            // events were handled).
+            // Do some more file operations. All events should be observed
+            // (because the overflow simulation is no longer running).
+            bookkeeper.reset();
             Files.writeString(directory.resolve("b.txt"), "baz");
             Files.createFile(directory.resolve("c.txt"));
             Files.delete(directory.resolve("d.txt"));
 
-            await("File create should trigger regular created event")
-                .until(nCreated::get, n -> n >= 1);
-            await("File write should trigger regular modified event")
-                .until(nModified::get, n -> n >= 1);
-            await("File delete should trigger regular deleted event")
-                .until(nDeleted::get, n -> n >= 1);
+            for (var e : new WatchEvent[] {
+                new WatchEvent(MODIFIED, directory, Path.of("b.txt")),
+                new WatchEvent(CREATED, directory, Path.of("c.txt")),
+                new WatchEvent(DELETED, directory, Path.of("d.txt"))
+            }) {
+                await("File operation should trigger event: " + e)
+                    .until(() -> bookkeeper.events().any(e));
+            }
 
-            var nCreatedBeforeOverflow = nCreated.get();
-            var nModifiedBeforeOverflow = nModified.get();
-            var nDeletedBeforeOverflow = nDeleted.get();
-
+            // Generate another `OVERFLOW` event. Synthetic events shouldn't be
+            // issued and observed (because the index should have been updated).
+            bookkeeper.reset();
             ((EventHandlingWatch) watch).handleEvent(overflow);
-            Thread.sleep(TestHelper.NORMAL_WAIT.toMillis());
 
-            await("Overflow shouldn't trigger synthetic created event after file create (and index updated)")
-                .until(nCreated::get, Predicate.isEqual(nCreatedBeforeOverflow));
-            await("Overflow shouldn't trigger synthetic modified event after file write (and index updated)")
-                .until(nModified::get, Predicate.isEqual(nModifiedBeforeOverflow));
-            await("Overflow shouldn't trigger synthetic deleted event after file delete (and index updated)")
-                .until(nDeleted::get, Predicate.isEqual(nDeletedBeforeOverflow));
+            await("No events should have been triggered")
+                .pollDelay(TestHelper.SHORT_WAIT)
+                .until(() -> bookkeeper.events().kindNot(OVERFLOW).none());
         }
     }
 }

@@ -26,16 +26,15 @@
  */
 package engineering.swat.watch;
 
+import static engineering.swat.watch.WatchEvent.Kind.CREATED;
 import static org.awaitility.Awaitility.await;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 
 import org.apache.logging.log4j.LogManager;
@@ -158,33 +157,27 @@ class RecursiveWatchTests {
             Path.of("bar", "x", "y", "z")
         };
 
-        // Define a bunch of helper functions to test which events have happened
-        var events = ConcurrentHashMap.<WatchEvent> newKeySet(); // Stores all incoming events
-
-        BiPredicate<WatchEvent.Kind, Path> eventsContains = (kind, descendant) ->
-            events.stream().anyMatch(e ->
-                e.getKind().equals(kind) &&
-                e.getRootPath().equals(parent) &&
-                e.getRelativePath().equals(descendant));
-
-        Consumer<Path> awaitCreation = p ->
-            await("Creation of `" + p + "` should be observed").until(
-                () -> eventsContains.test(Kind.CREATED, p));
-
-        Consumer<Path> awaitNotCreation = p ->
-            await("Creation of `" + p + "` shouldn't be observed: " + events)
-                .pollDelay(TestHelper.TINY_WAIT)
-                .until(() -> !eventsContains.test(Kind.CREATED, p));
-
         // Configure and start watch
         var dropEvents = new AtomicBoolean(false); // Toggles overflow simulation
+        var bookkeeper = new TestHelper.Bookkeeper();
         var watchConfig = Watcher.watch(parent, WatchScope.PATH_AND_ALL_DESCENDANTS)
             .withExecutor(ForkJoinPool.commonPool())
-            .onOverflow(whichFiles)
             .filter(e -> !dropEvents.get())
-            .on(events::add);
+            .onOverflow(whichFiles)
+            .on(bookkeeper);
 
         try (var watch = (EventHandlingWatch) watchConfig.start()) {
+
+            // Define helper functions to test which events have happened
+            Consumer<Path> awaitCreation = p ->
+                await("Creation of `" + p + "` should be observed")
+                    .until(() -> bookkeeper.events().kind(CREATED).rootPath(parent).relativePath(p).any());
+
+            Consumer<Path> awaitNotCreation = p ->
+                await("Creation of `" + p + "` shouldn't be observed: " + bookkeeper)
+                    .pollDelay(TestHelper.TINY_WAIT)
+                    .until(() -> bookkeeper.events().kind(CREATED).rootPath(parent).relativePath(p).none());
+
             // Begin overflow simulation
             dropEvents.set(true);
 
