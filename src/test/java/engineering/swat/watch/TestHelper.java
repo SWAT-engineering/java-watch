@@ -102,7 +102,7 @@ public class TestHelper {
             }
 
             public boolean any() {
-                return stream.anyMatch(e -> true);
+                return stream.findAny().isPresent();
             }
 
             public boolean any(WatchEvent event) {
@@ -110,11 +110,11 @@ public class TestHelper {
             }
 
             public boolean none() {
-                return stream.noneMatch(e -> true);
+                return !any();
             }
 
             public boolean none(WatchEvent event) {
-                return stream.noneMatch(e -> WatchEvent.areEquivalent(e, event));
+                return !any(event);
             }
 
             public Events kind(WatchEvent.Kind... kinds) {
