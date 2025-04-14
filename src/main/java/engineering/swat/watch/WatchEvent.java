@@ -135,7 +135,7 @@ public class WatchEvent {
      * <p>
      * Note: This method applies different logic to compare events than (the
      * default implementation of) method {@link #equals(Object)}, which
-     * shouldn't be overridden. This is because events should norminally be
+     * shouldn't be overridden. This is because events should normally be
      * compared in terms of their identities (e.g., two successive modifications
      * of the same file result in events that are equivalent, but not equal;
      * they need to be distinguishable in collections).

@@ -79,6 +79,10 @@ public class TestHelper {
         }
     }
 
+    /**
+     * Helper class to keep track of a list of events and query it (on a
+     * slightly higher level of abstraction than manipulation of event streams).
+     */
     public static class Bookkeeper implements Consumer<WatchEvent> {
         private final Queue<WatchEvent> events = new ConcurrentLinkedQueue<>();
 
