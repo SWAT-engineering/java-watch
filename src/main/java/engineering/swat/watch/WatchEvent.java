@@ -131,6 +131,7 @@ public class WatchEvent {
      * <p>
      * Tests the equivalence of two events. Two events are equivalent when they
      * have equal kinds, equal root paths, and equal relative paths.
+     * </p>
      *
      * <p>
      * Note: This method applies different logic to compare events than (the
@@ -139,6 +140,7 @@ public class WatchEvent {
      * compared in terms of their identities (e.g., two successive modifications
      * of the same file result in events that are equivalent, but not equal;
      * they need to be distinguishable in collections).
+     * </p>
      */
     public static boolean areEquivalent(WatchEvent e1, WatchEvent e2) {
         return Objects.equals(e1.getKind(), e2.getKind()) &&
