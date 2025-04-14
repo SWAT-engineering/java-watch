@@ -6,6 +6,7 @@ on:
   pull_request:
     branches:
       - main
+      - improved-macos-support-main
 
 jobs:
   test:
