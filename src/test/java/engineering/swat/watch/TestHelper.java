@@ -26,8 +26,12 @@
  */
 package engineering.swat.watch;
 
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.function.Consumer;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -72,6 +76,81 @@ public class TestHelper {
         else { // Sort by value
             return Arrays.stream(values).flatMap(v ->
                 IntStream.range(0, repetitions).mapToObj(i -> v));
+        }
+    }
+
+    public static class Bookkeeper implements Consumer<WatchEvent> {
+        private final Queue<WatchEvent> events = new ConcurrentLinkedQueue<>();
+
+        public Events events() {
+            return new Events(events.stream());
+        }
+
+        public static class Events {
+            private final Stream<WatchEvent> stream;
+
+            private Events(Stream<WatchEvent> stream) {
+                this.stream = stream;
+            }
+
+            public boolean any() {
+                return stream.anyMatch(e -> true);
+            }
+
+            public boolean any(WatchEvent event) {
+                return stream.anyMatch(e -> WatchEvent.areEquivalent(e, event));
+            }
+
+            public boolean none() {
+                return stream.noneMatch(e -> true);
+            }
+
+            public boolean none(WatchEvent event) {
+                return stream.noneMatch(e -> WatchEvent.areEquivalent(e, event));
+            }
+
+            public Events kind(WatchEvent.Kind... kinds) {
+                return new Events(stream.filter(e -> contains(kinds, e.getKind())));
+            }
+
+            public Events kindNot(WatchEvent.Kind... kinds) {
+                return new Events(stream.filter(e -> !contains(kinds, e.getKind())));
+            }
+
+            public Events rootPath(Path... rootPaths) {
+                return new Events(stream.filter(e -> contains(rootPaths, e.getRootPath())));
+            }
+
+            public Events rootPathNot(Path... rootPaths) {
+                return new Events(stream.filter(e -> !contains(rootPaths, e.getRootPath())));
+            }
+
+            public Events relativePath(Path... relativePaths) {
+                return new Events(stream.filter(e -> contains(relativePaths, e.getRelativePath())));
+            }
+
+            public Events relativePathNot(Path... relativePaths) {
+                return new Events(stream.filter(e -> !contains(relativePaths, e.getRelativePath())));
+            }
+
+            private boolean contains(Object[] a, Object key) {
+                for (var elem : a) {
+                    if (elem.equals(key)) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+        }
+
+        @Override
+        public void accept(WatchEvent event) {
+            events.offer(event);
+        }
+
+        @Override
+        public String toString() {
+            return events.toString();
         }
     }
 }

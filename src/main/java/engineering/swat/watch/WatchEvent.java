@@ -27,6 +27,7 @@
 package engineering.swat.watch;
 
 import java.nio.file.Path;
+import java.util.Objects;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -126,4 +127,22 @@ public class WatchEvent {
         return String.format("WatchEvent[%s, %s, %s]", this.rootPath, this.kind, this.relativePath);
     }
 
+    /**
+     * <p>
+     * Tests the equivalence of two events. Two events are equivalent when they
+     * have equal kinds, equal root paths, and equal relative paths.
+     *
+     * <p>
+     * Note: This method applies different logic to compare events than (the
+     * default implementation of) method {@link #equals(Object)}, which
+     * shouldn't be overridden. This is because events should norminally be
+     * compared in terms of their identities (e.g., two successive modifications
+     * of the same file result in events that are equivalent, but not equal;
+     * they need to be distinguishable in collections).
+     */
+    public static boolean areEquivalent(WatchEvent e1, WatchEvent e2) {
+        return Objects.equals(e1.getKind(), e2.getKind()) &&
+            Objects.equals(e1.getRootPath(), e2.getRootPath()) &&
+            Objects.equals(e1.getRelativePath(), e2.getRelativePath());
+    }
 }
