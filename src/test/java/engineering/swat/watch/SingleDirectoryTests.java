@@ -175,12 +175,13 @@ class SingleDirectoryTests {
             .on(bookkeeper);
 
         try (var watch = watchConfig.start()) {
-
             // Begin overflow simulation
             dropEvents.set(true);
 
-            // Do some file operations. No events should be observed (because
-            // the overflow simulation is running).
+            // Perform some file operations (after a short wait to ensure a new
+            // last-modified-time). No events should be observed (because the
+            // overflow simulation is running).
+            Thread.sleep(TestHelper.SHORT_WAIT.toMillis());
             Files.writeString(directory.resolve("a.txt"), "foo");
             Files.writeString(directory.resolve("b.txt"), "bar");
             Files.delete(directory.resolve("c.txt"));
@@ -206,25 +207,28 @@ class SingleDirectoryTests {
                     .until(() -> bookkeeper.events().any(e));
             }
 
-            // Do some more file operations. All events should be observed
-            // (because the overflow simulation is no longer running).
             bookkeeper.reset();
+
+            // Perform some more file operations. All events should be observed
+            // (because the overflow simulation is no longer running).
+            Thread.sleep(TestHelper.SHORT_WAIT.toMillis());
+            Files.delete(directory.resolve("a.txt"));
             Files.writeString(directory.resolve("b.txt"), "baz");
             Files.createFile(directory.resolve("c.txt"));
-            Files.delete(directory.resolve("d.txt"));
 
             for (var e : new WatchEvent[] {
+                new WatchEvent(DELETED, directory, Path.of("a.txt")),
                 new WatchEvent(MODIFIED, directory, Path.of("b.txt")),
-                new WatchEvent(CREATED, directory, Path.of("c.txt")),
-                new WatchEvent(DELETED, directory, Path.of("d.txt"))
+                new WatchEvent(CREATED, directory, Path.of("c.txt"))
             }) {
                 await("File operation should trigger event: " + e)
                     .until(() -> bookkeeper.events().any(e));
             }
 
+            bookkeeper.reset();
+
             // Generate another `OVERFLOW` event. Synthetic events shouldn't be
             // issued and observed (because the index should have been updated).
-            bookkeeper.reset();
             ((EventHandlingWatch) watch).handleEvent(overflow);
 
             await("No events should have been triggered")
