@@ -71,9 +71,9 @@
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <checkerframework.version>3.42.0</checkerframework.version>
-    <junit.version>5.10.2</junit.version>
-    <log4j.version>2.23.0</log4j.version>
+    <checkerframework.version>3.49.2</checkerframework.version>
+    <junit.version>5.12.2</junit.version>
+    <log4j.version>2.24.3</log4j.version>
     <maven.compiler.source>11</maven.compiler.source>
     <maven.compiler.target>11</maven.compiler.target>
   </properties>
@@ -204,7 +204,7 @@
     <dependency>
       <groupId>org.awaitility</groupId>
       <artifactId>awaitility</artifactId>
-      <version>4.2.2</version>
+      <version>4.3.0</version>
       <scope>test</scope>
     </dependency>
     <dependency>
