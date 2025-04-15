@@ -71,7 +71,7 @@ class SingleFileTests {
         var target = testDir.getTestFiles().get(0);
         var seen = new AtomicBoolean(false);
         var others = new AtomicBoolean(false);
-        var watchConfig = Watcher.build(target, WatchScope.PATH_ONLY)
+        var watchConfig = Watch.build(target, WatchScope.PATH_ONLY)
             .on(ev -> {
                 if (ev.calculateFullPath().equals(target)) {
                     seen.set(true);
@@ -100,7 +100,7 @@ class SingleFileTests {
         var target = testDir.getTestDirectory();
         var seen = new AtomicBoolean(false);
         var others = new AtomicBoolean(false);
-        var watchConfig = Watcher.build(target, WatchScope.PATH_ONLY)
+        var watchConfig = Watch.build(target, WatchScope.PATH_ONLY)
             .on(ev -> {
                 if (ev.calculateFullPath().equals(target)) {
                     seen.set(true);
@@ -161,7 +161,7 @@ class SingleFileTests {
         var parent = testDir.getTestDirectory();
         var file = parent.resolve("a.txt");
 
-        var watch = Watcher
+        var watch = Watch
             .build(file, WatchScope.PATH_ONLY)
             .onOverflow(whichFiles)
             .on(bookkeeper)

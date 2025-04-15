@@ -71,7 +71,7 @@ class SingleDirectoryTests {
         var target = testDir.getTestFiles().get(0);
         var seenDelete = new AtomicBoolean(false);
         var seenCreate = new AtomicBoolean(false);
-        var watchConfig = Watcher.build(target.getParent(), WatchScope.PATH_AND_CHILDREN)
+        var watchConfig = Watch.build(target.getParent(), WatchScope.PATH_AND_CHILDREN)
             .on(ev -> {
                 if (ev.getKind() == Kind.DELETED && ev.calculateFullPath().equals(target)) {
                     seenDelete.set(true);
@@ -99,7 +99,7 @@ class SingleDirectoryTests {
         var target = testDir.getTestFiles().get(0);
         var seenDelete = new AtomicBoolean(false);
         var seenCreate = new AtomicBoolean(false);
-        var watchConfig = Watcher.build(target.getParent(), WatchScope.PATH_AND_CHILDREN)
+        var watchConfig = Watch.build(target.getParent(), WatchScope.PATH_AND_CHILDREN)
             .on(new WatchEventListener() {
                 @Override
                 public void onCreated(WatchEvent ev) {
@@ -132,7 +132,7 @@ class SingleDirectoryTests {
         Files.writeString(directory.resolve("b.txt"), "bar");
 
         var bookkeeper = new TestHelper.Bookkeeper();
-        var watchConfig = Watcher.build(directory, WatchScope.PATH_AND_CHILDREN)
+        var watchConfig = Watch.build(directory, WatchScope.PATH_AND_CHILDREN)
             .onOverflow(Approximation.ALL)
             .on(bookkeeper);
 
@@ -169,7 +169,7 @@ class SingleDirectoryTests {
 
         var bookkeeper = new TestHelper.Bookkeeper();
         var dropEvents = new AtomicBoolean(false); // Toggles overflow simulation
-        var watchConfig = Watcher.build(directory, WatchScope.PATH_AND_CHILDREN)
+        var watchConfig = Watch.build(directory, WatchScope.PATH_AND_CHILDREN)
             .filter(e -> !dropEvents.get())
             .onOverflow(Approximation.DIFF)
             .on(bookkeeper);

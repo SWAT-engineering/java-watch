@@ -53,7 +53,7 @@ import engineering.swat.watch.impl.overflows.MemorylessRescanner;
  * <p>It will avoid common errors using the raw apis, and will try to use the most native api where possible.</p>
  * Note, there are differences per platform that cannot be avoided, please review the readme of the library.
  */
-public class Watcher {
+public class Watch {
     private final Logger logger = LogManager.getLogger();
     private final Path path;
     private final WatchScope scope;
@@ -65,19 +65,9 @@ public class Watcher {
     private static final Predicate<WatchEvent> TRUE_FILTER = e -> true;
     private volatile Predicate<WatchEvent> eventFilter = TRUE_FILTER;
 
-    private Watcher(Path path, WatchScope scope) {
+    private Watch(Path path, WatchScope scope) {
         this.path = path;
         this.scope = scope;
-    }
-
-    /**
-     * Watch a path for updates, optionally also get events for its children/descendants
-     * @deprecated please upgrade to {@linkplain #build}
-     *
-     */
-    @Deprecated(since = "0.6.0", forRemoval = true)
-    public static Watcher watch(Path path, WatchScope scope) {
-        return build(path, scope);
     }
 
     /**
@@ -86,7 +76,7 @@ public class Watcher {
      * @param scope for directories you can also choose to monitor it's direct children or all it's descendants
      * @throws IllegalArgumentException in case a path is not supported (in relation to the scope)
      */
-    public static Watcher build(Path path, WatchScope scope) {
+    public static Watch build(Path path, WatchScope scope) {
         if (!path.isAbsolute()) {
             throw new IllegalArgumentException("We can only watch absolute paths");
         }
@@ -105,7 +95,7 @@ public class Watcher {
             default:
                 throw new IllegalArgumentException("Unsupported scope: " + scope);
         }
-        return new Watcher(path, scope);
+        return new Watch(path, scope);
     }
 
     /**
@@ -115,7 +105,7 @@ public class Watcher {
      * @param eventHandler a callback that handles the watch event, will be called once per event.
      * @return this for optional method chaining
      */
-    public Watcher on(Consumer<WatchEvent> eventHandler) {
+    public Watch on(Consumer<WatchEvent> eventHandler) {
         if (this.eventHandler != EMPTY_HANDLER) {
             throw new IllegalArgumentException("on handler cannot be set more than once");
         }
@@ -126,7 +116,7 @@ public class Watcher {
     /**
      * Convenience variant of {@link #on(Consumer)}, which allows you to only respond to certain events
      */
-    public Watcher on(WatchEventListener listener) {
+    public Watch on(WatchEventListener listener) {
         if (this.eventHandler != EMPTY_HANDLER) {
             throw new IllegalArgumentException("on handler cannot be set more than once");
         }
@@ -159,7 +149,7 @@ public class Watcher {
      * ({@code true}) or dropped ({@code false})
      * @return {@code this} (to support method chaining)
      */
-    Watcher filter(Predicate<WatchEvent> predicate) {
+    Watch filter(Predicate<WatchEvent> predicate) {
         if (this.eventFilter != TRUE_FILTER) {
             throw new IllegalArgumentException("filter cannot be set more than once");
         }
@@ -173,7 +163,7 @@ public class Watcher {
      * @param callbackHandler worker pool to use
      * @return this for optional method chaining
      */
-    public Watcher withExecutor(Executor callbackHandler) {
+    public Watch withExecutor(Executor callbackHandler) {
         this.executor = callbackHandler;
         return this;
     }
@@ -189,7 +179,7 @@ public class Watcher {
      * files/directories to approximate
      * @return This watcher for optional method chaining
      */
-    public Watcher onOverflow(Approximation whichFiles) {
+    public Watch onOverflow(Approximation whichFiles) {
         this.approximateOnOverflow = whichFiles;
         return this;
     }
