@@ -43,7 +43,7 @@ Start using java-watch:
 
 ```java
 var directory = Path.of("tmp", "test-dir");
-var watcherSetup = Watcher.watch(directory, WatchScope.PATH_AND_CHILDREN)
+var watcherSetup = Watch.build(directory, WatchScope.PATH_AND_CHILDREN)
     .withExecutor(Executors.newCachedThreadPool()) // optionally configure a custom thread pool
     .onOverflow(Approximation.DIFF) // optionally configure a handler for overflows
     .on(watchEvent -> {

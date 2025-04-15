@@ -43,7 +43,7 @@ import engineering.swat.watch.TestDirectory;
 import engineering.swat.watch.TestHelper;
 import engineering.swat.watch.WatchEvent;
 import engineering.swat.watch.WatchScope;
-import engineering.swat.watch.Watcher;
+import engineering.swat.watch.Watch;
 import engineering.swat.watch.impl.EventHandlingWatch;
 
 class IndexingRescannerTests {
@@ -74,7 +74,7 @@ class IndexingRescannerTests {
         // Configure a non-recursive directory watch that monitors only the
         // children (not all descendants) of `path`
         var eventsOnlyForChildren = new AtomicBoolean(true);
-        var watchConfig = Watcher.watch(path, WatchScope.PATH_AND_CHILDREN)
+        var watchConfig = Watch.build(path, WatchScope.PATH_AND_CHILDREN)
             .onOverflow(Approximation.NONE) // Disable the auto-handler here; we'll have an explicit one below
             .on(e -> {
                 if (e.getRelativePath().getNameCount() > 1) {

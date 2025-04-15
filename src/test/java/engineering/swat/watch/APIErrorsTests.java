@@ -61,8 +61,8 @@ class APIErrorsTests {
     @Test
     void noDuplicateEvents() {
         assertThrowsExactly(IllegalArgumentException.class, () ->
-            Watcher
-                .watch(testDir.getTestDirectory(), WatchScope.PATH_AND_CHILDREN)
+            Watch
+                .build(testDir.getTestDirectory(), WatchScope.PATH_AND_CHILDREN)
                 .on(System.out::println)
                 .on(System.err::println)
         );
@@ -71,16 +71,16 @@ class APIErrorsTests {
     @Test
     void onlyDirectoryWatchingOnDirectories() {
         assertThrowsExactly(IllegalArgumentException.class, () ->
-            Watcher
-                .watch(testDir.getTestFiles().get(0), WatchScope.PATH_AND_CHILDREN)
+            Watch
+                .build(testDir.getTestFiles().get(0), WatchScope.PATH_AND_CHILDREN)
         );
     }
 
     @Test
     void doNotStartWithoutEventHandler() {
         assertThrowsExactly(IllegalStateException.class, () ->
-            Watcher
-                .watch(testDir.getTestDirectory(), WatchScope.PATH_AND_CHILDREN)
+            Watch
+                .build(testDir.getTestDirectory(), WatchScope.PATH_AND_CHILDREN)
                 .start()
         );
     }
@@ -90,8 +90,8 @@ class APIErrorsTests {
         var relativePath = testDir.getTestDirectory().resolve("d1").relativize(testDir.getTestDirectory());
 
         assertThrowsExactly(IllegalArgumentException.class, () ->
-            Watcher
-                .watch(relativePath, WatchScope.PATH_AND_CHILDREN)
+            Watch
+                .build(relativePath, WatchScope.PATH_AND_CHILDREN)
                 .start()
         );
     }
@@ -100,7 +100,7 @@ class APIErrorsTests {
     void nonExistingDirectory() throws IOException {
         var nonExistingDir = testDir.getTestDirectory().resolve("testd1");
         Files.createDirectory(nonExistingDir);
-        var w = Watcher.watch(nonExistingDir, WatchScope.PATH_AND_CHILDREN);
+        var w = Watch.build(nonExistingDir, WatchScope.PATH_AND_CHILDREN);
         Files.delete(nonExistingDir);
         assertThrowsExactly(IllegalStateException.class, w::start);
     }
