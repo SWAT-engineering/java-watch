@@ -51,8 +51,11 @@ import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import com.sun.jna.Platform;
 import com.sun.nio.file.ExtendedWatchEventModifier;
 
+import engineering.swat.watch.impl.mac.nio.file.MacWatchService;
+import engineering.swat.watch.impl.mac.nio.file.MacWatchable;
 import engineering.swat.watch.impl.util.SubscriptionKey;
 
 /**
@@ -73,7 +76,11 @@ class JDKPoller {
 
     static {
         try {
-            service = FileSystems.getDefault().newWatchService();
+            if (Platform.isMac()) {
+                service = new MacWatchService();
+            } else {
+                service = FileSystems.getDefault().newWatchService();
+            }
         } catch (IOException e) {
             throw new RuntimeException("Could not start watcher", e);
         }
@@ -122,11 +129,12 @@ class JDKPoller {
             return CompletableFuture.supplyAsync(() -> {
                 try {
                     WatchEvent.Kind<?>[] kinds = new WatchEvent.Kind[]{ ENTRY_CREATE, ENTRY_MODIFY, OVERFLOW, ENTRY_DELETE };
+                    var watchable = Platform.isMac() ? new MacWatchable(path.getPath()) : path.getPath();
                     if (path.isRecursive()) {
-                        return path.getPath().register(service, kinds, ExtendedWatchEventModifier.FILE_TREE);
+                        return watchable.register(service, kinds, ExtendedWatchEventModifier.FILE_TREE);
                     }
                     else {
-                        return path.getPath().register(service, kinds);
+                        return watchable.register(service, kinds);
                     }
                 } catch (IOException e) {
                     throw new RuntimeException(e);
