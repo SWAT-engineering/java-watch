@@ -1,4 +1,7 @@
 # java-watch
+[![Maven Central Version](https://img.shields.io/maven-central/v/engineering.swat/java-watch?style=flat-square&label=maven)](https://central.sonatype.com/artifact/engineering.swat/java-watch)
+[![javadoc](https://javadoc.io/badge2/engineering.swat/java-watch/docs.svg?style=flat-square)](https://javadoc.io/doc/engineering.swat/java-watch) 
+[![Codecov](https://img.shields.io/codecov/c/github/SWAT-engineering/java-watch?style=flat-square)](https://codecov.io/gh/SWAT-engineering/java-watch)
 
 a java file watcher that works across platforms and supports recursion, single file watches, and tries to make sure no events are missed. Where possible it uses Java's NIO WatchService.
 
@@ -22,7 +25,7 @@ Planned features:
 - Support single file watches natively in linux (see [#11](https://github.com/SWAT-engineering/java-watch/issues/11))
 - Monitor only specific events (such as only CREATE events)
 
-[![codecov](https://codecov.io/gh/SWAT-engineering/java-watch/graph/badge.svg?token=XL29SDYAF0)](https://codecov.io/gh/SWAT-engineering/java-watch)
+
 
 ## Usage
 
