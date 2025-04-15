@@ -12,4 +12,4 @@ First version of java-watch. Included features:
   - Yourself
   - We generate events for all current entries on disk
   - We keep track of changes in a map, and based on modification stamp generate a most likely events
-- extensive tests for Linux/Windows/OSX support 
+- extensive tests for Linux/Windows/OSX support
