@@ -236,6 +236,7 @@
             <extensions>true</extensions>
             <configuration>
               <publishingServerId>central</publishingServerId>
+              <autoPublish>true</autoPublish>
             </configuration>
           </plugin>
           <plugin> <!-- sign jar for maven central-->
