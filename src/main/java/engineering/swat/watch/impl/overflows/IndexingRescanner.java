@@ -44,6 +44,7 @@ import java.util.function.BiFunction;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 import engineering.swat.watch.WatchEvent;
@@ -59,7 +60,7 @@ public class IndexingRescanner extends MemorylessRescanner {
         new Indexer(path, scope).walkFileTree(); // Make an initial scan to populate the index
     }
 
-    private static class PathMap<V> {
+    private static class PathMap<V extends @NonNull Object > {
         private final Map<Path, Map<Path, V>> values = new ConcurrentHashMap<>();
         //                ^^^^      ^^^^
         //                Parent    File name (regular file or directory)
@@ -85,7 +86,7 @@ public class IndexingRescanner extends MemorylessRescanner {
             return apply(this::remove, p);
         }
 
-        private static <V> @Nullable V apply(BiFunction<Path, Path, @Nullable V> action, Path p) {
+        private static <V extends @Nullable Object> V apply(BiFunction<Path, Path, V> action, Path p) {
             var parent = p.getParent();
             var fileName = p.getFileName();
             if (parent != null && fileName != null) {
