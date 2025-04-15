@@ -74,7 +74,7 @@ class IndexingRescannerTests {
         // Configure a non-recursive directory watch that monitors only the
         // children (not all descendants) of `path`
         var eventsOnlyForChildren = new AtomicBoolean(true);
-        var watchConfig = Watcher.watch(path, WatchScope.PATH_AND_CHILDREN)
+        var watchConfig = Watcher.build(path, WatchScope.PATH_AND_CHILDREN)
             .onOverflow(Approximation.NONE) // Disable the auto-handler here; we'll have an explicit one below
             .on(e -> {
                 if (e.getRelativePath().getNameCount() > 1) {

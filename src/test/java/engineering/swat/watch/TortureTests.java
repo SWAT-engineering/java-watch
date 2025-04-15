@@ -153,7 +153,7 @@ class TortureTests {
         var io = new IOGenerator(THREADS, root, pool);
 
         var seenCreates = ConcurrentHashMap.<Path>newKeySet();
-        var watchConfig = Watcher.watch(testDir.getTestDirectory(), WatchScope.PATH_AND_ALL_DESCENDANTS)
+        var watchConfig = Watcher.build(testDir.getTestDirectory(), WatchScope.PATH_AND_ALL_DESCENDANTS)
             .withExecutor(pool)
             .onOverflow(whichFiles)
             .on(ev -> {
@@ -223,7 +223,7 @@ class TortureTests {
             var r = new Thread(() -> {
                 try {
                     var watcher = Watcher
-                        .watch(testDir.getTestDirectory(), WatchScope.PATH_AND_CHILDREN)
+                        .build(testDir.getTestDirectory(), WatchScope.PATH_AND_CHILDREN)
                         .on(e -> seen.add(e.calculateFullPath()));
                     startRegistering.acquire();
                     try (var c = watcher.start()) {
@@ -295,7 +295,7 @@ class TortureTests {
                         startRegistering.acquire();
                         for (int k = 0; k < 1000; k++) {
                             var watcher = Watcher
-                                .watch(testDir.getTestDirectory(), WatchScope.PATH_AND_CHILDREN)
+                                .build(testDir.getTestDirectory(), WatchScope.PATH_AND_CHILDREN)
                                 .onOverflow(whichFiles)
                                 .on(e -> {
                                     if (e.calculateFullPath().equals(target)) {
@@ -359,7 +359,7 @@ class TortureTests {
 
             final var events = new AtomicInteger(0);
             final var happened = new Semaphore(0);
-            var watchConfig = Watcher.watch(testDir.getTestDirectory(), WatchScope.PATH_AND_ALL_DESCENDANTS)
+            var watchConfig = Watcher.build(testDir.getTestDirectory(), WatchScope.PATH_AND_ALL_DESCENDANTS)
                 .withExecutor(pool)
                 .onOverflow(whichFiles)
                 .on(ev -> {

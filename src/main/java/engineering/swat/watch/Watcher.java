@@ -72,11 +72,21 @@ public class Watcher {
 
     /**
      * Watch a path for updates, optionally also get events for its children/descendants
+     * @deprecated please upgrade to {@linkplain #build}
+     *
+     */
+    @Deprecated(since = "0.6.0", forRemoval = true)
+    public static Watcher watch(Path path, WatchScope scope) {
+        return build(path, scope);
+    }
+
+    /**
+     * Watch a path for updates, optionally also get events for its children/descendants
      * @param path which absolute path to monitor, can be a file or a directory, but has to be absolute
      * @param scope for directories you can also choose to monitor it's direct children or all it's descendants
      * @throws IllegalArgumentException in case a path is not supported (in relation to the scope)
      */
-    public static Watcher watch(Path path, WatchScope scope) {
+    public static Watcher build(Path path, WatchScope scope) {
         if (!path.isAbsolute()) {
             throw new IllegalArgumentException("We can only watch absolute paths");
         }

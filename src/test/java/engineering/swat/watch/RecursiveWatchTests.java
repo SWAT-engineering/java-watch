@@ -77,7 +77,7 @@ class RecursiveWatchTests {
         var target = new AtomicReference<Path>();
         var created = new AtomicBoolean(false);
         var changed = new AtomicBoolean(false);
-        var watchConfig = Watcher.watch(testDir.getTestDirectory(), WatchScope.PATH_AND_ALL_DESCENDANTS)
+        var watchConfig = Watcher.build(testDir.getTestDirectory(), WatchScope.PATH_AND_ALL_DESCENDANTS)
             .on(ev -> {
                     logger.debug("Event received: {}", ev);
                     if (ev.calculateFullPath().equals(target.get())) {
@@ -109,7 +109,7 @@ class RecursiveWatchTests {
     void correctRelativePathIsReported() throws IOException {
         Path relative = Path.of("a","b", "c", "d.txt");
         var seen = new AtomicBoolean(false);
-        var watcher = Watcher.watch(testDir.getTestDirectory(), WatchScope.PATH_AND_ALL_DESCENDANTS)
+        var watcher = Watcher.build(testDir.getTestDirectory(), WatchScope.PATH_AND_ALL_DESCENDANTS)
             .on(ev -> {
                 logger.debug("Seen event: {}", ev);
                 if (ev.getRelativePath().equals(relative)) {
@@ -134,7 +134,7 @@ class RecursiveWatchTests {
             .findAny()
             .orElseThrow();
         var seen = new AtomicBoolean(false);
-        var watchConfig = Watcher.watch(target.getParent(), WatchScope.PATH_AND_CHILDREN)
+        var watchConfig = Watcher.build(target.getParent(), WatchScope.PATH_AND_CHILDREN)
             .on(ev -> {
                 if (ev.getKind() == Kind.DELETED && ev.calculateFullPath().equals(target)) {
                     seen.set(true);
@@ -160,7 +160,7 @@ class RecursiveWatchTests {
         // Configure and start watch
         var dropEvents = new AtomicBoolean(false); // Toggles overflow simulation
         var bookkeeper = new TestHelper.Bookkeeper();
-        var watchConfig = Watcher.watch(parent, WatchScope.PATH_AND_ALL_DESCENDANTS)
+        var watchConfig = Watcher.build(parent, WatchScope.PATH_AND_ALL_DESCENDANTS)
             .withExecutor(ForkJoinPool.commonPool())
             .filter(e -> !dropEvents.get())
             .onOverflow(whichFiles)
