@@ -54,10 +54,10 @@ public class EventStream implements Closeable {
     private volatile @Nullable Pointer queue;
 
     private final Path path;
-    private final BiConsumer<Kind<?>, Path> handler;
+    private final BiConsumer<Kind<?>, @Nullable Path> handler;
     private volatile boolean closed;
 
-    public EventStream(Path path, BiConsumer<Kind<?>, Path> handler) throws IOException {
+    public EventStream(Path path, BiConsumer<Kind<?>, @Nullable Path> handler) throws IOException {
         this.path = path.toRealPath(); // Resolve symbolic links
         this.handler = handler;
         this.closed = true;
@@ -71,16 +71,19 @@ public class EventStream implements Closeable {
         }
 
         // Allocate native memory
-        callback = createCallback(handler, path);
-        stream = createFSEventStream(callback, path);
-        queue = createDispatchQueue();
+        var callback = createCallback(path, handler);
+        var stream = createFSEventStream(path, callback);
+        var queue = createDispatchQueue();
+        this.callback = callback; // `Nullable` instead of `NonNull`
+        this.stream = stream;     // `Nullable` instead of `NonNull`
+        this.queue = queue;       // `Nullable` instead of `NonNull`
 
         // Start the stream
         FSE.FSEventStreamSetDispatchQueue(stream, queue);
         FSE.FSEventStreamStart(stream);
     }
 
-    private static FSEventStreamCallback createCallback(BiConsumer<Kind<?>, Path> handler, Path path) {
+    private static FSEventStreamCallback createCallback(Path path, BiConsumer<Kind<?>, @Nullable Path> handler) {
         return new FSEventStreamCallback() {
             @Override
             public void callback(Pointer streamRef, Pointer clientCallBackInfo,
@@ -116,7 +119,7 @@ public class EventStream implements Closeable {
         };
     }
 
-    private static Pointer createFSEventStream(FSEventStreamCallback callback, Path path) {
+    private static Pointer createFSEventStream(Path path, FSEventStreamCallback callback) {
         try (
             var pathsToWatch = new Strings(path.toString());
         ) {
@@ -146,11 +149,15 @@ public class EventStream implements Closeable {
         }
 
         // Stop the stream
-        FSE.FSEventStreamStop(stream);
-        FSE.FSEventStreamSetDispatchQueue(stream, Pointer.NULL);
-        FSE.FSEventStreamInvalidate(stream);
-        FSE.FSEventStreamRelease(stream);
-        DO.dispatch_release(queue);
+        if (stream != null && queue != null) {
+            var stream = this.stream; // `NonNull` instead of `Nullable`
+            var queue = this.queue;   // `NonNull` instead of `Nullable`
+            FSE.FSEventStreamStop(stream);
+            FSE.FSEventStreamSetDispatchQueue(stream, Pointer.NULL);
+            FSE.FSEventStreamInvalidate(stream);
+            FSE.FSEventStreamRelease(stream);
+            DO.dispatch_release(queue);
+        }
 
         // Deallocate native memory
         callback = null;

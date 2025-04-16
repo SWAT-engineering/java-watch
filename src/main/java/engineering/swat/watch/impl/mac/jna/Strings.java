@@ -1,7 +1,5 @@
 package engineering.swat.watch.impl.mac.jna;
 
-import org.checkerframework.checker.nullness.qual.Nullable;
-
 import com.sun.jna.Memory;
 import com.sun.jna.Native;
 import com.sun.jna.Pointer;
@@ -11,7 +9,8 @@ import com.sun.jna.platform.mac.CoreFoundation.CFIndex;
 import com.sun.jna.platform.mac.CoreFoundation.CFStringRef;
 
 /**
- * Array of strings in native memory
+ * Array of strings in native memory. Such arrays are needed to create new event
+ * streams (in which case the strings are paths to watch).
  */
 class Strings implements AutoCloseable {
 
@@ -19,15 +18,15 @@ class Strings implements AutoCloseable {
     private static final CoreFoundation CF = CoreFoundation.INSTANCE;
 
     // Native memory
-    private volatile @Nullable CFStringRef[] strings;
-    private volatile @Nullable CFArrayRef array;
+    private final CFStringRef[] strings;
+    private final CFArrayRef array;
 
     private volatile boolean closed = false;
 
-    public Strings(String... pathsToWatch) {
+    public Strings(String... strings) {
         // Allocate native memory
-        this.strings = createCFStrings(pathsToWatch);
-        this.array = createCFArray(strings);
+        this.strings = createCFStrings(strings);
+        this.array = createCFArray(this.strings);
     }
 
     public CFArrayRef toCFArray() {
@@ -74,11 +73,12 @@ class Strings implements AutoCloseable {
 
         // Deallocate native memory
         for (var s : strings) {
-            s.release();
+            if (s != null) {
+                s.release();
+            }
         }
-        array.release();
-
-        strings = null;
-        array = null;
+        if (array != null) {
+            array.release();
+        }
     }
 }
