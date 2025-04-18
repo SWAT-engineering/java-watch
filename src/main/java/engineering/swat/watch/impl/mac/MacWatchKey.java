@@ -1,4 +1,4 @@
-package engineering.swat.watch.impl.mac.nio.file;
+package engineering.swat.watch.impl.mac;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -17,14 +17,12 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import com.sun.nio.file.ExtendedWatchEventModifier;
 
-import engineering.swat.watch.impl.mac.jna.EventStream;
-
 public class MacWatchKey implements WatchKey {
     private final MacWatchable watchable;
     private final MacWatchService service;
     private final BlockingQueue<WatchEvent<?>> pendingEvents;
 
-    private volatile @Nullable EventStream stream;
+    private volatile @Nullable NativeEventStream stream;
     private volatile Configuration config = new Configuration();
     private volatile boolean signalled = false;
     private volatile boolean cancelled = false;
@@ -50,6 +48,23 @@ public class MacWatchKey implements WatchKey {
         if (condition) {
             signalled = true;
             service.offer(this);
+            // The order of these statements is important. If it's the other way
+            // around, then the following harmful interleaving of an offering
+            // thread (Thread 1) and a polling thread (Thread 2) can happen:
+            //   - Thread 1:
+            //       - Add event to `pendingEvents` [`handle`]
+            //       - Test `!signalled` is true [`handle`+`signalWhen`]
+            //       - Offer `this` to `service` [`signalWhen`].
+            //   - Thread 2:
+            //       - Poll `this` from `service` [`MacWatchService.poll`]
+            //       - Drain events from `pendingEvents` [`pollEvents`]
+            //       - Set `signalled` to false [`reset`]
+            //       - Test `!pendingEvents.empty()` is false [`reset`+`signalWhen`]
+            //   - Thread 1:
+            //       - Set `signalled` to true [`signalWhen`]. At this point:
+            //         (a) `this` isn't offered to `service`; (b) subsequent
+            //         calls of `handle` will not cause `this` to be offered. As
+            //         a result, no subsequent events are propagated.
         }
     }
 
@@ -59,12 +74,7 @@ public class MacWatchKey implements WatchKey {
 
     private synchronized void openStream() throws IOException {
         if (stream == null) {
-            stream = new EventStream(watchable.getPath(), (k, c) -> {
-                if (!cancelled && !config.ignore(k, c)) {
-                    pendingEvents.offer(MacWatchEvent.create(k, c));
-                    signalWhen(!signalled);
-                }
-            });
+            stream = new NativeEventStream(watchable.getPath(), new OfferWatchEvent());
             stream.open();
         }
     }
@@ -73,6 +83,39 @@ public class MacWatchKey implements WatchKey {
         if (stream != null) {
             stream.close();
             stream = null;
+        }
+    }
+
+    /**
+     * Handler for native events, issued by macOS. When called, it checks if the
+     * native event is eligible for downstream consumption, creates and enqueues
+     * a suitable {@link WatchEvent}, and signals the service (when needed).
+     */
+    private class OfferWatchEvent implements NativeEventHandler {
+        @Override
+        public <T> void handle(Kind<T> kind, T context) {
+            if (!cancelled && !config.ignore(kind, context)) {
+
+                var event = new WatchEvent<T>() {
+                    @Override
+                    public Kind<T> kind() {
+                        return kind;
+                    }
+                    @Override
+                    public int count() {
+                        // We currently don't need/use event counts, so let's
+                        // keep the code simple for now.
+                        throw new UnsupportedOperationException();
+                    }
+                    @Override
+                    public T context() {
+                        return context;
+                    }
+                };
+
+                pendingEvents.offer(event);
+                signalWhen(!signalled);
+            }
         }
     }
 
@@ -104,13 +147,14 @@ public class MacWatchKey implements WatchKey {
          * configuration. This is the case when one of the following is true:
          * (a) the watch key isn't configured to watch events of the given
          * {@code kind}; (b) the watch key is configured to watch only the root
-         * level of a file tree, but the given {@code context} points to a
-         * non-root level.
+         * level of a file tree, but the given {@code context} (a {@code Path})
+         * points to a non-root level.
          */
-        public boolean ignore(Kind<?> kind, Path context) {
+        public boolean ignore(Kind<?> kind, @Nullable Object context) {
             for (var k : kinds) {
                 if (k == kind) {
-                    return singleDirectory && context.getNameCount() > 1;
+                    return singleDirectory &&
+                        context instanceof Path && ((Path) context).getNameCount() > 1;
                 }
             }
             return true;

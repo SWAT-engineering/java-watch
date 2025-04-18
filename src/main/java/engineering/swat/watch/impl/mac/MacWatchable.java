@@ -1,4 +1,4 @@
-package engineering.swat.watch.impl.mac.nio.file;
+package engineering.swat.watch.impl.mac;
 
 import static java.nio.file.StandardWatchEventKinds.OVERFLOW;
 
@@ -13,6 +13,8 @@ import java.nio.file.WatchEvent.Modifier;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+
+import org.checkerframework.checker.nullness.qual.NonNull;
 
 public class MacWatchable implements Watchable {
     private final Path path;
@@ -39,10 +41,12 @@ public class MacWatchable implements Watchable {
             var service = (MacWatchService) watcher;
             var key = registrations.computeIfAbsent(service, k -> new MacWatchKey(this, k));
 
-            events = Arrays.copyOf(events, events.length + 1);
-            events[events.length - 1] = OVERFLOW; // Always register for `OVERFLOW` events (per this method's docs)
-            key.reconfigure(events, modifiers);
+            // Add `OVERFLOW` to the array (see this method's docs). Note: The
+            // `@NonNull` cast is only temporarily unsound.
+            events = (Kind<@NonNull ?>[]) Arrays.copyOf(events, events.length + 1);
+            events[events.length - 1] = OVERFLOW; // All elements are now `@NonNull`
 
+            key.reconfigure(events, modifiers);
             return key;
         } else {
             throw new IllegalArgumentException();

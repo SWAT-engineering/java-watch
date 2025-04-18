@@ -1,4 +1,4 @@
-package engineering.swat.watch.impl.mac.jna.apis;
+package engineering.swat.watch.impl.mac.apis;
 
 import com.sun.jna.Callback;
 import com.sun.jna.Library;
@@ -51,6 +51,12 @@ public interface FileSystemEvents extends Library {
      * @see https://developer.apple.com/documentation/coreservices/1444164-fseventstreamsetdispatchqueue?language=objc
      */
     void FSEventStreamSetDispatchQueue(Pointer streamRef, Pointer q);
+
+     /**
+      * @param streamRef {@code FSEventStreamRef}
+      * @see https://developer.apple.com/documentation/coreservices/1444302-fseventstreamshow?language=objc
+      */
+    boolean FSEventStreamShow(Pointer streamRef);
 
      /**
       * @param streamRef {@code FSEventStreamRef}

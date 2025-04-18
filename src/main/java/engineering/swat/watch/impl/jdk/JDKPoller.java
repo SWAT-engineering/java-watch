@@ -33,7 +33,6 @@ import static java.nio.file.StandardWatchEventKinds.OVERFLOW;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.nio.file.FileSystems;
 import java.nio.file.WatchEvent;
 import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
@@ -51,11 +50,8 @@ import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import com.sun.jna.Platform;
 import com.sun.nio.file.ExtendedWatchEventModifier;
 
-import engineering.swat.watch.impl.mac.nio.file.MacWatchService;
-import engineering.swat.watch.impl.mac.nio.file.MacWatchable;
 import engineering.swat.watch.impl.util.SubscriptionKey;
 
 /**
@@ -66,6 +62,7 @@ class JDKPoller {
 
     private static final Logger logger = LogManager.getLogger();
     private static final Map<WatchKey, Consumer<List<WatchEvent<?>>>> watchers = new ConcurrentHashMap<>();
+    private static final Platform platform;
     private static final WatchService service;
     private static final int nCores = Runtime.getRuntime().availableProcessors();
     /**
@@ -76,11 +73,8 @@ class JDKPoller {
 
     static {
         try {
-            if (Platform.isMac()) {
-                service = new MacWatchService();
-            } else {
-                service = FileSystems.getDefault().newWatchService();
-            }
+            platform = Platform.get();
+            service = platform.newWatchService();
         } catch (IOException e) {
             throw new RuntimeException("Could not start watcher", e);
         }
@@ -129,7 +123,7 @@ class JDKPoller {
             return CompletableFuture.supplyAsync(() -> {
                 try {
                     WatchEvent.Kind<?>[] kinds = new WatchEvent.Kind[]{ ENTRY_CREATE, ENTRY_MODIFY, OVERFLOW, ENTRY_DELETE };
-                    var watchable = Platform.isMac() ? new MacWatchable(path.getPath()) : path.getPath();
+                    var watchable = platform.newWatchable(path.getPath());
                     if (path.isRecursive()) {
                         return watchable.register(service, kinds, ExtendedWatchEventModifier.FILE_TREE);
                     }
