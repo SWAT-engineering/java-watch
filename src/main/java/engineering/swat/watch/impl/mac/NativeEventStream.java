@@ -84,9 +84,9 @@ public class NativeEventStream implements Closeable {
     private static final FileSystemEvents FSE = FileSystemEvents.INSTANCE;
 
     // Native memory (automatically deallocated when set to `null`)
-    private volatile @Nullable FSEventStreamCallback callback;
-    private volatile @Nullable Pointer stream;
-    private volatile @Nullable Pointer queue;
+    private @Nullable FSEventStreamCallback callback;
+    private @Nullable Pointer stream;
+    private @Nullable Pointer queue;
 
     private final Path path;
     private final NativeEventHandler handler;
