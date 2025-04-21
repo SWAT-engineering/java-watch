@@ -121,23 +121,23 @@ class SmokeTests {
         var file = Files.createFile(child1.resolve("file.txt"));
 
         var parentWatchBookkeeper = new TestHelper.Bookkeeper();
-        var parentWatchConfig = Watcher
-            .watch(parent, WatchScope.PATH_AND_ALL_DESCENDANTS)
+        var parentWatchConfig = Watch
+            .build(parent, WatchScope.PATH_AND_ALL_DESCENDANTS)
             .on(parentWatchBookkeeper);
 
         var child1WatchBookkeeper = new TestHelper.Bookkeeper();
-        var child1WatchConfig = Watcher
-            .watch(child1, WatchScope.PATH_AND_CHILDREN)
+        var child1WatchConfig = Watch
+            .build(child1, WatchScope.PATH_AND_CHILDREN)
             .on(child1WatchBookkeeper);
 
         var child2WatchBookkeeper = new TestHelper.Bookkeeper();
-        var child2WatchConfig = Watcher
-            .watch(child2, WatchScope.PATH_AND_CHILDREN)
+        var child2WatchConfig = Watch
+            .build(child2, WatchScope.PATH_AND_CHILDREN)
             .on(child2WatchBookkeeper);
 
         var fileWatchBookkeeper = new TestHelper.Bookkeeper();
-        var fileWatchConfig = Watcher
-            .watch(file, WatchScope.PATH_ONLY)
+        var fileWatchConfig = Watch
+            .build(file, WatchScope.PATH_ONLY)
             .on(fileWatchBookkeeper);
 
         try (var parentWatch = parentWatchConfig.start();
