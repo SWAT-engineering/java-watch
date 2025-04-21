@@ -1,0 +1,29 @@
+version: 2
+updates:
+- package-ecosystem: "maven"
+  directory: "/"
+  schedule:
+    interval: "monthly"
+  open-pull-requests-limit: 10
+  groups:
+    upstream-libs:
+      patterns:
+      - "*"
+      exclude-patterns:
+      - "*checkerframework*"
+      - "*maven.plugins*"
+    checker-framework:
+      patterns:
+      - "*checkerframework*"
+    maven-plugins:
+      patterns:
+      - "*maven.plugins*"
+
+- package-ecosystem: "github-actions"
+  directory: "/"
+  schedule:
+    interval: "monthly"
+  groups:
+    gh-actions:
+      patterns:
+      - "*" # group all GH action upgrades in a single PR
