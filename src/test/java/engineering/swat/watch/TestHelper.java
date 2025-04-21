@@ -48,7 +48,7 @@ public class TestHelper {
         var os = System.getProperty("os.name", "?").toLowerCase();
         if (os.contains("mac")) {
             // OSX is SLOW on it's watches
-            delayFactor *= 2;
+            delayFactor *= 3;
         }
         else if (os.contains("win")) {
             // windows watches can be slow to get everything
