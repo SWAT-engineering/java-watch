@@ -34,9 +34,11 @@ import static java.nio.file.StandardWatchEventKinds.OVERFLOW;
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.FileSystems;
+import java.nio.file.Path;
 import java.nio.file.WatchEvent;
 import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
+import java.nio.file.Watchable;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -53,6 +55,8 @@ import org.apache.logging.log4j.Logger;
 
 import com.sun.nio.file.ExtendedWatchEventModifier;
 
+import engineering.swat.watch.impl.mac.MacWatchService;
+import engineering.swat.watch.impl.mac.MacWatchable;
 import engineering.swat.watch.impl.util.SubscriptionKey;
 
 /**
@@ -73,7 +77,7 @@ class JDKPoller {
 
     static {
         try {
-            service = FileSystems.getDefault().newWatchService();
+            service = Platform.get().newWatchService();
         } catch (IOException e) {
             throw new RuntimeException("Could not start watcher", e);
         }
@@ -122,11 +126,12 @@ class JDKPoller {
             return CompletableFuture.supplyAsync(() -> {
                 try {
                     WatchEvent.Kind<?>[] kinds = new WatchEvent.Kind[]{ ENTRY_CREATE, ENTRY_MODIFY, OVERFLOW, ENTRY_DELETE };
+                    var watchable = Platform.get().newWatchable(path.getPath());
                     if (path.isRecursive()) {
-                        return path.getPath().register(service, kinds, ExtendedWatchEventModifier.FILE_TREE);
+                        return watchable.register(service, kinds, ExtendedWatchEventModifier.FILE_TREE);
                     }
                     else {
-                        return path.getPath().register(service, kinds);
+                        return watchable.register(service, kinds);
                     }
                 } catch (IOException e) {
                     throw new RuntimeException(e);
@@ -154,6 +159,40 @@ class JDKPoller {
             // the pool was closing, forward it
             Thread.currentThread().interrupt();
             throw new IOException("The registration was canceled");
+        }
+    }
+
+    private static interface Platform {
+        WatchService newWatchService() throws IOException;
+        Watchable newWatchable(Path path);
+
+        static final Platform MAC = new Platform() {
+            @Override
+            public WatchService newWatchService() throws IOException {
+                return new MacWatchService();
+            }
+            @Override
+            public Watchable newWatchable(Path path) {
+                return new MacWatchable(path);
+            }
+        };
+
+        static final Platform DEFAULT = new Platform() {
+            @Override
+            public WatchService newWatchService() throws IOException {
+                return FileSystems.getDefault().newWatchService();
+            }
+            @Override
+            public Watchable newWatchable(Path path) {
+                return path;
+            }
+        };
+
+        static final Platform CURRENT = // Assumption: the platform doesn't change
+            com.sun.jna.Platform.isMac() ? MAC : DEFAULT;
+
+        static Platform get() {
+            return CURRENT;
         }
     }
 }
