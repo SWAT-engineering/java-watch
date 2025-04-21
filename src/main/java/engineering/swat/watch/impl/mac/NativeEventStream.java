@@ -59,19 +59,20 @@ import engineering.swat.watch.impl.mac.apis.FileSystemEvents;
 import engineering.swat.watch.impl.mac.apis.FileSystemEvents.FSEventStreamCallback;
 
 // Note: This file is designed to be the only place in this package where JNA is
-// used and/or the native APIs are called. If the need to do so arises outside
+// used and/or the native APIs are invoked. If the need to do so arises outside
 // this file, consider extending this file to offer the required services
 // without exposing JNA and/or the native APIs.
 
 /**
  * <p>
- * Stream of native events for a path, issued by macOS.
+ * Stream of native events for a path, issued by macOS. It's a facade-like
+ * object that hides the low-level native APIs behind a higher-level interface.
  * </p>
  *
  * <p>
  * Note: Methods {@link #open()} and {@link #close()} synchronize on this object
  * to avoid races. The synchronization overhead is expected to be negligible, as
- * these methods are expected to be rarely called.
+ * these methods are expected to be rarely invoked.
  * </p>
  */
 public class NativeEventStream implements Closeable {

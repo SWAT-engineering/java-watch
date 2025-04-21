@@ -107,7 +107,7 @@ class APIs {
     }
 
     public static void main(String[] args) throws IOException {
-        var s = "/Users/sungshik/Desktop/tmp";
+        var s = args[0];
         var handler = (MinimalWorkingExample.EventHandler) (path, flags, id) -> {
             LOGGER.info(prettyPrint(path, flags, id));
         };
@@ -130,9 +130,9 @@ class APIs {
     }
 
     private static class MinimalWorkingExample implements Closeable {
-        FileSystemEvents.FSEventStreamCallback callback;
-        Pointer stream;
-        Pointer queue;
+        private FileSystemEvents.FSEventStreamCallback callback;
+        private Pointer stream;
+        private Pointer queue;
 
         public MinimalWorkingExample(String s, EventHandler handler) {
 
