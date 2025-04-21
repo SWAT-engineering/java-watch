@@ -121,8 +121,6 @@ public class NativeEventStream implements Closeable {
                     if (any(flags[i], MUST_SCAN_SUB_DIRS.mask)) {
                         handler.handle(OVERFLOW, null);
                     }
-
-                    // TODO: Fix renames (`ITEM_RENAMED`)
                 }
             }
 
