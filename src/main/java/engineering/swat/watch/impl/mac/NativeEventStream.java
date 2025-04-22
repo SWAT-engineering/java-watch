@@ -100,15 +100,15 @@ public class NativeEventStream implements Closeable {
 
     public synchronized void open() {
         if (!closed) {
-            throw new IllegalStateException("Stream already open");
+            throw new IllegalStateException("Stream is already open");
         } else {
             closed = false;
         }
 
         // Allocate native memory. (Checker Framework: The local variables are
         // `@NonNull` copies of the `@Nullable` fields.)
-        var callback = this.callback = createCallback(path, handler);
-        var stream = this.stream = createFSEventStream(path, callback);
+        var callback = this.callback = createCallback();
+        var stream = this.stream = createFSEventStream(callback);
         var queue = this.queue = createDispatchQueue();
 
         // Start the stream
@@ -116,7 +116,7 @@ public class NativeEventStream implements Closeable {
         FSE.FSEventStreamStart(stream);
     }
 
-    private static FSEventStreamCallback createCallback(Path path, NativeEventHandler handler) {
+    private FSEventStreamCallback createCallback() {
         return new FSEventStreamCallback() {
             @Override
             public void callback(Pointer streamRef, Pointer clientCallBackInfo,
@@ -132,10 +132,10 @@ public class NativeEventStream implements Closeable {
                 for (var i = 0; i < numEvents; i++) {
                     var context = path.relativize(Path.of(paths[i]));
 
-                    // Note: Multiple "physical" native events might be merged
-                    // into a single "logical" native event, so the following
-                    // series of checks should be if-statements (instead of
-                    // if/else-statements).
+                    // Note: Multiple "physical" native events might be
+                    // coalesced into a single "logical" native event, so the
+                    // following series of checks should be if-statements
+                    // (instead of if/else-statements).
                     if (any(flags[i], ITEM_CREATED.mask)) {
                         handler.handle(ENTRY_CREATE, context);
                     }
@@ -157,7 +157,7 @@ public class NativeEventStream implements Closeable {
         };
     }
 
-    private static Pointer createFSEventStream(Path path, FSEventStreamCallback callback) {
+    private Pointer createFSEventStream(FSEventStreamCallback callback) {
         try (
             var pathsToWatch = new Strings(path.toString());
         ) {
@@ -170,7 +170,7 @@ public class NativeEventStream implements Closeable {
         }
     }
 
-    private static Pointer createDispatchQueue() {
+    private Pointer createDispatchQueue() {
         var label = "engineering.swat.watch";
         var attr  = Pointer.NULL;
         return DQ.dispatch_queue_create(label, attr);
