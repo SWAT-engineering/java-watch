@@ -42,6 +42,7 @@ import static java.nio.file.StandardWatchEventKinds.OVERFLOW;
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.Arrays;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -100,7 +101,7 @@ class NativeEventStream implements Closeable {
 
     public synchronized void open() {
         if (!closed) {
-            throw new IllegalStateException("Stream is already open");
+            return;
         } else {
             closed = false;
         }
@@ -158,9 +159,7 @@ class NativeEventStream implements Closeable {
     }
 
     private Pointer createFSEventStream(FSEventStreamCallback callback) {
-        try (
-            var pathsToWatch = new Strings(path.toString());
-        ) {
+        try (var pathsToWatch = new Strings(path.toString())) {
             var allocator = CF.CFAllocatorGetDefault();
             var context   = Pointer.NULL;
             var sinceWhen = FSE.FSEventsGetCurrentEventId();
@@ -181,7 +180,7 @@ class NativeEventStream implements Closeable {
     @Override
     public synchronized void close() {
         if (closed) {
-            throw new IllegalStateException("Stream is already closed");
+            return;
         } else {
             closed = true;
         }
@@ -236,13 +235,9 @@ class Strings implements AutoCloseable {
     }
 
     private static CFStringRef[] createCFStrings(String[] pathsToWatch) {
-        var n = pathsToWatch.length;
-
-        var strings = new CFStringRef[n];
-        for (int i = 0; i < n; i++) {
-            strings[i] = CFStringRef.createCFString(pathsToWatch[i]);
-        }
-        return strings;
+        return Arrays.stream(pathsToWatch)
+            .map(CFStringRef::createCFString)
+            .toArray(CFStringRef[]::new);
     }
 
     private static CFArrayRef createCFArray(CFStringRef[] strings) {
