@@ -108,15 +108,17 @@ class NativeEventStream implements Closeable {
             closed = false;
         }
 
-        // Allocate native memory. (Checker Framework: The local variables are
-        // `@NonNull` copies of the `@Nullable` fields.)
-        var callback = this.callback = createCallback();
-        var stream = this.stream = createFSEventStream(callback);
-        var queue = this.queue = createDispatchQueue();
+        // Allocate native memory
+        callback = createCallback();
+        stream = createFSEventStream(callback);
+        queue = createDispatchQueue();
 
         // Start the stream
-        FSE.FSEventStreamSetDispatchQueue(stream, queue);
-        FSE.FSEventStreamStart(stream);
+        var streamNonNull = stream;
+        if (streamNonNull != null) {
+            FSE.FSEventStreamSetDispatchQueue(streamNonNull, queue);
+            FSE.FSEventStreamStart(streamNonNull);
+        }
     }
 
     private FSEventStreamCallback createCallback() {
@@ -187,24 +189,22 @@ class NativeEventStream implements Closeable {
             closed = true;
         }
 
-        // Stop the stream
-        if (stream != null) {
-            var streamNonNull = stream; // Checker Framework: `@NonNull` copy of `@Nullable` field
+        var streamNonNull = stream;
+        var queueNonNull = queue;
+        if (streamNonNull != null && queueNonNull != null) {
+
+            // Stop the stream
             FSE.FSEventStreamStop(streamNonNull);
             FSE.FSEventStreamSetDispatchQueue(streamNonNull, Pointer.NULL);
             FSE.FSEventStreamInvalidate(streamNonNull);
 
             // Deallocate native memory
+            DO.dispatch_release(queueNonNull);
             FSE.FSEventStreamRelease(streamNonNull);
+            queue = null;
+            stream = null;
+            callback = null;
         }
-        if (queue != null) {
-            DO.dispatch_release(queue);
-        }
-
-        // Deallocate native memory
-        callback = null;
-        stream = null;
-        queue = null;
     }
 }
 
