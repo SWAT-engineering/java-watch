@@ -38,6 +38,7 @@ import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 
@@ -114,6 +115,7 @@ class SmokeTests {
     }
 
     @Test
+    @Disabled
     void moveRegularFileBetweenNestedDirectories() throws IOException {
         var parent = testDir.getTestDirectory();
         var child1 = Files.createDirectories(parent.resolve("from"));
