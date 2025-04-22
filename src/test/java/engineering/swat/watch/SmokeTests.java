@@ -65,7 +65,7 @@ class SmokeTests {
     void watchDirectory() throws IOException {
         var changed = new AtomicBoolean(false);
         var target = testDir.getTestFiles().get(0);
-        var watchConfig = Watcher.watch(testDir.getTestDirectory(), WatchScope.PATH_AND_CHILDREN)
+        var watchConfig = Watch.build(testDir.getTestDirectory(), WatchScope.PATH_AND_CHILDREN)
             .on(ev -> {if (ev.getKind() == MODIFIED && ev.calculateFullPath().equals(target)) { changed.set(true); }})
             ;
 
@@ -82,7 +82,7 @@ class SmokeTests {
             .filter(p -> !p.getParent().equals(testDir.getTestDirectory()))
             .findFirst()
             .orElseThrow();
-        var watchConfig = Watcher.watch(testDir.getTestDirectory(), WatchScope.PATH_AND_ALL_DESCENDANTS)
+        var watchConfig = Watch.build(testDir.getTestDirectory(), WatchScope.PATH_AND_ALL_DESCENDANTS)
             .on(ev -> { if (ev.getKind() == MODIFIED && ev.calculateFullPath().equals(target)) { changed.set(true);}})
             ;
 
@@ -100,7 +100,7 @@ class SmokeTests {
             .findFirst()
             .orElseThrow();
 
-        var watchConfig = Watcher.watch(target, WatchScope.PATH_ONLY)
+        var watchConfig = Watch.build(target, WatchScope.PATH_ONLY)
             .on(ev -> {
                 if (ev.calculateFullPath().equals(target)) {
                     changed.set(true);
@@ -110,6 +110,64 @@ class SmokeTests {
         try (var watch = watchConfig.start()) {
             Files.writeString(target, "Hello world");
             await("Single file change").untilTrue(changed);
+        }
+    }
+
+    @Test
+    void moveRegularFileBetweenNestedDirectories() throws IOException {
+        var parent = testDir.getTestDirectory();
+        var child1 = Files.createDirectories(parent.resolve("from"));
+        var child2 = Files.createDirectories(parent.resolve("to"));
+        var file = Files.createFile(child1.resolve("file.txt"));
+
+        var parentWatchBookkeeper = new TestHelper.Bookkeeper();
+        var parentWatchConfig = Watch
+            .build(parent, WatchScope.PATH_AND_ALL_DESCENDANTS)
+            .on(parentWatchBookkeeper);
+
+        var child1WatchBookkeeper = new TestHelper.Bookkeeper();
+        var child1WatchConfig = Watch
+            .build(child1, WatchScope.PATH_AND_CHILDREN)
+            .on(child1WatchBookkeeper);
+
+        var child2WatchBookkeeper = new TestHelper.Bookkeeper();
+        var child2WatchConfig = Watch
+            .build(child2, WatchScope.PATH_AND_CHILDREN)
+            .on(child2WatchBookkeeper);
+
+        var fileWatchBookkeeper = new TestHelper.Bookkeeper();
+        var fileWatchConfig = Watch
+            .build(file, WatchScope.PATH_ONLY)
+            .on(fileWatchBookkeeper);
+
+        try (var parentWatch = parentWatchConfig.start();
+             var child1Watch = child1WatchConfig.start();
+             var child2Watch = child2WatchConfig.start();
+             var fileWatch = fileWatchConfig.start()) {
+
+            var source = child1.resolve(file.getFileName());
+            var target = child2.resolve(file.getFileName());
+            Files.move(source, target);
+
+            await("Move should be observed as delete by `parent` watch (file tree)")
+                .until(() -> parentWatchBookkeeper
+                    .events().kind(DELETED).rootPath(parent).relativePath(parent.relativize(source)).any());
+
+            await("Move should be observed as create by `parent` watch (file tree)")
+                .until(() -> parentWatchBookkeeper
+                    .events().kind(CREATED).rootPath(parent).relativePath(parent.relativize(target)).any());
+
+            await("Move should be observed as delete by `child1` watch (single directory)")
+                .until(() -> child1WatchBookkeeper
+                    .events().kind(DELETED).rootPath(child1).relativePath(child1.relativize(source)).any());
+
+            await("Move should be observed as create by `child2` watch (single directory)")
+                .until(() -> child2WatchBookkeeper
+                    .events().kind(CREATED).rootPath(child2).relativePath(child2.relativize(target)).any());
+
+            await("Move should be observed as delete by `file` watch (regular file)")
+                .until(() -> fileWatchBookkeeper
+                    .events().kind(DELETED).rootPath(source).any());
         }
     }
 }
