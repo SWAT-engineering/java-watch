@@ -44,6 +44,8 @@ import java.util.stream.Stream;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 
 import com.sun.jna.Memory;
 import com.sun.jna.Native;
@@ -59,6 +61,7 @@ import engineering.swat.watch.impl.mac.apis.DispatchQueue;
 import engineering.swat.watch.impl.mac.apis.FileSystemEvents;
 import engineering.swat.watch.impl.mac.apis.FileSystemEvents.FSEventStreamEventFlag;
 
+@EnabledOnOs({OS.MAC})
 class APIs {
     private static final Logger LOGGER = LogManager.getLogger();
 
