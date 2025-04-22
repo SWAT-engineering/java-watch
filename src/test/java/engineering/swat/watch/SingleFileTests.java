@@ -71,7 +71,7 @@ class SingleFileTests {
         var target = testDir.getTestFiles().get(0);
         var seen = new AtomicBoolean(false);
         var others = new AtomicBoolean(false);
-        var watchConfig = Watcher.watch(target, WatchScope.PATH_ONLY)
+        var watchConfig = Watch.build(target, WatchScope.PATH_ONLY)
             .on(ev -> {
                 if (ev.calculateFullPath().equals(target)) {
                     seen.set(true);
@@ -100,7 +100,7 @@ class SingleFileTests {
         var target = testDir.getTestDirectory();
         var seen = new AtomicBoolean(false);
         var others = new AtomicBoolean(false);
-        var watchConfig = Watcher.watch(target, WatchScope.PATH_ONLY)
+        var watchConfig = Watch.build(target, WatchScope.PATH_ONLY)
             .on(ev -> {
                 if (ev.calculateFullPath().equals(target)) {
                     seen.set(true);
@@ -143,13 +143,11 @@ class SingleFileTests {
         try (var watch = startWatchAndTriggerOverflow(Approximation.ALL, bookkeeper)) {
             Thread.sleep(TestHelper.SHORT_WAIT.toMillis());
 
-            var fileName = watch.getPath().getFileName();
-            var parent = watch.getPath().getParent();
-
-            await("Overflow should trigger created event for `" + fileName + "`")
-                .until(() -> bookkeeper.events().kind(CREATED).rootPath(parent).relativePath(fileName).any());
+            var path = watch.getPath();
+            await("Overflow should trigger created event for `" + path + "`")
+                .until(() -> bookkeeper.events().kind(CREATED).rootPath(path).any());
             await("Overflow shouldn't trigger created events for other files")
-                .until(() -> bookkeeper.events().kind(CREATED).rootPath(parent).relativePathNot(fileName).none());
+                .until(() -> bookkeeper.events().kind(CREATED).rootPathNot(path).none());
             await("Overflow shouldn't trigger modified or deleted events")
                 .until(() -> bookkeeper.events().kind(MODIFIED, DELETED).none());
             await("Overflow should be visible to user-defined event handler")
@@ -161,8 +159,8 @@ class SingleFileTests {
         var parent = testDir.getTestDirectory();
         var file = parent.resolve("a.txt");
 
-        var watch = Watcher
-            .watch(file, WatchScope.PATH_ONLY)
+        var watch = Watch
+            .build(file, WatchScope.PATH_ONLY)
             .onOverflow(whichFiles)
             .on(bookkeeper)
             .start();
