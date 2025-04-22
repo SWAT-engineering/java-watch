@@ -84,10 +84,12 @@ class NativeEventStream implements Closeable {
     private static final DispatchQueue    DQ  = DispatchQueue.INSTANCE;
     private static final FileSystemEvents FSE = FileSystemEvents.INSTANCE;
 
-    // Native memory (automatically deallocated when set to `null`)
-    private @Nullable FSEventStreamCallback callback;
+    // Native memory
+    private @Nullable FSEventStreamCallback callback; // Keep reference to avoid premature GC'ing
     private @Nullable Pointer stream;
     private @Nullable Pointer queue;
+    // Note: These fields aren't volatile, as all reads/write from/to them are
+    // inside synchronized blocks. Be careful to not break this invariant.
 
     private final Path path;
     private final NativeEventHandler handler;
@@ -191,6 +193,8 @@ class NativeEventStream implements Closeable {
             FSE.FSEventStreamStop(streamNonNull);
             FSE.FSEventStreamSetDispatchQueue(streamNonNull, Pointer.NULL);
             FSE.FSEventStreamInvalidate(streamNonNull);
+
+            // Deallocate native memory
             FSE.FSEventStreamRelease(streamNonNull);
         }
         if (queue != null) {

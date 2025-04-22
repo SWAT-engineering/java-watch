@@ -192,13 +192,13 @@ class APIs {
             FSE.FSEventStreamStop(stream);
             FSE.FSEventStreamSetDispatchQueue(stream, Pointer.NULL);
             FSE.FSEventStreamInvalidate(stream);
-            FSE.FSEventStreamRelease(stream);
-            DO.dispatch_release(queue);
 
             // Deallocate queue, stream, and callback
-            this.queue = null;
-            this.stream = null;
-            this.callback = null;
+            DO.dispatch_release(queue);
+            FSE.FSEventStreamRelease(stream);
+            queue = null;
+            stream = null;
+            callback = null;
         }
 
         @FunctionalInterface
