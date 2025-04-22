@@ -143,13 +143,11 @@ class SingleFileTests {
         try (var watch = startWatchAndTriggerOverflow(Approximation.ALL, bookkeeper)) {
             Thread.sleep(TestHelper.SHORT_WAIT.toMillis());
 
-            var fileName = watch.getPath().getFileName();
-            var parent = watch.getPath().getParent();
-
-            await("Overflow should trigger created event for `" + fileName + "`")
-                .until(() -> bookkeeper.events().kind(CREATED).rootPath(parent).relativePath(fileName).any());
+            var path = watch.getPath();
+            await("Overflow should trigger created event for `" + path + "`")
+                .until(() -> bookkeeper.events().kind(CREATED).rootPath(path).any());
             await("Overflow shouldn't trigger created events for other files")
-                .until(() -> bookkeeper.events().kind(CREATED).rootPath(parent).relativePathNot(fileName).none());
+                .until(() -> bookkeeper.events().kind(CREATED).rootPathNot(path).none());
             await("Overflow shouldn't trigger modified or deleted events")
                 .until(() -> bookkeeper.events().kind(MODIFIED, DELETED).none());
             await("Overflow should be visible to user-defined event handler")
