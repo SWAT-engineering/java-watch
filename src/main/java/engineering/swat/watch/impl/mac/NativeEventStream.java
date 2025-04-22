@@ -75,7 +75,7 @@ import engineering.swat.watch.impl.mac.apis.FileSystemEvents.FSEventStreamCallba
  * these methods are expected to be rarely invoked.
  * </p>
  */
-public class NativeEventStream implements Closeable {
+class NativeEventStream implements Closeable {
 
     // Native APIs
     private static final CoreFoundation   CF  = CoreFoundation.INSTANCE;

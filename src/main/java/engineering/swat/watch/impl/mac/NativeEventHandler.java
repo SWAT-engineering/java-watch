@@ -50,6 +50,6 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  * </p>
  */
 @FunctionalInterface
-public interface NativeEventHandler {
+interface NativeEventHandler {
     <T> void handle(Kind<T> kind, @Nullable T context);
 }
