@@ -72,9 +72,9 @@ public class MacWatchable implements Watchable {
         events = (Kind<@NonNull ?>[]) Arrays.copyOf(events, events.length + 1);
         events[events.length - 1] = OVERFLOW; // All elements are now `@NonNull`
 
-        return registrations
-            .computeIfAbsent((MacWatchService) watcher, s -> new MacWatchKey(this, s))
-            .initialize(events, modifiers);
+        var service = (MacWatchService) watcher;
+        var key = new MacWatchKey(this, service);
+        return registrations.putIfAbsent(service, key).initialize(events, modifiers);
     }
 
     @Override

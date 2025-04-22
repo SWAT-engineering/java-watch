@@ -52,8 +52,8 @@ public class MacBlockingWatchService extends MacWatchService {
     private <K> K throwIfClosedDuring(BlockingSupplier<K> supplier) throws InterruptedException {
         var t = Thread.currentThread();
         blockedThreads.add(t);
-        throwIfClosed();
         try {
+            throwIfClosed();
             return supplier.get();
         } catch (InterruptedException e) {
             throwIfClosed();

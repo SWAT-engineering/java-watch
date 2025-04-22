@@ -47,16 +47,18 @@ public class MacWatchKey implements WatchKey {
     private final MacWatchable watchable;
     private final MacWatchService service;
     private final BlockingQueue<WatchEvent<?>> pendingEvents;
+    private final NativeEventStream stream;
 
-    private volatile @Nullable NativeEventStream stream;
     private volatile Configuration config = new Configuration();
     private volatile boolean signalled = false;
     private volatile boolean cancelled = false;
 
-    public MacWatchKey(MacWatchable watchable, MacWatchService service) {
+
+    public MacWatchKey(MacWatchable watchable, MacWatchService service) throws IOException {
         this.watchable = watchable;
         this.service = service;
         this.pendingEvents = new LinkedBlockingQueue<>();
+        this.stream = new NativeEventStream(watchable.getPath(), new OfferWatchEvent());
     }
 
     /**
@@ -71,7 +73,7 @@ public class MacWatchKey implements WatchKey {
     public MacWatchKey initialize(Kind<?>[] kinds, Modifier[] modifiers) throws IOException {
         if (isValid()) {
             config = new Configuration(kinds, modifiers);
-            openStream();
+            stream.open();
         }
         return this;
     }
@@ -98,24 +100,6 @@ public class MacWatchKey implements WatchKey {
             //         invocations of `handle` will not cause `this` to be
             //         offered. As a result, no subsequent events are
             //         propagated.
-        }
-    }
-
-    // The following two methods synchronize on this object to avoid races. The
-    // synchronization overhead is expected to be negligible, as these methods
-    // are expected to be rarely invoked.
-
-    private synchronized void openStream() throws IOException {
-        if (stream == null) {
-            stream = new NativeEventStream(watchable.getPath(), new OfferWatchEvent());
-            stream.open();
-        }
-    }
-
-    private synchronized void closeStream() {
-        if (stream != null) {
-            stream.close();
-            stream = null;
         }
     }
 
@@ -227,7 +211,7 @@ public class MacWatchKey implements WatchKey {
     public void cancel() {
         cancelled = true;
         watchable.unregister(service);
-        closeStream();
+        stream.close();
     }
 
     @Override
