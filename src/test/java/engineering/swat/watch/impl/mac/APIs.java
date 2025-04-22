@@ -44,6 +44,8 @@ import java.util.stream.Stream;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 
 import com.sun.jna.Memory;
 import com.sun.jna.Native;
@@ -59,6 +61,7 @@ import engineering.swat.watch.impl.mac.apis.DispatchQueue;
 import engineering.swat.watch.impl.mac.apis.FileSystemEvents;
 import engineering.swat.watch.impl.mac.apis.FileSystemEvents.FSEventStreamEventFlag;
 
+@EnabledOnOs({OS.MAC})
 class APIs {
     private static final Logger LOGGER = LogManager.getLogger();
 
@@ -107,7 +110,7 @@ class APIs {
     }
 
     public static void main(String[] args) throws IOException {
-        var s = "/Users/sungshik/Desktop/tmp";
+        var s = args[0];
         var handler = (MinimalWorkingExample.EventHandler) (path, flags, id) -> {
             LOGGER.info(prettyPrint(path, flags, id));
         };
@@ -130,9 +133,9 @@ class APIs {
     }
 
     private static class MinimalWorkingExample implements Closeable {
-        FileSystemEvents.FSEventStreamCallback callback;
-        Pointer stream;
-        Pointer queue;
+        private FileSystemEvents.FSEventStreamCallback callback;
+        private Pointer stream;
+        private Pointer queue;
 
         public MinimalWorkingExample(String s, EventHandler handler) {
 
@@ -189,13 +192,13 @@ class APIs {
             FSE.FSEventStreamStop(stream);
             FSE.FSEventStreamSetDispatchQueue(stream, Pointer.NULL);
             FSE.FSEventStreamInvalidate(stream);
-            FSE.FSEventStreamRelease(stream);
-            DO.dispatch_release(queue);
 
             // Deallocate queue, stream, and callback
-            this.queue = null;
-            this.stream = null;
-            this.callback = null;
+            DO.dispatch_release(queue);
+            FSE.FSEventStreamRelease(stream);
+            queue = null;
+            stream = null;
+            callback = null;
         }
 
         @FunctionalInterface

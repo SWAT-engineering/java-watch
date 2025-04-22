@@ -33,22 +33,23 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 /**
  * <p>
- * Handler for native events, intended to be used for the construction of
- * JDK's {@link WatchEvent}s (and continue downstream consumption).
+ * Handler for native events, intended to be used in a {@link NativeEventStream}
+ * callback to construct {@link WatchEvent}s (and propagate them for downstream
+ * consumption).
  * </p>
  *
  * <p>
- * In each call, the types of {@code kind} and {@code context} depend
+ * In each invocation, the types of {@code kind} and {@code context} depend
  * specifically on the given native event: they're {@code Kind<Path>} and
  * {@code Path} for non-overflows, but they're {@code Kind<Object>} and
  * {@code Object} for overflows. This precision is needed to construct
- * {@link WatchEvent}s, where the types of {@code kind} and {@code context}
- * are correlated. Note: {@link java.util.function.BiConsumer} doesn't give
- * the required precision (i.e., its type parameters are initialized only
- * once for all calls).
+ * {@link WatchEvent}s, where the types of {@code kind} and {@code context} need
+ * to be correlated. Note: {@link java.util.function.BiConsumer} doesn't give
+ * the required precision (i.e., its type parameters are initialized only once
+ * for all invocations).
  * </p>
  */
 @FunctionalInterface
-public interface NativeEventHandler {
+interface NativeEventHandler {
     <T> void handle(Kind<T> kind, @Nullable T context);
 }
