@@ -229,9 +229,10 @@ class Strings implements AutoCloseable {
 
     public CFArrayRef toCFArray() {
         if (closed) {
-            throw new IllegalStateException("Paths already deallocated");
+            throw new IllegalStateException("Strings are already deallocated");
+        } else {
+            return array;
         }
-        return array;
     }
 
     private static CFStringRef[] createCFStrings(String[] pathsToWatch) {
@@ -267,7 +268,7 @@ class Strings implements AutoCloseable {
     @Override
     public void close() {
         if (closed) {
-            throw new IllegalStateException("Paths already deallocated");
+            throw new IllegalStateException("Strings are already deallocated");
         } else {
             closed = true;
         }
