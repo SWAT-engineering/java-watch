@@ -73,8 +73,9 @@ public class MacWatchable implements Watchable {
         events[events.length - 1] = OVERFLOW; // All elements are now `@NonNull`
 
         var service = (MacWatchService) watcher;
-        var key = new MacWatchKey(this, service);
-        return registrations.putIfAbsent(service, key).initialize(events, modifiers);
+        var newKey = new MacWatchKey(this, service);
+        var oldKey = registrations.putIfAbsent(service, newKey);
+        return (oldKey == null ? newKey : oldKey).initialize(events, modifiers);
     }
 
     @Override
