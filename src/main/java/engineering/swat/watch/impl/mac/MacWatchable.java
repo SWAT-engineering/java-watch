@@ -75,7 +75,7 @@ public class MacWatchable implements Watchable {
         var service = (MacWatchService) watcher;
         var newKey = new MacWatchKey(this, service);
         var oldKey = registrations.putIfAbsent(service, newKey);
-        return (oldKey == null ? newKey : oldKey).initialize(events, modifiers);
+        return (oldKey != null ? oldKey : newKey).initialize(events, modifiers);
     }
 
     @Override

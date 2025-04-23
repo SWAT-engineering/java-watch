@@ -50,9 +50,8 @@ public class MacWatchKey implements WatchKey {
     private final NativeEventStream stream;
 
     private volatile Configuration config = new Configuration();
-    private volatile boolean signalled = false;
+    private volatile boolean signalled = false; // `!signalled` means "ready"
     private volatile boolean cancelled = false;
-
 
     public MacWatchKey(MacWatchable watchable, MacWatchService service) throws IOException {
         this.watchable = watchable;
@@ -198,8 +197,10 @@ public class MacWatchKey implements WatchKey {
             return false;
         }
 
-        signalled = false;
-        signalWhen(!pendingEvents.isEmpty());
+        if (signalled) {
+            signalled = false;
+            signalWhen(!pendingEvents.isEmpty());
+        }
 
         // Invalidation of this key *during* the invocation of this method is
         // observationally equivalent to invalidation immediately *after*. Thus,

@@ -125,8 +125,8 @@ class JDKPoller {
         try {
             return CompletableFuture.supplyAsync(() -> {
                 try {
+                    Watchable watchable = Platform.get().newWatchable(path.getPath());
                     WatchEvent.Kind<?>[] kinds = new WatchEvent.Kind[]{ ENTRY_CREATE, ENTRY_MODIFY, OVERFLOW, ENTRY_DELETE };
-                    var watchable = Platform.get().newWatchable(path.getPath());
                     if (path.isRecursive()) {
                         return watchable.register(service, kinds, ExtendedWatchEventModifier.FILE_TREE);
                     }
