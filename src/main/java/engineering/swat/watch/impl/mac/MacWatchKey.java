@@ -43,7 +43,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 
 import com.sun.nio.file.ExtendedWatchEventModifier;
 
-public class MacWatchKey implements WatchKey {
+class MacWatchKey implements WatchKey {
     private final MacWatchable watchable;
     private final MacWatchService service;
     private final BlockingQueue<WatchEvent<?>> pendingEvents;
