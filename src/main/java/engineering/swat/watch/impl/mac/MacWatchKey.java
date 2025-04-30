@@ -53,7 +53,7 @@ class MacWatchKey implements WatchKey {
     private volatile boolean signalled = false; // `!signalled` means "ready"
     private volatile boolean cancelled = false;
 
-    public MacWatchKey(MacWatchable watchable, MacWatchService service) throws IOException {
+    MacWatchKey(MacWatchable watchable, MacWatchService service) throws IOException {
         this.watchable = watchable;
         this.service = service;
         this.pendingEvents = new LinkedBlockingQueue<>();
@@ -69,7 +69,7 @@ class MacWatchKey implements WatchKey {
      *
      * @return This watch key
      */
-    public MacWatchKey initialize(Kind<?>[] kinds, Modifier[] modifiers) throws IOException {
+    MacWatchKey initialize(Kind<?>[] kinds, Modifier[] modifiers) throws IOException {
         if (isValid()) {
             config = new Configuration(kinds, modifiers);
             stream.open();

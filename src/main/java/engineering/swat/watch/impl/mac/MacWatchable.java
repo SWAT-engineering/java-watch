@@ -46,16 +46,16 @@ class MacWatchable implements Watchable {
     private final Path path;
     private final Map<MacWatchService, MacWatchKey> registrations;
 
-    public MacWatchable(Path path) {
+    MacWatchable(Path path) {
         this.path = path;
         this.registrations = new ConcurrentHashMap<>();
     }
 
-    public Path getPath() {
+    Path getPath() {
         return path;
     }
 
-    public void unregister(MacWatchService watcher) {
+    void unregister(MacWatchService watcher) {
         registrations.remove(watcher);
     }
 

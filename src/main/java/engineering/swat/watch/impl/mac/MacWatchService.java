@@ -38,14 +38,14 @@ import java.util.concurrent.TimeUnit;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 public class MacWatchService implements WatchService {
-    protected final BlockingQueue<MacWatchKey> pendingKeys = new LinkedBlockingQueue<>();
-    protected volatile boolean closed = false;
+    final BlockingQueue<MacWatchKey> pendingKeys = new LinkedBlockingQueue<>();
+    volatile boolean closed = false;
 
-    public boolean offer(MacWatchKey key) {
+    boolean offer(MacWatchKey key) {
         return pendingKeys.offer(key);
     }
 
-    public boolean isClosed() {
+    boolean isClosed() {
         return closed;
     }
 
