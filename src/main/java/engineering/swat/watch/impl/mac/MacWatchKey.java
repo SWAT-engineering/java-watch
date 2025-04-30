@@ -141,7 +141,7 @@ class MacWatchKey implements WatchKey {
      */
     private static class Configuration {
         private final Kind<?>[] kinds;
-        private final boolean singleDirectory;
+        private final boolean watchFileTree;
 
         public Configuration() {
             this(new Kind<?>[0], new Modifier[0]);
@@ -149,28 +149,32 @@ class MacWatchKey implements WatchKey {
 
         public Configuration(Kind<?>[] kinds, Modifier[] modifiers) {
             // Extract only the relevant information from `modifiers`
-            var fileTree = false;
+            var watchFileTree = false;
             for (var m : modifiers) {
-                fileTree |= m == ExtendedWatchEventModifier.FILE_TREE;
+                watchFileTree |= m == ExtendedWatchEventModifier.FILE_TREE;
             }
 
             this.kinds = Arrays.copyOf(kinds, kinds.length);
-            this.singleDirectory = !fileTree;
+            this.watchFileTree = watchFileTree;
         }
 
         /**
          * Tests if an event should be ignored by a watch key with this
          * configuration. This is the case when one of the following is true:
          * (a) the watch key isn't configured to watch events of the given
-         * {@code kind}; (b) the watch key is configured to watch only the root
-         * level of a file tree, but the given {@code context} (a {@code Path})
-         * points to a non-root level.
+         * {@code kind}; (b) the watch key is configured to watch only a single
+         * directory, but the given {@code context} (a {@code Path}) points to a
+         * file in a subdirectory.
          */
         public boolean ignore(Kind<?> kind, @Nullable Object context) {
             for (var k : kinds) {
                 if (k == kind) {
-                    return singleDirectory &&
-                        context instanceof Path && ((Path) context).getNameCount() > 1;
+                    if (watchFileTree) {
+                        return false;
+                    } else { // Watch a single directory
+                        return context instanceof Path &&
+                            ((Path) context).getNameCount() > 1; // File in subdirectory
+                    }
                 }
             }
             return true;
