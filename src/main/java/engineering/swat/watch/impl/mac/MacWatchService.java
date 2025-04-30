@@ -58,6 +58,9 @@ public class MacWatchService implements WatchService {
     @Override
     public void close() throws IOException {
         closed = true;
+        // Note: We currently don't support blocking poll/take, so no additional
+        // logic is needed here to interrupt waiting threads (as specified in
+        // the documentation of `close`).
     }
 
     @Override
