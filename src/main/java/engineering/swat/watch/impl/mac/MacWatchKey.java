@@ -46,17 +46,16 @@ import com.sun.nio.file.ExtendedWatchEventModifier;
 class MacWatchKey implements WatchKey {
     private final MacWatchable watchable;
     private final MacWatchService service;
-    private final BlockingQueue<WatchEvent<?>> pendingEvents;
+    private final PendingEvents pendingEvents;
     private final NativeEventStream stream;
 
     private volatile Configuration config = new Configuration();
-    private volatile boolean signalled = false; // `!signalled` means "ready"
     private volatile boolean cancelled = false;
 
     MacWatchKey(MacWatchable watchable, MacWatchService service) throws IOException {
         this.watchable = watchable;
         this.service = service;
-        this.pendingEvents = new LinkedBlockingQueue<>();
+        this.pendingEvents = new PendingEvents();
         this.stream = new NativeEventStream(watchable.getPath(), new OfferWatchEvent());
     }
 
@@ -77,29 +76,75 @@ class MacWatchKey implements WatchKey {
         return this;
     }
 
-    private void signalWhen(boolean condition) {
-        if (condition) {
-            signalled = true;
-            service.offer(this);
-            // The order of these statements is important. If it's the other way
-            // around, then the following harmful interleaving of an "offering
-            // thread" (Thread 1) and a "polling thread" (Thread 2) can happen:
-            //   - Thread 1:
-            //       - `handle`: Add event to `pendingEvents`
-            //       - `handle`, `signalWhen`: Test `!signalled` is true
-            //       - `signalWhen`: Offer `this` to `service`.
-            //   - Thread 2:
-            //       - `MacWatchService.poll`: Poll `this` from `service`
-            //       - `pollEvents`: Drain events from `pendingEvents`
-            //       - `reset`: Set `signalled` to false []
-            //       - `reset`, `signalWhen`: Test `!pendingEvents.empty()` is false
-            //   - Thread 1:
-            //       - `signalWhen`: Set `signalled` to true. At this point
-            //         `this` isn't offered to `service`, but subsequent
-            //         invocations of `handle` will not cause `this` to be
-            //         offered. As a result, no subsequent events are
-            //         propagated.
+    /**
+     * Auxiliary container to manage the internal state of this watch key in a
+     * single place (to make it easier to reason about concurrent accesses).
+     */
+    private class PendingEvents {
+        private final BlockingQueue<WatchEvent<?>> pendingEvents = new LinkedBlockingQueue<>();
+        private volatile boolean signalled = false;
+
+        // Following the documentation `WatchKey`, initially, this watch key is
+        // *ready* (i.e., `signalled` is false). When an event is offered, this
+        // watch key becomes *signalled* and is enqueued at `service`.
+        // Subsequently, this watch key remains signalled until it is reset; not
+        // until the pending events are polled. Thus, at the same time,
+        // `pendingEvents` can be empty and `signalled` can be true. The
+        // interplay between `pendingEvents` and `signalled` is quite tricky,
+        // and potentially subject to harmful races. The comments below the
+        // following methods argue why such harmful races won't happen.
+
+        void offerAndSignal(WatchEvent<?> event) {
+            pendingEvents.offer(event);
+            if (!signalled) {
+                signalled = true;
+                service.offer(MacWatchKey.this);
+            }
         }
+
+        List<WatchEvent<?>> drain() {
+            var list = new ArrayList<WatchEvent<?>>(pendingEvents.size());
+            pendingEvents.drainTo(list);
+            return list;
+        }
+
+        void resignalIfNonEmpty() {
+            if (signalled && !pendingEvents.isEmpty()) {
+                service.offer(MacWatchKey.this);
+            } else {
+                signalled = false;
+            }
+        }
+
+        // The crucial property that needs to be maintained is that when
+        // `resignalIfNonEmpty` returns, either this watch key has been, or will
+        // be, enqueued at `service`, or `signalled` is false. Otherwise, until
+        // a next invocation of `reset` (including `resignalIfNonEmpty`),
+        // consumers of `service` won't be able to dequeue this watch key (it
+        // won't be queued by `offerAndSignal` while `signalled` is true), even
+        // when `pendingEvents` becomes non-empty---this causes consumers to
+        // miss events. Note: The documentation of `WatchService` doesn't
+        // specify the need for a next invocation of `reset` after a succesful
+        // one.
+        //
+        // To argue that the property holds, there are two cases to analyze:
+        //
+        //    - If the then-branch of `resignalIfNonEmpty` is executed, then
+        //      this watch key has been enqueued at `service`, so the property
+        //      holds. Note: It doesn't matter if, by the time
+        //      `resignalIfNonEmpty` returns, this watch key has already been
+        //      dequeued by another thread. This is because that other thread is
+        //      then responsible to make a next invocation of `reset` (including
+        //      `resignalIfNonEmpty`) after its usage of this watch key.
+        //
+        //    - If the else-branch of `resignalIfNonEmpty` is executed, then
+        //      `signalled` may become `true` right after it's set to `false`.
+        //      This happens when another thread concurrently invokes
+        //      `offerAndSignal`. (There are no other places where `signalled`
+        //      is modified.) But then, as part of `offerAndSignal`, this watch
+        //      key will be enqueued at `service` by the other thread, too, so
+        //      the property holds. Note: If we were to change the order of the
+        //      statements in `offerAndSignal`, the property no longer holds.
     }
 
     /**
@@ -129,8 +174,7 @@ class MacWatchKey implements WatchKey {
                     }
                 };
 
-                pendingEvents.offer(event);
-                signalWhen(!signalled);
+                pendingEvents.offerAndSignal(event);
             }
         }
     }
@@ -190,9 +234,7 @@ class MacWatchKey implements WatchKey {
 
     @Override
     public List<WatchEvent<?>> pollEvents() {
-        var list = new ArrayList<WatchEvent<?>>(pendingEvents.size());
-        pendingEvents.drainTo(list);
-        return list;
+        return pendingEvents.drain();
     }
 
     @Override
@@ -201,10 +243,7 @@ class MacWatchKey implements WatchKey {
             return false;
         }
 
-        if (signalled) {
-            signalled = false;
-            signalWhen(!pendingEvents.isEmpty());
-        }
+        pendingEvents.resignalIfNonEmpty();
 
         // Invalidation of this key *during* the invocation of this method is
         // observationally equivalent to invalidation immediately *after*. Thus,
