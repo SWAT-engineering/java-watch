@@ -188,8 +188,24 @@ class JDKPoller {
             }
         };
 
-        static final Platform CURRENT = // Assumption: the platform doesn't change
-            com.sun.jna.Platform.isMac() ? MAC : DEFAULT;
+        static final Platform CURRENT = current(); // Assumption: the platform doesn't change
+
+        private static Platform current() {
+            var key = "engineering.swat.watch.impl";
+            var val = System.getProperty(key);
+            if (val != null) {
+                if (val.equals("mac")) {
+                    return MAC;
+                } else if (val.equals("default")) {
+                    return DEFAULT;
+                } else {
+                    logger.warn("Unexpected value \"{}\" for system property \"{}\". Using value \"default\" instead.", val, key);
+                    return DEFAULT;
+                }
+            }
+
+            return com.sun.jna.Platform.isMac() ? MAC : DEFAULT;
+        }
 
         static Platform get() {
             return CURRENT;

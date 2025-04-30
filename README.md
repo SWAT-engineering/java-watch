@@ -3,7 +3,7 @@
 [![javadoc](https://javadoc.io/badge2/engineering.swat/java-watch/docs.svg?style=flat-square)](https://javadoc.io/doc/engineering.swat/java-watch)
 [![Codecov](https://img.shields.io/codecov/c/github/SWAT-engineering/java-watch?style=flat-square)](https://codecov.io/gh/SWAT-engineering/java-watch)
 
-a java file watcher that works across platforms and supports recursion, single file watches, and tries to make sure no events are missed. Where possible it uses Java's NIO WatchService.
+A Java file watcher that works across platforms and supports recursion, single file watches, and tries to make sure no events are missed.
 
 ## Features
 
@@ -21,7 +21,6 @@ Features:
 
 Planned features:
 
-- Avoid poll based watcher in macOS/OSX that only detects changes every 2 seconds (see [#4](https://github.com/SWAT-engineering/java-watch/issues/4))
 - Support single file watches natively in linux (see [#11](https://github.com/SWAT-engineering/java-watch/issues/11))
 - Monitor only specific events (such as only CREATE events)
 
@@ -57,6 +56,14 @@ try(var active = watcherSetup.start()) {
 // after active.close(), the watch is stopped and
 // no new events will be scheduled on the threadpool
 ```
+
+## Internals
+
+On all platforms except macOS, the library internally uses the JDK default implementation of the Java NIO [`WatchService`](https://docs.oracle.com/javase/8/docs/api/java/nio/file/WatchService.html) API.
+
+On macOS, the library internally uses our custom `WatchService` implementation based on macOS's native [file system event streams](https://developer.apple.com/documentation/coreservices/file_system_events?language=objc) (using JNA).
+Generally, it offers better performance than the JDK default implementation (because the latter uses a polling loop to detect changes only once every two seconds).
+To force the library to use the JDK default implementation on macOS, set system property `engineering.swat.watch.impl` to `default`.
 
 ## Related work
 
