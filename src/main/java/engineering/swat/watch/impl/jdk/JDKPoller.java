@@ -56,7 +56,6 @@ import org.apache.logging.log4j.Logger;
 import com.sun.nio.file.ExtendedWatchEventModifier;
 
 import engineering.swat.watch.impl.mac.MacWatchService;
-import engineering.swat.watch.impl.mac.MacWatchable;
 import engineering.swat.watch.impl.util.SubscriptionKey;
 
 /**
@@ -173,7 +172,7 @@ class JDKPoller {
             }
             @Override
             public Watchable newWatchable(Path path) {
-                return new MacWatchable(path);
+                return MacWatchService.newWatchable(path);
             }
         };
 

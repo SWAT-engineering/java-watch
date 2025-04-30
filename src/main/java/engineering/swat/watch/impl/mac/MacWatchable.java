@@ -42,7 +42,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
-public class MacWatchable implements Watchable {
+class MacWatchable implements Watchable {
     private final Path path;
     private final Map<MacWatchService, MacWatchKey> registrations;
 

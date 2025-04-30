@@ -28,6 +28,7 @@ package engineering.swat.watch.impl.mac;
 
 import java.io.IOException;
 import java.nio.file.ClosedWatchServiceException;
+import java.nio.file.Path;
 import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
 import java.util.concurrent.BlockingQueue;
@@ -46,6 +47,10 @@ public class MacWatchService implements WatchService {
 
     public boolean isClosed() {
         return closed;
+    }
+
+    public static MacWatchable newWatchable(Path path) {
+        return new MacWatchable(path);
     }
 
     // -- WatchService --
