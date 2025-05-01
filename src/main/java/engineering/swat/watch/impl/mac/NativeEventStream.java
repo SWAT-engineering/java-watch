@@ -42,6 +42,7 @@ import static java.nio.file.StandardWatchEventKinds.OVERFLOW;
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.Arrays;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -59,22 +60,23 @@ import engineering.swat.watch.impl.mac.apis.FileSystemEvents;
 import engineering.swat.watch.impl.mac.apis.FileSystemEvents.FSEventStreamCallback;
 
 // Note: This file is designed to be the only place in this package where JNA is
-// used and/or the native APIs are called. If the need to do so arises outside
+// used and/or the native APIs are invoked. If the need to do so arises outside
 // this file, consider extending this file to offer the required services
 // without exposing JNA and/or the native APIs.
 
 /**
  * <p>
- * Stream of native events for a path, issued by macOS.
+ * Stream of native events for a path, issued by macOS. It's a facade-like
+ * object that hides the low-level native APIs behind a higher-level interface.
  * </p>
  *
  * <p>
  * Note: Methods {@link #open()} and {@link #close()} synchronize on this object
  * to avoid races. The synchronization overhead is expected to be negligible, as
- * these methods are expected to be rarely called.
+ * these methods are expected to be rarely invoked.
  * </p>
  */
-public class NativeEventStream implements Closeable {
+class NativeEventStream implements Closeable {
 
     // Native APIs
     private static final CoreFoundation   CF  = CoreFoundation.INSTANCE;
@@ -82,10 +84,12 @@ public class NativeEventStream implements Closeable {
     private static final DispatchQueue    DQ  = DispatchQueue.INSTANCE;
     private static final FileSystemEvents FSE = FileSystemEvents.INSTANCE;
 
-    // Native memory (automatically deallocated when set to `null`)
-    private volatile @Nullable FSEventStreamCallback callback;
-    private volatile @Nullable Pointer stream;
-    private volatile @Nullable Pointer queue;
+    // Native memory
+    private @Nullable FSEventStreamCallback callback; // Keep reference to avoid premature GC'ing
+    private @Nullable Pointer stream;
+    private @Nullable Pointer queue;
+    // Note: These fields aren't volatile, as all reads/write from/to them are
+    // inside synchronized blocks. Be careful to not break this invariant.
 
     private final Path path;
     private final NativeEventHandler handler;
@@ -99,23 +103,25 @@ public class NativeEventStream implements Closeable {
 
     public synchronized void open() {
         if (!closed) {
-            throw new IllegalStateException("Stream already open");
+            return;
         } else {
             closed = false;
         }
 
-        // Allocate native memory. (Checker Framework: The local variables are
-        // `@NonNull` copies of the `@Nullable` fields.)
-        var callback = this.callback = createCallback(path, handler);
-        var stream = this.stream = createFSEventStream(path, callback);
-        var queue = this.queue = createDispatchQueue();
+        // Allocate native memory
+        callback = createCallback();
+        stream = createFSEventStream(callback);
+        queue = createDispatchQueue();
 
         // Start the stream
-        FSE.FSEventStreamSetDispatchQueue(stream, queue);
-        FSE.FSEventStreamStart(stream);
+        var streamNonNull = stream;
+        if (streamNonNull != null) {
+            FSE.FSEventStreamSetDispatchQueue(streamNonNull, queue);
+            FSE.FSEventStreamStart(streamNonNull);
+        }
     }
 
-    private static FSEventStreamCallback createCallback(Path path, NativeEventHandler handler) {
+    private FSEventStreamCallback createCallback() {
         return new FSEventStreamCallback() {
             @Override
             public void callback(Pointer streamRef, Pointer clientCallBackInfo,
@@ -131,10 +137,10 @@ public class NativeEventStream implements Closeable {
                 for (var i = 0; i < numEvents; i++) {
                     var context = path.relativize(Path.of(paths[i]));
 
-                    // Note: Multiple "physical" native events might be merged
-                    // into a single "logical" native event, so the following
-                    // series of checks should be if-statements (instead of
-                    // if/else-statements).
+                    // Note: Multiple "physical" native events might be
+                    // coalesced into a single "logical" native event, so the
+                    // following series of checks should be if-statements
+                    // (instead of if/else-statements).
                     if (any(flags[i], ITEM_CREATED.mask)) {
                         handler.handle(ENTRY_CREATE, context);
                     }
@@ -156,10 +162,8 @@ public class NativeEventStream implements Closeable {
         };
     }
 
-    private static Pointer createFSEventStream(Path path, FSEventStreamCallback callback) {
-        try (
-            var pathsToWatch = new Strings(path.toString());
-        ) {
+    private Pointer createFSEventStream(FSEventStreamCallback callback) {
+        try (var pathsToWatch = new Strings(path.toString())) {
             var allocator = CF.CFAllocatorGetDefault();
             var context   = Pointer.NULL;
             var sinceWhen = FSE.FSEventsGetCurrentEventId();
@@ -169,7 +173,7 @@ public class NativeEventStream implements Closeable {
         }
     }
 
-    private static Pointer createDispatchQueue() {
+    private Pointer createDispatchQueue() {
         var label = "engineering.swat.watch";
         var attr  = Pointer.NULL;
         return DQ.dispatch_queue_create(label, attr);
@@ -180,27 +184,27 @@ public class NativeEventStream implements Closeable {
     @Override
     public synchronized void close() {
         if (closed) {
-            throw new IllegalStateException("Stream is already closed");
+            return;
         } else {
             closed = true;
         }
 
-        // Stop the stream
-        if (stream != null) {
-            var streamNonNull = stream; // Checker Framework: `@NonNull` copy of `@Nullable` field
+        var streamNonNull = stream;
+        var queueNonNull = queue;
+        if (streamNonNull != null && queueNonNull != null) {
+
+            // Stop the stream
             FSE.FSEventStreamStop(streamNonNull);
             FSE.FSEventStreamSetDispatchQueue(streamNonNull, Pointer.NULL);
             FSE.FSEventStreamInvalidate(streamNonNull);
-            FSE.FSEventStreamRelease(streamNonNull);
-        }
-        if (queue != null) {
-            DO.dispatch_release(queue);
-        }
 
-        // Deallocate native memory
-        callback = null;
-        stream = null;
-        queue = null;
+            // Deallocate native memory
+            DO.dispatch_release(queueNonNull);
+            FSE.FSEventStreamRelease(streamNonNull);
+            queue = null;
+            stream = null;
+            callback = null;
+        }
     }
 }
 
@@ -228,19 +232,16 @@ class Strings implements AutoCloseable {
 
     public CFArrayRef toCFArray() {
         if (closed) {
-            throw new IllegalStateException("Paths already deallocated");
+            throw new IllegalStateException("Strings are already deallocated");
+        } else {
+            return array;
         }
-        return array;
     }
 
     private static CFStringRef[] createCFStrings(String[] pathsToWatch) {
-        var n = pathsToWatch.length;
-
-        var strings = new CFStringRef[n];
-        for (int i = 0; i < n; i++) {
-            strings[i] = CFStringRef.createCFString(pathsToWatch[i]);
-        }
-        return strings;
+        return Arrays.stream(pathsToWatch)
+            .map(CFStringRef::createCFString)
+            .toArray(CFStringRef[]::new);
     }
 
     private static CFArrayRef createCFArray(CFStringRef[] strings) {
@@ -266,7 +267,7 @@ class Strings implements AutoCloseable {
     @Override
     public void close() {
         if (closed) {
-            throw new IllegalStateException("Paths already deallocated");
+            throw new IllegalStateException("Strings are already deallocated");
         } else {
             closed = true;
         }

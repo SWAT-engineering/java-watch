@@ -28,6 +28,7 @@ package engineering.swat.watch.impl.mac;
 
 import java.io.IOException;
 import java.nio.file.ClosedWatchServiceException;
+import java.nio.file.Path;
 import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
 import java.util.concurrent.BlockingQueue;
@@ -37,15 +38,19 @@ import java.util.concurrent.TimeUnit;
 import org.checkerframework.checker.nullness.qual.Nullable;
 
 public class MacWatchService implements WatchService {
-    protected final BlockingQueue<MacWatchKey> pendingKeys = new LinkedBlockingQueue<>();
-    protected volatile boolean closed = false;
+    final BlockingQueue<MacWatchKey> pendingKeys = new LinkedBlockingQueue<>();
+    volatile boolean closed = false;
 
-    public boolean offer(MacWatchKey key) {
+    boolean offer(MacWatchKey key) {
         return pendingKeys.offer(key);
     }
 
-    public boolean isClosed() {
+    boolean isClosed() {
         return closed;
+    }
+
+    public static MacWatchable newWatchable(Path path) {
+        return new MacWatchable(path);
     }
 
     // -- WatchService --
@@ -53,6 +58,9 @@ public class MacWatchService implements WatchService {
     @Override
     public void close() throws IOException {
         closed = true;
+        // Note: We currently don't support blocking poll/take, so no additional
+        // logic is needed here to interrupt waiting threads (as specified in
+        // the documentation of `close`).
     }
 
     @Override

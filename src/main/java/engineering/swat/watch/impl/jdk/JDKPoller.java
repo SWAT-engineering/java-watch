@@ -56,7 +56,6 @@ import org.apache.logging.log4j.Logger;
 import com.sun.nio.file.ExtendedWatchEventModifier;
 
 import engineering.swat.watch.impl.mac.MacWatchService;
-import engineering.swat.watch.impl.mac.MacWatchable;
 import engineering.swat.watch.impl.util.SubscriptionKey;
 
 /**
@@ -125,8 +124,8 @@ class JDKPoller {
         try {
             return CompletableFuture.supplyAsync(() -> {
                 try {
+                    Watchable watchable = Platform.get().newWatchable(path.getPath());
                     WatchEvent.Kind<?>[] kinds = new WatchEvent.Kind[]{ ENTRY_CREATE, ENTRY_MODIFY, OVERFLOW, ENTRY_DELETE };
-                    var watchable = Platform.get().newWatchable(path.getPath());
                     if (path.isRecursive()) {
                         return watchable.register(service, kinds, ExtendedWatchEventModifier.FILE_TREE);
                     }
@@ -173,7 +172,7 @@ class JDKPoller {
             }
             @Override
             public Watchable newWatchable(Path path) {
-                return new MacWatchable(path);
+                return MacWatchService.newWatchable(path);
             }
         };
 
@@ -188,8 +187,24 @@ class JDKPoller {
             }
         };
 
-        static final Platform CURRENT = // Assumption: the platform doesn't change
-            com.sun.jna.Platform.isMac() ? MAC : DEFAULT;
+        static final Platform CURRENT = current(); // Assumption: the platform doesn't change
+
+        private static Platform current() {
+            var key = "engineering.swat.watch.impl";
+            var val = System.getProperty(key);
+            if (val != null) {
+                if (val.equals("mac")) {
+                    return MAC;
+                } else if (val.equals("default")) {
+                    return DEFAULT;
+                } else {
+                    logger.warn("Unexpected value \"{}\" for system property \"{}\". Using value \"default\" instead.", val, key);
+                    return DEFAULT;
+                }
+            }
+
+            return com.sun.jna.Platform.isMac() ? MAC : DEFAULT;
+        }
 
         static Platform get() {
             return CURRENT;
