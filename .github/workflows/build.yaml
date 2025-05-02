@@ -12,10 +12,17 @@ jobs:
   test:
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os:
+          - image: ubuntu-latest
+          - image: macos-latest
+            mac-backend: jdk
+          - image: macos-latest
+            mac-backend: jna
+          - image: windows-latest
         jdk: [11, 17, 21]
+
       fail-fast: false
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.os.image }}
     steps:
       - uses: actions/checkout@v4
       - run: echo " " >> pom.xml # make sure the cache is slightly different for these runners
@@ -27,7 +34,7 @@ jobs:
           cache: 'maven'
 
       - name: test
-        run: mvn -B clean test
+        run: mvn -B clean test -DargLine="-Dengineering.swat.java-watch.mac=${{ matrix.os.mac-backend }}"
         env:
           DELAY_FACTOR: 3
 

@@ -57,13 +57,13 @@ try(var active = watcherSetup.start()) {
 // no new events will be scheduled on the threadpool
 ```
 
-## Internals
+## Backends
 
 On all platforms except macOS, the library internally uses the JDK default implementation of the Java NIO [`WatchService`](https://docs.oracle.com/javase/8/docs/api/java/nio/file/WatchService.html) API.
 
 On macOS, the library internally uses our custom `WatchService` implementation based on macOS's native [file system event streams](https://developer.apple.com/documentation/coreservices/file_system_events?language=objc) (using JNA).
 Generally, it offers better performance than the JDK default implementation (because the latter uses a polling loop to detect changes only once every two seconds).
-To force the library to use the JDK default implementation on macOS, set system property `engineering.swat.watch.impl` to `default`.
+To force the library to use the JDK default implementation on macOS, set system property `engineering.swat.java-watch.mac` to `jdk`.
 
 ## Related work
 
