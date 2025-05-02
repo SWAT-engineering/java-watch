@@ -57,7 +57,7 @@ try(var active = watcherSetup.start()) {
 // no new events will be scheduled on the threadpool
 ```
 
-## Internals
+## Backends
 
 On all platforms except macOS, the library internally uses the JDK default implementation of the Java NIO [`WatchService`](https://docs.oracle.com/javase/8/docs/api/java/nio/file/WatchService.html) API.
 
