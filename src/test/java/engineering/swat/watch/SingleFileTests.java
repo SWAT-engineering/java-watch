@@ -130,7 +130,7 @@ class SingleFileTests {
         try (var watch = startWatchAndTriggerOverflow(Approximation.NONE, bookkeeper)) {
             Thread.sleep(TestHelper.SHORT_WAIT.toMillis());
 
-            await("Overflow shouldn't trigger created, modified, or deleted events")
+            await("Overflow shouldn't trigger created, modified, or deleted events: " + bookkeeper)
                 .until(() -> bookkeeper.events().kind(CREATED, MODIFIED, DELETED).none());
             await("Overflow should be visible to user-defined event handler")
                 .until(() -> bookkeeper.events().kind(OVERFLOW).any());
