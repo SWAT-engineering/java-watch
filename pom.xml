@@ -74,6 +74,7 @@
     <checkerframework.version>3.49.2</checkerframework.version>
     <junit.version>5.12.2</junit.version>
     <log4j.version>2.24.3</log4j.version>
+    <jna.version>5.16.0</jna.version>
     <maven.compiler.source>11</maven.compiler.source>
     <maven.compiler.target>11</maven.compiler.target>
   </properties>
@@ -226,12 +227,12 @@
     <dependency>
       <groupId>net.java.dev.jna</groupId>
       <artifactId>jna</artifactId>
-      <version>5.16.0</version>
+      <version>${jna.version}</version>
     </dependency>
     <dependency>
       <groupId>net.java.dev.jna</groupId>
       <artifactId>jna-platform</artifactId>
-      <version>5.16.0</version>
+      <version>${jna.version}</version>
     </dependency>
   </dependencies>
 
