@@ -33,6 +33,7 @@ import static engineering.swat.watch.impl.mac.apis.FileSystemEvents.FSEventStrea
 import static engineering.swat.watch.impl.mac.apis.FileSystemEvents.FSEventStreamEventFlag.ITEM_INODE_META_MOD;
 import static engineering.swat.watch.impl.mac.apis.FileSystemEvents.FSEventStreamEventFlag.ITEM_MODIFIED;
 import static engineering.swat.watch.impl.mac.apis.FileSystemEvents.FSEventStreamEventFlag.ITEM_REMOVED;
+import static engineering.swat.watch.impl.mac.apis.FileSystemEvents.FSEventStreamEventFlag.ITEM_RENAMED;
 import static engineering.swat.watch.impl.mac.apis.FileSystemEvents.FSEventStreamEventFlag.MUST_SCAN_SUB_DIRS;
 import static java.nio.file.StandardWatchEventKinds.ENTRY_CREATE;
 import static java.nio.file.StandardWatchEventKinds.ENTRY_DELETE;
@@ -41,6 +42,7 @@ import static java.nio.file.StandardWatchEventKinds.OVERFLOW;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 
@@ -152,6 +154,19 @@ class NativeEventStream implements Closeable {
                     }
                     if (any(flags[i], MUST_SCAN_SUB_DIRS.mask)) {
                         handler.handle(OVERFLOW, null);
+                    }
+                    if (any(flags[i], ITEM_RENAMED.mask)) {
+                        // For now, check if the file exists to determine if the
+                        // event pertains to the target of the rename (if it
+                        // exists) or to the source (else). This is an
+                        // approximation. It might be more accurate to maintain
+                        // an internal index (but getting the concurrency right
+                        // requires care).
+                        if (Files.exists(Path.of(paths[i]))) {
+                            handler.handle(ENTRY_CREATE, context);
+                        } else {
+                            handler.handle(ENTRY_DELETE, context);
+                        }
                     }
                 }
             }
