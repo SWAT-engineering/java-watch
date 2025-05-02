@@ -38,7 +38,6 @@ import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 
@@ -169,6 +168,84 @@ class SmokeTests {
             await("Move should be observed as delete by `file` watch (regular file)")
                 .until(() -> fileWatchBookkeeper
                     .events().kind(DELETED).rootPath(source).any());
+        }
+    }
+
+    @Test
+    void moveDirectory() throws IOException {
+        var parent = testDir.getTestDirectory();
+        var child1 = Files.createDirectories(parent.resolve("from"));
+        var child2 = Files.createDirectories(parent.resolve("to"));
+
+        var directory = Files.createDirectory(child1.resolve("directory"));
+        var regularFile1 = Files.createFile(directory.resolve("file1.txt"));
+        var regularFile2 = Files.createFile(directory.resolve("file2.txt"));
+
+        var parentWatchBookkeeper = new TestHelper.Bookkeeper();
+        var parentWatchConfig = Watch
+            .build(parent, WatchScope.PATH_AND_ALL_DESCENDANTS)
+            .on(parentWatchBookkeeper);
+
+        var child1WatchBookkeeper = new TestHelper.Bookkeeper();
+        var child1WatchConfig = Watch
+            .build(child1, WatchScope.PATH_AND_CHILDREN)
+            .on(child1WatchBookkeeper);
+
+        var child2WatchBookkeeper = new TestHelper.Bookkeeper();
+        var child2WatchConfig = Watch
+            .build(child2, WatchScope.PATH_AND_CHILDREN)
+            .on(child2WatchBookkeeper);
+
+        var directoryWatchBookkeeper = new TestHelper.Bookkeeper();
+        var directoryWatchConfig = Watch
+            .build(directory, WatchScope.PATH_ONLY)
+            .on(directoryWatchBookkeeper);
+
+        try (var parentWatch = parentWatchConfig.start();
+             var child1Watch = child1WatchConfig.start();
+             var child2Watch = child2WatchConfig.start();
+             var fileWatch = directoryWatchConfig.start()) {
+
+            var sourceDirectory = child1.resolve(directory.getFileName());
+            var sourceRegularFile1 = sourceDirectory.resolve(regularFile1.getFileName());
+            var sourceRegularFile2 = sourceDirectory.resolve(regularFile2.getFileName());
+
+            var targetDirectory = child2.resolve(directory.getFileName());
+            var targetRegularFile1 = targetDirectory.resolve(regularFile1.getFileName());
+            var targetRegularFile2 = targetDirectory.resolve(regularFile2.getFileName());
+
+            Files.move(sourceDirectory, targetDirectory);
+
+            for (var e : new WatchEvent[] {
+                new WatchEvent(DELETED, parent, parent.relativize(sourceDirectory)),
+                new WatchEvent(CREATED, parent, parent.relativize(targetDirectory)),
+                // The following events currently *aren't* observed by the
+                // `parent` watch for the whole file tree: moving a directory
+                // doesn't trigger events for the deletion/creation of the files
+                // contained in it (neither using the general default/JDK
+                // implementation of Watch Service, nor using our special macOS
+                // implementation).
+                //
+                // new WatchEvent(DELETED, parent, parent.relativize(sourceRegularFile1)),
+                // new WatchEvent(DELETED, parent, parent.relativize(sourceRegularFile2)),
+                // new WatchEvent(CREATED, parent, parent.relativize(targetRegularFile1)),
+                // new WatchEvent(CREATED, parent, parent.relativize(targetRegularFile2))
+            }) {
+                await("Move should be observed as delete/create by `parent` watch (file tree): " + e)
+                    .until(() -> parentWatchBookkeeper.events().any(e));
+            }
+
+            await("Move should be observed as delete by `child1` watch (single directory)")
+                .until(() -> child1WatchBookkeeper
+                    .events().kind(DELETED).rootPath(child1).relativePath(child1.relativize(sourceDirectory)).any());
+
+            await("Move should be observed as create by `child2` watch (single directory)")
+                .until(() -> child2WatchBookkeeper
+                    .events().kind(CREATED).rootPath(child2).relativePath(child2.relativize(targetDirectory)).any());
+
+            await("Move should be observed as delete by `directory` watch")
+                .until(() -> directoryWatchBookkeeper
+                    .events().kind(DELETED).rootPath(sourceDirectory).any());
         }
     }
 }
