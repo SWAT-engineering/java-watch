@@ -1,0 +1,14 @@
+package java.nio.file;
+
+import org.checkerframework.checker.nullness.qual.Nullable;
+
+public interface WatchService {
+    @Nullable WatchKey poll();
+
+    @Nullable WatchKey poll(long timeout, TimeUnit unit)
+        throws InterruptedException;
+}
+
+public interface WatchEvent<T> {
+    @Nullable T context();
+}
