@@ -6,15 +6,23 @@ on:
   pull_request:
     branches:
       - main
+      - improved-macos-support-main
 
 jobs:
   test:
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os:
+          - image: ubuntu-latest
+          - image: macos-latest
+            mac-backend: jdk
+          - image: macos-latest
+            mac-backend: fsevents
+          - image: windows-latest
         jdk: [11, 17, 21]
+
       fail-fast: false
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.os.image }}
     steps:
       - uses: actions/checkout@v4
       - run: echo " " >> pom.xml # make sure the cache is slightly different for these runners
@@ -26,7 +34,7 @@ jobs:
           cache: 'maven'
 
       - name: test
-        run: mvn -B clean test
+        run: mvn -B clean test "-Dwatch.mac.backend=${{ matrix.os.mac-backend }}"
         env:
           DELAY_FACTOR: 3
 

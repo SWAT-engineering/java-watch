@@ -74,8 +74,10 @@
     <checkerframework.version>3.49.2</checkerframework.version>
     <junit.version>5.12.2</junit.version>
     <log4j.version>2.24.3</log4j.version>
+    <jna.version>5.16.0</jna.version>
     <maven.compiler.source>11</maven.compiler.source>
     <maven.compiler.target>11</maven.compiler.target>
+    <watch.mac.backend>fsevents</watch.mac.backend>
   </properties>
 
   <build>
@@ -103,6 +105,9 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <version>3.5.3</version>
+        <configuration>
+          <argLine>@{argLine} -Dengineering.swat.java-watch.mac=${watch.mac.backend}</argLine>
+        </configuration>
       </plugin>
       <plugin> <!-- code coverage -->
         <groupId>org.jacoco</groupId>
@@ -222,6 +227,16 @@
       <artifactId>log4j-core</artifactId>
       <version>${log4j.version}</version>
       <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>net.java.dev.jna</groupId>
+      <artifactId>jna</artifactId>
+      <version>${jna.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>net.java.dev.jna</groupId>
+      <artifactId>jna-platform</artifactId>
+      <version>${jna.version}</version>
     </dependency>
   </dependencies>
 
