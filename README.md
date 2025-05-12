@@ -12,9 +12,7 @@ Features:
 - monitor a single file (or directory) for changes
 - monitor a directory for changes to its direct children
 - monitor a directory for changes for all its descendants (aka recursive directory watch)
-- backends supported:
-  - the JDK [`WatchService`](https://docs.oracle.com/javase/8/docs/api/java/nio/file/WatchService.html) API on any platform
-  - the native [FSEvents](https://developer.apple.com/documentation/coreservices/file_system_events) API on macOS
+- high-resolution events (on macOS we use the native [FSEvents](https://developer.apple.com/documentation/coreservices/file_system_events) API to circumvent the polling behavior of the JDK [WatchService](https://docs.oracle.com/javase/8/docs/api/java/nio/file/WatchService.html))
 - edge cases dealt with:
   - recursive watches will also continue in new directories
   - multiple watches for the same directory are merged to avoid overloading the kernel
