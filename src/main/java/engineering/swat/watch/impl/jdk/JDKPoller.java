@@ -194,7 +194,7 @@ class JDKPoller {
                 var key = "engineering.swat.java-watch.mac";
                 var val = System.getProperty(key);
                 if (val != null) {
-                    if (val.equals("jna")) {
+                    if (val.equals("fsevents")) {
                         return MAC;
                     } else if (val.equals("jdk")) {
                         return DEFAULT;
