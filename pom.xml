@@ -106,7 +106,7 @@
         <artifactId>maven-surefire-plugin</artifactId>
         <version>3.5.3</version>
         <configuration>
-          <argLine>@{argLine} -Dengineering.swat.java-watch.mac=@{watch.mac.backend}</argLine>
+          <argLine>@{argLine} -Dengineering.swat.java-watch.mac=${watch.mac.backend}</argLine>
         </configuration>
       </plugin>
       <plugin> <!-- code coverage -->
