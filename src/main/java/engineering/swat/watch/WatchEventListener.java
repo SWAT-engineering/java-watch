@@ -30,8 +30,24 @@ package engineering.swat.watch;
  * A visit like interface that allows you to only override the functions you are interested in
  */
 public interface WatchEventListener {
+    /**
+     * executed in case of a create event
+     * @param ev the event
+     */
     default void onCreated(WatchEvent ev) { }
+    /**
+     * executed in case of a modified event
+     * @param ev the event
+     */
     default void onModified(WatchEvent ev) { }
+    /**
+     * executed in case of a delete event
+     * @param ev the event
+     */
     default void onDeleted(WatchEvent ev) { }
+    /**
+     * executed in case of a overflow event
+     * @param ev the event
+     */
     default void onOverflow(WatchEvent ev) { }
 }

@@ -75,6 +75,7 @@ public class Watch {
      * @param path which absolute path to monitor, can be a file or a directory, but has to be absolute
      * @param scope for directories you can also choose to monitor it's direct children or all it's descendants
      * @throws IllegalArgumentException in case a path is not supported (in relation to the scope)
+     * @return watch builder that can be further configured and then started
      */
     public static Watch build(Path path, WatchScope scope) {
         if (!path.isAbsolute()) {
@@ -103,7 +104,7 @@ public class Watch {
      * Use the {@link #withExecutor(Executor)} function to influence the sequencing of these events.
      * By default they can arrive in parallel.
      * @param eventHandler a callback that handles the watch event, will be called once per event.
-     * @return this for optional method chaining
+     * @return {@code this} (to support method chaining)
      */
     public Watch on(Consumer<WatchEvent> eventHandler) {
         if (this.eventHandler != EMPTY_HANDLER) {
@@ -115,6 +116,8 @@ public class Watch {
 
     /**
      * Convenience variant of {@link #on(Consumer)}, which allows you to only respond to certain events
+     * @param listener gets executed on every event the watch produced
+     * @return {@code this} (to support method chaining)
      */
     public Watch on(WatchEventListener listener) {
         if (this.eventHandler != EMPTY_HANDLER) {

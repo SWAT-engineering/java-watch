@@ -71,16 +71,30 @@ public class WatchEvent {
 
     private static final Path EMPTY_PATH = Path.of("");
 
+    /**
+     * Internal constructor an end user should never call, creates a new watch event for the root of a watch
+     * @param kind kind of watch event
+     * @param rootPath the path of the registered watch
+     */
     public WatchEvent(Kind kind, Path rootPath) {
         this(kind, rootPath, null);
     }
 
+    /**
+     * Internal constructor an end user should never call, creates a new watch event
+     * @param kind kind of watch event
+     * @param rootPath the path of the registered watch
+     * @param relativePath the child path of the event
+     */
     public WatchEvent(Kind kind, Path rootPath, @Nullable Path relativePath) {
         this.kind = kind;
         this.rootPath = rootPath;
         this.relativePath = relativePath == null ? EMPTY_PATH : relativePath;
     }
 
+    /**
+     * @return the kind of watch event
+     */
     public Kind getKind() {
         return this.kind;
     }
@@ -141,6 +155,9 @@ public class WatchEvent {
      * of the same file result in events that are equivalent, but not equal;
      * they need to be distinguishable in collections).
      * </p>
+     * @param e1 event 1
+     * @param e2 event 2
+     * @return true if e1 and e2 are the same path and kind
      */
     public static boolean areEquivalent(WatchEvent e1, WatchEvent e2) {
         return Objects.equals(e1.getKind(), e2.getKind()) &&

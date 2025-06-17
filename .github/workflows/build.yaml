@@ -72,3 +72,5 @@ jobs:
 
       - run: mvn -B editorconfig:check
 
+      - run: mvn -B -Dmaven.javadoc.failOnWarnings javadoc:jar -Prelease
+

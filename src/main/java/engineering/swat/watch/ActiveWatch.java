@@ -37,12 +37,12 @@ import java.nio.file.Path;
 public interface ActiveWatch extends Closeable {
 
     /**
-     * Gets the path watched by this watch.
+     * @return the path watched by this watch.
      */
     Path getPath();
 
     /**
-     * Gets the scope of this watch.
+     * @return the scope of this watch.
      */
     WatchScope getScope();
 }

@@ -281,6 +281,9 @@
                 </goals>
               </execution>
             </executions>
+            <configuration>
+              <excludePackageNames>engineering.swat.watch.impl:engineering.swat.watch.impl.*</excludePackageNames>
+            </configuration>
           </plugin>
           <plugin> <!-- generate sources jar -->
             <groupId>org.apache.maven.plugins</groupId>
