@@ -28,9 +28,12 @@ package engineering.swat.watch;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.awaitility.Awaitility.await;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -61,42 +64,37 @@ class ParallelWatches {
     }
 
     @Test
-    void directoryAndFile() throws IOException {
+    void directoryAndFileBothTrigger() throws IOException {
+        var dirTriggered = new AtomicBoolean();
+        var fileTriggered = new AtomicBoolean();
+        var file = testDir.getTestFiles().get(0);
+        assertEquals(testDir.getTestDirectory(), file.getParent(), "Test file should be a direct child of the test dir");
+        try (var dirWatch = watch(testDir.getTestDirectory(), WatchScope.PATH_AND_CHILDREN, dirTriggered)) {
+            try (var fileWatch = watch(file, WatchScope.PATH_ONLY, fileTriggered))  {
+                Files.write(file, "test".getBytes());
+                await("Directory should have picked up the file")
+                    .untilTrue(dirTriggered);
+                await("File should have picked up the file")
+                    .untilTrue(fileTriggered);
+            }
+        }
+    }
+
+    @Test
+    void fileShouldNotTrigger() throws IOException {
         var dirTriggered = new AtomicBoolean();
         var fileTriggered = new AtomicBoolean();
         var file = testDir.getTestFiles().get(0);
         var file2 = testDir.getTestFiles().get(1);
         assertEquals(testDir.getTestDirectory(), file.getParent(), "Test file should be a direct child of the test dir");
         assertEquals(testDir.getTestDirectory(), file2.getParent(), "Test file should be a direct child of the test dir");
-        try (var dirWatch = Watch.build(testDir.getTestDirectory(), WatchScope.PATH_AND_CHILDREN)
-            .on(e -> dirTriggered.set(true))
-            .start()) {
-            try (var fileWatch = Watch.build(file, WatchScope.PATH_ONLY).on(e -> fileTriggered.set(true)).start())  {
-                Files.write(file, "test".getBytes());
-                Awaitility.await()
-                    .alias("Directory should have picked up the file")
-                    .untilTrue(dirTriggered);
-                Awaitility.await()
-                    .alias("File should have picked up the file")
-                    .untilTrue(fileTriggered);
-
-                dirTriggered.set(false);
-                fileTriggered.set(false);
-
-                Awaitility.await()
-                    .alias("should remain false")
-                    .pollDelay(TestHelper.SHORT_WAIT.minus(Duration.ofMillis(100)))
-                    .untilFalse(fileTriggered);
-
-                assertFalse(dirTriggered.get(), "Directory should also have not seen new events");
-
+        try (var dirWatch = watch(testDir.getTestDirectory(), WatchScope.PATH_AND_CHILDREN, dirTriggered)) {
+            try (var fileWatch = watch(file, WatchScope.PATH_ONLY, fileTriggered))  {
                 Files.write(file2, "test2".getBytes());
-                Awaitility.await()
-                    .alias("Directory should have picked up the file")
+                await("Directory should have picked up the file")
                     .untilTrue(dirTriggered);
-                Awaitility.await()
-                    .alias("File should not have picked up the file")
-                    .during(TestHelper.SHORT_WAIT)
+                await("File should not have picked up the file")
+                    .pollDelay(TestHelper.NORMAL_WAIT.minus(Duration.ofMillis(100)))
                     .untilFalse(fileTriggered);
             }
         }
@@ -109,36 +107,59 @@ class ParallelWatches {
         var dir1 = testDir.getTestDirectory();
         var dir2 = dir1.resolve("nested");
         Files.createDirectories(dir2);
-        try (var dirWatch = Watch.build(dir1, WatchScope.PATH_AND_ALL_DESCENDANTS)
-            .on(e -> dirTriggered.set(true))
-            .start()) {
-            try (var nestedDirWatch = Watch.build(dir2, WatchScope.PATH_AND_CHILDREN).on(e -> nestedDirTriggered.set(true)).start())  {
-                Files.write(dir1.resolve("a1.txt"), "1".getBytes());
-                Awaitility.await().alias("Directory should have picked up the file")
-                    .untilTrue(dirTriggered);
-                Awaitility.await().alias("Nested dir should not have picked up the file")
-                    .during(TestHelper.SHORT_WAIT)
-                    .untilFalse(nestedDirTriggered);
-
-                dirTriggered.set(false);
-
-                Awaitility.await()
-                    .alias("should remain false")
-                    .pollDelay(TestHelper.SHORT_WAIT.minus(Duration.ofMillis(100)))
-                    .untilFalse(dirTriggered);
-
-                assertFalse(nestedDirTriggered.get(), "Nested directory should also have not seen new events");
-
+        try (var dirWatch = watch(dir1, WatchScope.PATH_AND_ALL_DESCENDANTS, dirTriggered)) {
+            try (var nestedDirWatch = watch(dir2, WatchScope.PATH_AND_CHILDREN, nestedDirTriggered))  {
                 Files.write(dir2.resolve("a2.txt"), "test2".getBytes());
-                Awaitility.await()
-                    .alias("Directory should have picked up the file")
+                await("Directory should have picked up nested file")
                     .untilTrue(dirTriggered);
-                Awaitility.await()
-                    .alias("Nested directory should have picked up the file")
+                await("Nested directory should have picked up the file")
                     .untilTrue(nestedDirTriggered);
             }
         }
     }
+
+    @Test
+    void nestedDirectoryNotTrigger() throws IOException {
+        var dirTriggered = new AtomicBoolean();
+        var nestedDirTriggered = new AtomicBoolean();
+        var dir1 = testDir.getTestDirectory();
+        var dir2 = dir1.resolve("nested");
+        Files.createDirectories(dir2);
+        try (var dirWatch = watch(dir1, WatchScope.PATH_AND_ALL_DESCENDANTS, dirTriggered)) {
+            try (var nestedDirWatch = watch(dir2, WatchScope.PATH_AND_CHILDREN, nestedDirTriggered))  {
+                Files.write(dir1.resolve("a1.txt"), "1".getBytes());
+                await("Directory should have picked up the file")
+                    .untilTrue(dirTriggered);
+                await("Nested dir should not have picked up the file")
+                    .pollDelay(TestHelper.NORMAL_WAIT.minus(Duration.ofMillis(100)))
+                    .untilFalse(nestedDirTriggered);
+            }
+        }
+    }
+
+    private static Closeable watch(Path p, WatchScope s, AtomicBoolean t) throws IOException {
+        return Watch.build(p, s).on(e -> t.set(true)).start();
+    }
+
+    @Test
+    void watchingSameDirectory() throws IOException {
+        var trig1 = new AtomicBoolean();
+        var trig2 = new AtomicBoolean();
+        var dir = testDir.getTestDirectory();
+        var nestedDir = dir.resolve("a/b/");
+        Files.createDirectories(nestedDir);
+        try (var dirWatch = watch(dir, WatchScope.PATH_AND_ALL_DESCENDANTS, trig1)) {
+            try (var dirWatch2 = watch(dir, WatchScope.PATH_AND_ALL_DESCENDANTS, trig2))  {
+                Files.write(dir.resolve("a1.txt"), "1".getBytes());
+
+                await("Watch 1 should have triggered")
+                    .untilTrue(trig1);
+                await("Directory should have picked up the file")
+                    .untilTrue(trig2);
+            }
+        }
+    }
+
 
 
 }
