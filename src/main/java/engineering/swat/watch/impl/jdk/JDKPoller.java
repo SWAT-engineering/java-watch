@@ -202,6 +202,8 @@ class JDKPoller {
                         logger.warn("Unexpected value \"{}\" for system property \"{}\". Using value \"jdk\" instead.", val, key);
                         return DEFAULT;
                     }
+                } else {
+                    return MAC;
                 }
             }
 
