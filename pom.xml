@@ -71,7 +71,7 @@
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <checkerframework.version>3.49.3</checkerframework.version>
+    <checkerframework.version>3.49.5</checkerframework.version>
     <junit.version>5.13.0</junit.version>
     <log4j.version>2.24.3</log4j.version>
     <jna.version>5.17.0</jna.version>
