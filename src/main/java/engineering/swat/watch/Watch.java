@@ -30,7 +30,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -38,6 +37,7 @@ import java.util.function.Predicate;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 
 import engineering.swat.watch.impl.EventHandlingWatch;
 import engineering.swat.watch.impl.jdk.JDKDirectoryWatch;
@@ -58,7 +58,9 @@ public class Watch {
     private final Path path;
     private final WatchScope scope;
     private volatile Approximation approximateOnOverflow = Approximation.ALL;
-    private volatile Executor executor = CompletableFuture::runAsync;
+
+    private static final Executor FALLBACK_EXECUTOR = DaemonThreadPool.buildConstrainedCached("JavaWatch-internal-handler",Runtime.getRuntime().availableProcessors());
+    private volatile @MonotonicNonNull Executor executor = null;
 
     private static final BiConsumer<EventHandlingWatch, WatchEvent> EMPTY_HANDLER = (w, e) -> {};
     private volatile BiConsumer<EventHandlingWatch, WatchEvent> eventHandler = EMPTY_HANDLER;
@@ -162,11 +164,14 @@ public class Watch {
 
     /**
      * Optionally configure the executor in which the {@link #on(Consumer)} callbacks are scheduled.
-     * If not defined, every task will be scheduled on the {@link java.util.concurrent.ForkJoinPool#commonPool()}.
+     * Make sure to consider the termination of the threadpool, it should be after the close of the active watch.
      * @param callbackHandler worker pool to use
      * @return this for optional method chaining
      */
     public Watch withExecutor(Executor callbackHandler) {
+        if (callbackHandler == null) {
+            throw new IllegalArgumentException("null is allowed");
+        }
         this.executor = callbackHandler;
         return this;
     }
@@ -197,8 +202,12 @@ public class Watch {
         if (this.eventHandler == EMPTY_HANDLER) {
             throw new IllegalStateException("There is no onEvent handler defined");
         }
+        var executor = this.executor;
+        if (executor == null) {
+            executor = FALLBACK_EXECUTOR;
+        }
 
-        var h = applyApproximateOnOverflow();
+        var h = applyApproximateOnOverflow(executor);
 
         switch (scope) {
             case PATH_AND_CHILDREN: {
@@ -230,7 +239,7 @@ public class Watch {
         }
     }
 
-    private BiConsumer<EventHandlingWatch, WatchEvent> applyApproximateOnOverflow() {
+    private BiConsumer<EventHandlingWatch, WatchEvent> applyApproximateOnOverflow(Executor executor) {
         switch (approximateOnOverflow) {
             case NONE:
                 return eventHandler;
