@@ -45,12 +45,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 import org.apache.logging.log4j.Level;
@@ -59,6 +54,7 @@ import org.apache.logging.log4j.Logger;
 
 import com.sun.nio.file.ExtendedWatchEventModifier;
 
+import engineering.swat.watch.DaemonThreadPool;
 import engineering.swat.watch.impl.mac.MacWatchService;
 import engineering.swat.watch.impl.util.SubscriptionKey;
 
@@ -75,19 +71,7 @@ class JDKPoller {
      * We have to be a bit careful with registering too many paths in parallel
      * Linux can be thrown into a deadlock if you try to start 1000 threads and then do a register at the same time.
      */
-    private static final ExecutorService registerPool = new ThreadPoolExecutor(
-            0, Runtime.getRuntime().availableProcessors(),
-            10, TimeUnit.SECONDS,
-            new LinkedBlockingQueue<>(), new ThreadFactory() {
-                private final AtomicInteger id = new AtomicInteger(0);
-                private final ThreadGroup group = new ThreadGroup("registry pool");
-                @Override
-                public Thread newThread(Runnable r) {
-                    var t = new Thread(group, r, "JavaWatch-registry-pool-" + id.incrementAndGet());
-                    t.setDaemon(true);
-                    return t;
-                }
-            });
+    private static final ExecutorService registerPool = DaemonThreadPool.buildConstrainedCached("JavaWatch-rate-limit-registry", Runtime.getRuntime().availableProcessors());
 
     static {
         try {
