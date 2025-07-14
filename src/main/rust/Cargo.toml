@@ -1,0 +1,22 @@
+[package]
+name = "rust-fsevents-jni"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib"]
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
+
+[dependencies]
+# we need this PR as it contains an updated version that targets core-foundation
+fsevent-sys = { git = "https://github.com/octplane/fsevent-rust.git", rev= "refs/pull/44/head"}
+core-foundation = "0.10.1"
+# we need this specific version of dispatch2, that still exposes the native type
+dispatch2 = { version = "0.2.0", default-features = false, features = ["alloc"] }
+bitflags = "2.9.1" # unsure if we need bitflags
+jni = "0.21.1"
+crossbeam-channel = "0.5.15" # more extensive channel api than build in
