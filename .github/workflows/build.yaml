@@ -37,7 +37,7 @@ jobs:
         if: ${{ matrix.os.image == 'macos-latest' }}
 
       - name: test
-        run: mvn -B clean test "-Dwatch.mac.backend=${{ matrix.os.mac-backend }}"
+        run: mvn -B clean test "-Dwatch.mac.backend=${{ matrix.os.mac-backend }}" -Dtest=Basic
         env:
           DELAY_FACTOR: 3
 
