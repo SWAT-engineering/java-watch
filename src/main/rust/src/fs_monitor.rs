@@ -18,7 +18,7 @@ use core_foundation::{
 };
 use fsevent_sys::{self as fs, kFSEventStreamCreateFlagFileEvents, kFSEventStreamCreateFlagNoDefer, kFSEventStreamCreateFlagWatchRoot};
 use std::{
-    ffi::CStr, ptr, sync::Arc
+    ffi::CStr, ptr
 };
 
 struct CallbackContext {
@@ -33,7 +33,7 @@ pub struct NativeEventStream {
     queue: dispatch_queue_t,
     stream: Option<fs::FSEventStreamRef>,
     receiver: chan::Receiver<Event>,
-    sender_heap: *mut Arc<CallbackContext>,
+    sender_heap: *mut CallbackContext,
 }
 
 
@@ -62,16 +62,17 @@ impl NativeEventStream {
             queue: unsafe { dispatch2::ffi::dispatch_queue_create(ptr::null(), DISPATCH_QUEUE_SERIAL)},
             stream: None,
             receiver: r,
-            sender_heap: Box::into_raw(Box::new(Arc::new(CallbackContext{ new_events: Box::new(new_events), channel: s })))
+            sender_heap: Box::into_raw(Box::new(CallbackContext{ new_events: Box::new(new_events), channel: s }))
         }
     }
 
     fn build_context(&mut self) -> *const fsevent_sys::FSEventStreamContext {
+        eprintln!("ctx sending: {?}", self.sender_heap);
         &fs::FSEventStreamContext {
             version: 0,
             info: self.sender_heap as *mut _,
-            retain: Some(retain_arc),
-            release: Some(release_arc),
+            retain: None,
+            release: None,
             copy_description: None
         }
     }
@@ -108,7 +109,7 @@ impl NativeEventStream {
                 fs::FSEventStreamInvalidate(stream);
                 dispatch2::ffi::dispatch_release(self.queue as dispatch_object_t);
                 fs::FSEventStreamRelease(stream);
-                release_arc(self.sender_heap as *mut c_void);
+                drop(Box::from(self.sender_heap));
             }
             None => unsafe {
                 dispatch2::ffi::dispatch_release(self.queue as dispatch_object_t);
@@ -126,21 +127,6 @@ impl NativeEventStream {
 
 }
 
-
-extern "C" fn retain_arc(info: *mut c_void) -> *mut c_void {
-    let ctx_ptr = info as *mut Arc<CallbackContext>;
-    let ctx = unsafe{ &mut *ctx_ptr };
-    Box::into_raw(Box::new(&ctx)) as *mut _
-}
-
-extern "C" fn release_arc(info: *mut c_void) {
-    let ctx_ptr = info as *mut Arc<CallbackContext>;
-    unsafe{ drop(Box::from_raw( ctx_ptr)); }
-}
-
-
-
-
 extern "C" fn callback(
     _stream_ref: fs::FSEventStreamRef,
     info: *mut c_void,
@@ -149,7 +135,8 @@ extern "C" fn callback(
     event_flags: *const fs::FSEventStreamEventFlags,
     event_ids: *const fs::FSEventStreamEventId,
 ) {
-    let ctx = unsafe{ &mut *(info as *mut Arc<CallbackContext>) };
+    let ctx = unsafe{ &mut *(info as *mut CallbackContext) };
+    eprintln!("ctx restored: {?}", ctx);
 
     let event_paths = event_paths as *const *const c_char;
 
@@ -167,7 +154,7 @@ extern "C" fn callback(
     }
 
     if num_events > 0 {
-      eprintln!("Sending message to java");
+        eprintln!("Sending message to java");
         (ctx.new_events)();
     }
 }
