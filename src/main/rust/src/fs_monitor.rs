@@ -66,25 +66,19 @@ impl NativeEventStream {
         }
     }
 
-    fn build_context(&mut self) -> *const fsevent_sys::FSEventStreamContext {
-        eprintln!("ctx sending: {:?}", self.sender_heap);
-        &fs::FSEventStreamContext {
-            version: 0,
-            info: self.sender_heap as *mut _,
-            retain: None,
-            release: Some(release_context),
-            copy_description: None
-        }
-    }
-
     pub fn start(&mut self) {
         unsafe {
-            let x = self.build_context();
             eprintln!("Creating stream: {}", self.since_when);
             let stream = fs::FSEventStreamCreate(
                 kCFAllocatorDefault,
                 callback,
-                x,
+                &fs::FSEventStreamContext {
+                    version: 0,
+                    info: self.sender_heap as *mut _,
+                    retain: None,
+                    release: Some(release_context),
+                    copy_description: None
+                },
                 self.path.as_concrete_TypeRef(),
                 self.since_when,
                 0.15,
@@ -128,17 +122,8 @@ impl NativeEventStream {
 }
 
 extern "C" fn release_context(info: *mut c_void) {
-  // Safety:
-  // - The [documentation] for `FSEventStreamContext` states that `release` is only
-  //   called when the stream is deallocated, so it is safe to convert `info` back into a
-  //   box and drop it.
-  //
-  // [docs]: https://developer.apple.com/documentation/coreservices/fseventstreamcontext?language=objc
-  unsafe {
-      drop(Box::from_raw(
-          info as *mut CallbackContext,
-      ));
-  }
+  let ctx_ptr = info as *mut CallbackContext;
+  unsafe{ drop(Box::from_raw( ctx_ptr)); }
 }
 
 extern "C" fn callback(
