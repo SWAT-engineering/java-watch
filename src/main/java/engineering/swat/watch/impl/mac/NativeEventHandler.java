@@ -26,8 +26,13 @@
  */
 package engineering.swat.watch.impl.mac;
 
+import static java.nio.file.StandardWatchEventKinds.ENTRY_CREATE;
+import static java.nio.file.StandardWatchEventKinds.ENTRY_DELETE;
+import static java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY;
+import static java.nio.file.StandardWatchEventKinds.OVERFLOW;
+
+import java.nio.file.Path;
 import java.nio.file.WatchEvent;
-import java.nio.file.WatchEvent.Kind;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -51,5 +56,28 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  */
 @FunctionalInterface
 interface NativeEventHandler {
-    <T> void handle(Kind<T> kind, @Nullable T context);
+    <T> void handle(java.nio.file.WatchEvent.Kind<T> kind, @Nullable T context);
+
+    default void handle(int kindOrdinal, String rootPath, String relativePath) {
+        if (kindOrdinal == Kind.OVERFLOW.ordinal()) {
+            handle(OVERFLOW, null);
+        } else {
+            var context = Path.of(rootPath).relativize(Path.of(relativePath));
+            var kind =
+                kindOrdinal == Kind.CREATE.ordinal() ? ENTRY_CREATE :
+                kindOrdinal == Kind.MODIFY.ordinal() ? ENTRY_MODIFY :
+                kindOrdinal == Kind.DELETE.ordinal() ? ENTRY_DELETE : null;
+
+            if (kind != null) {
+                handle(kind, context);
+            }
+        }
+    }
+}
+
+enum Kind {
+    OVERFLOW,
+    CREATE,
+    DELETE,
+    MODIFY;
 }
