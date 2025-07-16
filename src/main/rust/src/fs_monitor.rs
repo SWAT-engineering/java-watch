@@ -6,75 +6,57 @@
     unused_qualifications
 )]
 
-use crossbeam_channel as chan;
-
-use std::{os::raw::{c_char, c_void}, sync::atomic::{AtomicBool, Ordering}};
-
-use dispatch2::ffi::{dispatch_object_t, dispatch_queue_t, DISPATCH_QUEUE_SERIAL};
+use std::{
+    ffi::CStr,
+    ptr,
+    fs,
+    os::raw::{c_char, c_void},
+    sync::atomic::{AtomicBool, Ordering},
+};
+use dispatch2::ffi::{dispatch_object_t, dispatch_queue_t, DISPATCH_QUEUE_SERIAL, dispatch_queue_create};
 use core_foundation::{
     array::CFArray,
     base::{kCFAllocatorDefault, TCFType},
     string::CFString,
 };
-use fsevent_sys::{self as fs, kFSEventStreamCreateFlagFileEvents, kFSEventStreamCreateFlagNoDefer, kFSEventStreamCreateFlagWatchRoot};
-use std::{
-    ffi::CStr, ptr
-};
+use fsevent_sys::{self as fse};
 
-struct CallbackContext {
-    new_events: Box<dyn Fn()>,
-    channel: chan::Sender<Event>
+pub enum Kind { // Ordinals need to be consistent with enum `Kind` in Java
+    OVERFLOW=0,
+    CREATE=1,
+    DELETE=2,
+    MODIFY=3,
 }
 
 pub struct NativeEventStream {
-    since_when: fs::FSEventStreamEventId,
+    since_when: fse::FSEventStreamEventId,
     closed: AtomicBool,
     path : CFArray<CFString>,
     queue: dispatch_queue_t,
-    stream: Option<fs::FSEventStreamRef>,
-    receiver: chan::Receiver<Event>,
-    sender_heap: *mut CallbackContext,
+    stream: Option<fse::FSEventStreamRef>,
+    info: *mut ContextInfo,
 }
-
-
-pub struct Event {
-    pub id: fs::FSEventStreamEventId,
-    pub flags: fs::FSEventStreamEventFlags,
-    pub path: String
-}
-
-
-
-const FLAGS : fs::FSEventStreamCreateFlags
-        = kFSEventStreamCreateFlagNoDefer
-        | kFSEventStreamCreateFlagWatchRoot
-        | kFSEventStreamCreateFlagFileEvents;
-
 
 impl NativeEventStream {
-    pub fn new(path: String, new_events: impl Fn() + 'static) -> Self {
-        let (s, r) : (chan::Sender<Event>, chan::Receiver<Event>) = chan::unbounded();
-        eprintln!("New watch requested for: {}", &path);
+    pub fn new(path: String, handler: impl Fn(Kind, &String) + 'static) -> Self {
         Self {
-            since_when: unsafe { fs::FSEventsGetCurrentEventId() },
+            since_when: unsafe { fse::FSEventsGetCurrentEventId() },
             closed: AtomicBool::new(false),
             path: CFArray::from_CFTypes(&[CFString::new(&path)]),
-            queue: unsafe { dispatch2::ffi::dispatch_queue_create(ptr::null(), DISPATCH_QUEUE_SERIAL)},
+            queue: unsafe { dispatch_queue_create(ptr::null(), DISPATCH_QUEUE_SERIAL) },
             stream: None,
-            receiver: r,
-            sender_heap: Box::into_raw(Box::new(CallbackContext{ new_events: Box::new(new_events), channel: s }))
+            info: Box::into_raw(Box::new(ContextInfo{ handler: Box::new(handler) })),
         }
     }
 
     pub fn start(&mut self) {
         unsafe {
-            eprintln!("Creating stream: {}", self.since_when);
-            let stream = fs::FSEventStreamCreate(
+            let stream = fse::FSEventStreamCreate(
                 kCFAllocatorDefault,
                 callback,
-                &fs::FSEventStreamContext {
+                &fse::FSEventStreamContext {
                     version: 0,
-                    info: self.sender_heap as *mut _,
+                    info: self.info as *mut _,
                     retain: None,
                     release: Some(release_context),
                     copy_description: None
@@ -86,74 +68,86 @@ impl NativeEventStream {
 
             self.stream = Some(stream);
 
-            eprintln!("Connecting stream with queue");
-            fs::FSEventStreamSetDispatchQueue(stream, self.queue);
-            eprintln!("Starting stream");
-            fs::FSEventStreamStart(stream);
+            fse::FSEventStreamSetDispatchQueue(stream, self.queue);
+            fse::FSEventStreamStart(stream);
         };
     }
+
     pub fn stop(&self) {
         if self.closed.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst).is_err() {
-            // we weren't the first one to close it
-            return;
+            return; // The stream has already been closed
         }
         match self.stream {
             Some(stream) => unsafe{
-                fs::FSEventStreamStop(stream);
-                fs::FSEventStreamSetDispatchQueue(stream, ptr::null_mut());
-                fs::FSEventStreamInvalidate(stream);
+                fse::FSEventStreamStop(stream);
+                fse::FSEventStreamSetDispatchQueue(stream, ptr::null_mut());
+                fse::FSEventStreamInvalidate(stream);
                 dispatch2::ffi::dispatch_release(self.queue as dispatch_object_t);
-                fs::FSEventStreamRelease(stream);
+                fse::FSEventStreamRelease(stream);
             }
             None => unsafe {
                 dispatch2::ffi::dispatch_release(self.queue as dispatch_object_t);
             }
         };
     }
-
-    pub(crate) fn poll_all(&self) -> chan::TryIter<Event> {
-        self.receiver.try_iter()
-    }
-
-    pub(crate) fn is_empty(&self) -> bool {
-        self.receiver.is_empty()
-    }
-
 }
 
+struct ContextInfo {
+    handler: Box<dyn Fn(Kind, &String)>,
+}
+
+const FLAGS : fse::FSEventStreamCreateFlags
+        = fse::kFSEventStreamCreateFlagNoDefer
+        | fse::kFSEventStreamCreateFlagWatchRoot
+        | fse::kFSEventStreamCreateFlagFileEvents;
+
 extern "C" fn release_context(info: *mut c_void) {
-  let ctx_ptr = info as *mut CallbackContext;
+  let ctx_ptr = info as *mut ContextInfo;
   unsafe{ drop(Box::from_raw( ctx_ptr)); }
 }
 
 extern "C" fn callback(
-    _stream_ref: fs::FSEventStreamRef,
+    _stream_ref: fse::FSEventStreamRef,
     info: *mut c_void,
     num_events: usize,
     event_paths: *mut c_void,
-    event_flags: *const fs::FSEventStreamEventFlags,
-    event_ids: *const fs::FSEventStreamEventId,
+    event_flags: *const fse::FSEventStreamEventFlags,
+    _event_ids: *const fse::FSEventStreamEventId,
 ) {
-    let ctx = unsafe{ &mut *(info as *mut CallbackContext) };
-    eprintln!("ctx restored: {:?}", "foo");
+    let info = unsafe{ &mut *(info as *mut ContextInfo) };
+    let handler = info.handler.as_ref();
 
     let event_paths = event_paths as *const *const c_char;
-
     for i in 0..num_events {
-        unsafe{
-            ctx.channel.send(Event {
-                id: *event_ids.add(i),
-                flags: *event_flags.add(i),
-                path: CStr::from_ptr(*event_paths.add(i))
-                    .to_str()
-                    .expect("Invalid UTF8 string.")
-                    .to_string()
-            });
-        }
-    }
+        let path = unsafe { CStr::from_ptr(*event_paths.add(i)).to_str().unwrap().to_string() };
+        let flags: fse::FSEventStreamEventFlags = unsafe { *event_flags.add(i) };
 
-    if num_events > 0 {
-        eprintln!("Sending message to java");
-        (ctx.new_events)();
+        // Note: Multiple "physical" native events might be coalesced into a
+        // single "logical" native event, so the following series of checks
+        // should be if-statements (instead of if/else-statements).
+        if flags & fse::kFSEventStreamEventFlagItemCreated != 0 {
+            handler(Kind::CREATE, &path);
+        }
+        if flags & fse::kFSEventStreamEventFlagItemRemoved != 0 {
+            handler(Kind::DELETE, &path);
+        }
+        if flags & (fse::kFSEventStreamEventFlagItemModified | fse::kFSEventStreamEventFlagItemInodeMetaMod) != 0 {
+            handler(Kind::MODIFY, &path);
+        }
+        if flags & fse::kFSEventStreamEventFlagMustScanSubDirs != 0 {
+            handler(Kind::OVERFLOW, &path);
+        }
+        if flags & fse::kFSEventStreamEventFlagItemRenamed != 0 {
+            // For now, check if the file exists to determine if the event
+            // pertains to the target of the rename (if it exists) or to the
+            // source (else). This is an approximation. It might be more
+            // accurate to maintain an internal index (but getting the
+            // concurrency right requires care).
+            if fs::exists(&path).unwrap_or(false) {
+                handler(Kind::CREATE, &path);
+            } else {
+                handler(Kind::DELETE, &path);
+            }
+        }
     }
 }
