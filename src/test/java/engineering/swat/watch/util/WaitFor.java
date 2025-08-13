@@ -1,3 +1,29 @@
+/*
+ * BSD 2-Clause License
+ *
+ * Copyright (c) 2023, Swat.engineering
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
 package engineering.swat.watch.util;
 
 import static java.lang.System.currentTimeMillis;
@@ -172,6 +198,11 @@ public class WaitFor {
         assertTrue(block(p), message);
     }
 
+    public <T> void untilEquals(Supplier<T> val, T expected) {
+        assertTrue(block(() -> expected.equals(val.get())), message);
+        assertEquals(expected, val.get(), message);
+    }
+
     private void holdBlock(BooleanSupplier p) {
         // we keep going untill a false result
         block(() -> !p.getAsBoolean());
@@ -199,5 +230,30 @@ public class WaitFor {
         });
     }
 
+    private void delayedHoldsBlock(BooleanSupplier p, Runnable finalCheck) {
+        AtomicBoolean turnedTrue = new AtomicBoolean(false);
+        block(() -> {
+            var result = p.getAsBoolean();
+            if (result) {
+                turnedTrue.set(true);
+                // keep running, all good
+                return false;
+            }
+            // now if false, that could be fine, if we're never turned true yet
+            return turnedTrue.get();
+        });
+        finalCheck.run();
+    }
+
+    public void delayedHolds(BooleanSupplier p) {
+        delayedHoldsBlock(p, () -> assertTrue(p, message));
+    }
+
+    public <T> void delayedHoldsEquals(Supplier<T> sup, T expected) {
+        delayedHoldsBlock(
+            () -> expected.equals(sup.get()),
+            () -> assertEquals(expected, sup.get(), message)
+        );
+    }
 
 }
