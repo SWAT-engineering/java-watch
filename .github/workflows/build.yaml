@@ -1,4 +1,7 @@
 name: Build and Test
+permissions:
+  contents: read
+  pull-requests: write
 on:
   push:
     branches:
@@ -18,8 +21,10 @@ jobs:
             mac-backend: jdk
           - image: macos-latest
             mac-backend: fsevents
+          - image: macos-13
+            mac-backend: fsevents
           - image: windows-latest
-        jdk: [11, 17, 21]
+        jdk: [11, 21]
 
       fail-fast: false
     runs-on: ${{ matrix.os.image }}
@@ -32,9 +37,8 @@ jobs:
           java-version: ${{ matrix.jdk }}
           distribution: 'temurin'
           cache: 'maven'
-      #- uses: actions-rust-lang/setup-rust-toolchain@v1
       - run: ./update-rust-jni-libs.sh -r
-        if: ${{ matrix.os.image == 'macos-latest' }}
+        if: startsWith(matrix.os.image, 'macos-')
 
       - name: test
         run: mvn -B clean test "-Dwatch.mac.backend=${{ matrix.os.mac-backend }}"

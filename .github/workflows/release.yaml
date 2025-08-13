@@ -1,12 +1,19 @@
 name: Publish package maven
+permissions:
+  contents: read
+  pull-requests: read
 on:
   release:
     types: [created]
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest # for now build on macos for the jni
     steps:
       - uses: actions/checkout@v4
+
+      # build jni libs on osx
+      - run: ./update-rust-jni-libs.sh -r
+
       - uses: actions/setup-java@v4
         with:
           java-version: '11'
