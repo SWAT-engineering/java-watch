@@ -166,8 +166,18 @@ public class WaitFor {
         assertTrue(p, message);
     }
 
+    public void holds(AtomicBoolean b) {
+        holds(b::get);
+    }
     public void holds(BooleanSupplier p) {
         holdBlock(p);
+    }
+
+    public void holdsFalse(AtomicBoolean p) {
+        holdsFalse(p::get);
+    }
+    public void holdsFalse(BooleanSupplier p) {
+        holds(() -> !p.getAsBoolean());
     }
 
     public void holdsEmpty(Supplier<Stream<?>> stream) {
