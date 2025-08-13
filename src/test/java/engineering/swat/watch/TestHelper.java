@@ -29,6 +29,8 @@ package engineering.swat.watch;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.function.Consumer;
@@ -113,35 +115,59 @@ public class TestHelper {
                 return !any();
             }
 
+            public Stream<WatchEvent> events() {
+                return stream;
+            }
+
             public boolean none(WatchEvent event) {
                 return !any(event);
             }
 
             public Events kind(WatchEvent.Kind... kinds) {
+                return kind(Arrays.asList(kinds));
+            }
+            public Events kind(Collection<WatchEvent.Kind> kinds) {
                 return new Events(stream.filter(e -> contains(kinds, e.getKind())));
             }
 
             public Events kindNot(WatchEvent.Kind... kinds) {
+                return kindNot(Arrays.asList(kinds));
+            }
+            public Events kindNot(Collection<WatchEvent.Kind> kinds) {
                 return new Events(stream.filter(e -> !contains(kinds, e.getKind())));
             }
 
             public Events rootPath(Path... rootPaths) {
+                return rootPath(Arrays.asList(rootPaths));
+            }
+            public Events rootPath(Collection<Path> rootPaths) {
                 return new Events(stream.filter(e -> contains(rootPaths, e.getRootPath())));
             }
 
             public Events rootPathNot(Path... rootPaths) {
+                return rootPathNot(Arrays.asList(rootPaths));
+            }
+            public Events rootPathNot(Collection<Path> rootPaths) {
                 return new Events(stream.filter(e -> !contains(rootPaths, e.getRootPath())));
             }
 
             public Events relativePath(Path... relativePaths) {
+                return relativePath(Arrays.asList(relativePaths));
+            }
+
+            public Events relativePath(Collection<Path> relativePaths) {
                 return new Events(stream.filter(e -> contains(relativePaths, e.getRelativePath())));
             }
 
             public Events relativePathNot(Path... relativePaths) {
+                return relativePathNot(Arrays.asList(relativePaths));
+            }
+
+            public Events relativePathNot(Collection<Path> relativePaths) {
                 return new Events(stream.filter(e -> !contains(relativePaths, e.getRelativePath())));
             }
 
-            private boolean contains(Object[] a, Object key) {
+            private <T> boolean contains(Collection<T> a, T key) {
                 for (var elem : a) {
                     if (elem.equals(key)) {
                         return true;
