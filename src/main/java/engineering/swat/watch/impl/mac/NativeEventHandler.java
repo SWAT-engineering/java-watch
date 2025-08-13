@@ -59,19 +59,27 @@ interface NativeEventHandler {
     <T> void handle(java.nio.file.WatchEvent.Kind<T> kind, @Nullable T context);
 
     default void handle(int kindOrdinal, String rootPath, String relativePath) {
-        if (kindOrdinal == Kind.OVERFLOW.ordinal()) {
-            handle(OVERFLOW, null);
-        } else {
-            var context = Path.of(rootPath).relativize(Path.of(relativePath));
-            var kind =
-                kindOrdinal == Kind.CREATE.ordinal() ? ENTRY_CREATE :
-                kindOrdinal == Kind.MODIFY.ordinal() ? ENTRY_MODIFY :
-                kindOrdinal == Kind.DELETE.ordinal() ? ENTRY_DELETE : null;
-
-            if (kind != null) {
-                handle(kind, context);
+        if (kindOrdinal < Kind.values().length) {
+            var kind = Kind.values()[kindOrdinal];
+            switch (kind) {
+                case CREATE:
+                    handle(ENTRY_CREATE, toContext(rootPath, relativePath));
+                    break;
+                case MODIFY:
+                    handle(ENTRY_MODIFY, toContext(rootPath, relativePath));
+                    break;
+                case DELETE:
+                    handle(ENTRY_DELETE, toContext(rootPath, relativePath));
+                    break;
+                case OVERFLOW:
+                    handle(OVERFLOW, null);
+                    break;
             }
         }
+    }
+
+    static Path toContext(String rootPath, String relativePath) {
+        return Path.of(rootPath).relativize(Path.of(relativePath));
     }
 }
 
