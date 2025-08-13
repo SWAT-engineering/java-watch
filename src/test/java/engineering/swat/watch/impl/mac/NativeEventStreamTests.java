@@ -39,10 +39,13 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 
 import engineering.swat.watch.TestDirectory;
 import engineering.swat.watch.TestHelper;
 
+@EnabledOnOs({OS.MAC})
 public class NativeEventStreamTests {
 
     private TestDirectory testDir;
