@@ -72,8 +72,8 @@
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <checkerframework.version>3.49.5</checkerframework.version>
-    <junit.version>5.13.2</junit.version>
-    <log4j.version>2.25.0</log4j.version>
+    <junit.version>5.13.4</junit.version>
+    <log4j.version>2.25.1</log4j.version>
     <maven.compiler.source>11</maven.compiler.source>
     <maven.compiler.target>11</maven.compiler.target>
     <watch.mac.backend>fsevents</watch.mac.backend>
@@ -186,7 +186,7 @@
       <plugin> <!-- use a new version of maven  -->
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-enforcer-plugin</artifactId>
-        <version>3.5.0</version>
+        <version>3.6.1</version>
         <executions>
           <execution>
             <id>enforce-maven</id>
@@ -261,7 +261,7 @@
           <plugin> <!-- sign jar for maven central-->
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-gpg-plugin</artifactId>
-            <version>3.2.7</version>
+            <version>3.2.8</version>
             <executions>
               <execution>
                 <id>sign-artifacts</id>
