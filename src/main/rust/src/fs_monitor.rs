@@ -119,6 +119,8 @@ extern "C" fn callback(
 
     let event_paths = event_paths as *const *const c_char;
     for i in 0..num_events {
+        // TODO: We're currently going from C strings to Rust strings to JNI
+        // strings. If possible, go directly from C strings to JNI strings.
         let path = unsafe { CStr::from_ptr(*event_paths.add(i)).to_str().unwrap().to_string() };
         let flags: fse::FSEventStreamEventFlags = unsafe { *event_flags.add(i) };
 

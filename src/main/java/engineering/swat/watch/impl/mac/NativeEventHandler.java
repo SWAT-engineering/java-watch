@@ -83,7 +83,7 @@ interface NativeEventHandler {
     }
 }
 
-enum Kind {
+enum Kind { // Order of values needs to be consistent with enum `Kind` in Rust
     OVERFLOW,
     CREATE,
     DELETE,
