@@ -28,7 +28,12 @@ package engineering.swat.watch.impl.mac;
 
 import static java.nio.file.attribute.PosixFilePermission.*;
 
+import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.channels.Channels;
 import java.nio.file.Files;
+import java.nio.file.OpenOption;
+import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.FileAttribute;
 import java.nio.file.attribute.PosixFilePermission;
@@ -76,20 +81,21 @@ public class NativeLibrary {
 
     private static FileAttribute<Set<PosixFilePermission>> PRIVATE_FILE = PosixFilePermissions.asFileAttribute(Set.of(OWNER_READ, OWNER_WRITE , OWNER_EXECUTE));
 
+    private static OutputStream openPrivateStream(Path forFile, OpenOption... flags) throws IOException {
+        return Channels.newOutputStream(
+            Files.newByteChannel(forFile, Set.of(flags), PRIVATE_FILE)
+        );
+    }
+
     private static void loadLibrary(String path) {
         try {
-            var localFile = NativeLibrary.class.getResource(path);
-            if (localFile != null && localFile.getProtocol().equals("file")) {
-                System.load(localFile.getPath());
-                return;
-            }
             // in most cases the file is inside of a jar
             // so we have to copy it out and load that file instead
             var localCopy = Files.createTempFile("watch", ".dylib", PRIVATE_FILE);
             localCopy.toFile().deleteOnExit();
             try (var libStream = NativeLibrary.class.getResourceAsStream(path)) {
                 if (libStream != null) {
-                    try (var writer = Files.newOutputStream(localCopy, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE)) {
+                    try (var writer = openPrivateStream(localCopy, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE)) {
                         libStream.transferTo(writer);
                     }
                     System.load(localCopy.toString());
