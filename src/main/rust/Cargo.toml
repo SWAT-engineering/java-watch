@@ -17,6 +17,4 @@ fsevent-sys = { git = "https://github.com/octplane/fsevent-rust.git", rev= "refs
 core-foundation = "0.10.1"
 # we need this specific version of dispatch2, that still exposes the native type
 dispatch2 = { version = "0.2.0", default-features = false, features = ["alloc"] }
-bitflags = "2.9.1" # unsure if we need bitflags
 jni = "0.21.1"
-crossbeam-channel = "0.5.15" # more extensive channel api than build in
