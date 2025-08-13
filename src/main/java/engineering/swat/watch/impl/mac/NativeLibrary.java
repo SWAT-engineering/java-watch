@@ -85,7 +85,7 @@ public class NativeLibrary {
             }
             // in most cases the file is inside of a jar
             // so we have to copy it out and load that file instead
-            var localCopy = Files.createTempFile("watch", ".dylib"/*  , PRIVATE_FILE*/);
+            var localCopy = Files.createTempFile("watch", ".dylib", PRIVATE_FILE);
             localCopy.toFile().deleteOnExit();
             try (var libStream = NativeLibrary.class.getResourceAsStream(path)) {
                 if (libStream != null) {
