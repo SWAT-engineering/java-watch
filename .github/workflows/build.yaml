@@ -33,7 +33,7 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
       #- uses: actions-rust-lang/setup-rust-toolchain@v1
-      - run: ./update-rust-jni-libs.sh
+      - run: ./update-rust-jni-libs.sh -r
         if: ${{ matrix.os.image == 'macos-latest' }}
 
       - name: test

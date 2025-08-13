@@ -26,22 +26,30 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
 
-
-
 set -euxo pipefail
+
+# Run Cargo in debug mode by default
+CARGO_OPTIONS=""
+TARGET_SUBDIR="debug"
+
+while getopts ":r" OPTION; do
+   case $OPTION in
+      r) # Run Cargo in release mode
+         CARGO_OPTIONS="--release"
+         TARGET_SUBDIR="release"
+   esac
+done
 
 RESOURCES="../resources/engineering/swat/watch/jni/"
 
 cd src/main/rust
 
-
 function build() {
   rustup target add $1
-  cargo build --target $1
+  cargo build --target $1 $CARGO_OPTIONS
   mkdir -p "$RESOURCES/$2/"
-  cp "target/$1/debug/librust_fsevents_jni.dylib" "$RESOURCES/$2/"
+  cp "target/$1/$TARGET_SUBDIR/librust_fsevents_jni.dylib" "$RESOURCES/$2/"
 }
 
 build "x86_64-apple-darwin" "macos-x64"
 build "aarch64-apple-darwin" "macos-aarch64"
-
