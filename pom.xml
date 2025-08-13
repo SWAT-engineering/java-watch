@@ -154,6 +154,9 @@
               </excludes>
             </licenseSet>
           </licenseSets>
+          <mapping>
+            <rs>DOUBLESLASH_STYLE</rs> <!-- Use same style for license headers in Rust files as in https://github.com/rust-lang/style-team/blob/main/example/lists.rs -->
+          </mapping>
         </configuration>
         <executions>
           <execution>
