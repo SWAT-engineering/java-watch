@@ -26,8 +26,13 @@
  */
 package engineering.swat.watch.impl.mac;
 
+import static java.nio.file.StandardWatchEventKinds.ENTRY_CREATE;
+import static java.nio.file.StandardWatchEventKinds.ENTRY_DELETE;
+import static java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY;
+import static java.nio.file.StandardWatchEventKinds.OVERFLOW;
+
+import java.nio.file.Path;
 import java.nio.file.WatchEvent;
-import java.nio.file.WatchEvent.Kind;
 
 import org.checkerframework.checker.nullness.qual.Nullable;
 
@@ -51,5 +56,36 @@ import org.checkerframework.checker.nullness.qual.Nullable;
  */
 @FunctionalInterface
 interface NativeEventHandler {
-    <T> void handle(Kind<T> kind, @Nullable T context);
+    <T> void handle(java.nio.file.WatchEvent.Kind<T> kind, @Nullable T context);
+
+    default void handle(int kindOrdinal, String rootPath, String relativePath) {
+        if (kindOrdinal < Kind.values().length) {
+            var kind = Kind.values()[kindOrdinal];
+            switch (kind) {
+                case CREATE:
+                    handle(ENTRY_CREATE, toContext(rootPath, relativePath));
+                    break;
+                case MODIFY:
+                    handle(ENTRY_MODIFY, toContext(rootPath, relativePath));
+                    break;
+                case DELETE:
+                    handle(ENTRY_DELETE, toContext(rootPath, relativePath));
+                    break;
+                case OVERFLOW:
+                    handle(OVERFLOW, null);
+                    break;
+            }
+        }
+    }
+
+    static Path toContext(String rootPath, String relativePath) {
+        return Path.of(rootPath).relativize(Path.of(relativePath));
+    }
+}
+
+enum Kind { // Order of values needs to be consistent with enum `Kind` in Rust
+    OVERFLOW,
+    CREATE,
+    DELETE,
+    MODIFY;
 }

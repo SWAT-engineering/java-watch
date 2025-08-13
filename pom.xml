@@ -74,13 +74,20 @@
     <checkerframework.version>3.49.5</checkerframework.version>
     <junit.version>5.13.4</junit.version>
     <log4j.version>2.25.1</log4j.version>
-    <jna.version>5.17.0</jna.version>
     <maven.compiler.source>11</maven.compiler.source>
     <maven.compiler.target>11</maven.compiler.target>
     <watch.mac.backend>fsevents</watch.mac.backend>
   </properties>
 
   <build>
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+        <excludes>
+          <exclude>src/main/rust/**/*.*</exclude>
+        </excludes>
+      </resource>
+    </resources>
     <plugins>
       <plugin> <!-- configure java compiler -->
         <groupId>org.apache.maven.plugins</groupId>
@@ -147,6 +154,9 @@
               </excludes>
             </licenseSet>
           </licenseSets>
+          <mapping>
+            <rs>DOUBLESLASH_STYLE</rs> <!-- Use same style for license headers in Rust files as in https://github.com/rust-lang/style-team/blob/main/example/lists.rs -->
+          </mapping>
         </configuration>
         <executions>
           <execution>
@@ -170,6 +180,11 @@
             </goals>
           </execution>
         </executions>
+        <configuration>
+          <excludes>
+            <exclude>src/main/resources/**</exclude>
+          </excludes>
+        </configuration>
       </plugin>
       <plugin> <!-- use a new version of maven  -->
         <groupId>org.apache.maven.plugins</groupId>
@@ -228,16 +243,6 @@
       <artifactId>log4j-core</artifactId>
       <version>${log4j.version}</version>
       <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>net.java.dev.jna</groupId>
-      <artifactId>jna</artifactId>
-      <version>${jna.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>net.java.dev.jna</groupId>
-      <artifactId>jna-platform</artifactId>
-      <version>${jna.version}</version>
     </dependency>
   </dependencies>
 
