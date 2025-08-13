@@ -30,10 +30,9 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.Path;
 
-// Note: This file is designed to be the only place in this package where JNA is
-// used and/or the native APIs are invoked. If the need to do so arises outside
-// this file, consider extending this file to offer the required services
-// without exposing JNA and/or the native APIs.
+// Note: This file is designed to be the only place in this package where native
+// APIs are invoked. If the need to do so arises outside this file, consider
+// extending this file to offer the required services without the native APIs.
 
 /**
  * <p>

@@ -56,6 +56,7 @@ import com.sun.nio.file.ExtendedWatchEventModifier;
 
 import engineering.swat.watch.DaemonThreadPool;
 import engineering.swat.watch.impl.mac.MacWatchService;
+import engineering.swat.watch.impl.mac.NativeLibrary;
 import engineering.swat.watch.impl.util.SubscriptionKey;
 
 /**
@@ -189,7 +190,7 @@ class JDKPoller {
         static final Platform CURRENT = current(); // Assumption: the platform doesn't change
 
         private static Platform current() {
-            if (com.sun.jna.Platform.isMac()) {
+            if (NativeLibrary.isMac()) {
                 var key = "engineering.swat.java-watch.mac";
                 var val = System.getProperty(key);
                 if (val != null) {

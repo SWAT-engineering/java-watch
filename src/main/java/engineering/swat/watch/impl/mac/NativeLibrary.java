@@ -40,7 +40,7 @@ public class NativeLibrary {
     public static native long start(String path, NativeEventHandler handler);
     public static native void stop(long watchId);
 
-    private static boolean isMac() {
+    public static boolean isMac() {
         var os = System.getProperty("os.name");
         return os != null && (os.toLowerCase().contains("mac") || os.toLowerCase().contains("darwin"));
     }
