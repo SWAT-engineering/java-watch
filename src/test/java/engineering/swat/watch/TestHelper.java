@@ -40,6 +40,7 @@ import java.util.stream.Stream;
 public class TestHelper {
 
     public static final Duration TINY_WAIT;
+    public static final Duration SMALL_WAIT;
     public static final Duration SHORT_WAIT;
     public static final Duration NORMAL_WAIT;
     public static final Duration LONG_WAIT;
@@ -59,6 +60,7 @@ public class TestHelper {
             delayFactor *= 4;
         }
         TINY_WAIT = Duration.ofMillis(250 * delayFactor);
+        SMALL_WAIT = TINY_WAIT.multipliedBy(2);
         SHORT_WAIT = Duration.ofSeconds(1 * delayFactor);
         NORMAL_WAIT = Duration.ofSeconds(4 * delayFactor);
         LONG_WAIT = Duration.ofSeconds(8 * delayFactor);
