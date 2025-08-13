@@ -30,6 +30,7 @@ public class WaitFor {
     private @Nullable BooleanSupplier failFast;
     private @Nullable Duration time;
     private @Nullable Duration poll;
+    private @Nullable Supplier<String> failMessage;
 
 
     private WaitFor(Supplier<String> message) {
@@ -54,26 +55,38 @@ public class WaitFor {
         return this;
     }
 
-    public WaitFor failFast(BooleanSupplier b) {
+    public WaitFor failFast(String message, BooleanSupplier b) {
+        return failFast(() -> message, b);
+    }
+
+    public WaitFor failFast(Supplier<String> message, BooleanSupplier b) {
         this.failFast = b;
+        this.failMessage = message;
         return this;
     }
 
-    public WaitFor failFast(AtomicBoolean b) {
-        return failFast(b::get);
+    public WaitFor failFast(Supplier<String> message, AtomicBoolean b) {
+        return failFast(message, b::get);
+    }
+    public WaitFor failFast(String message, AtomicBoolean b) {
+        return failFast(message, b::get);
     }
 
 
 
-    private boolean alreadyFailed() {
+    private void checkFailed() {
         if (failFast != null) {
             try {
-                return failFast.getAsBoolean();
+                if (failFast.getAsBoolean()) {
+                    var actualFailMessage = failMessage;
+                    if (actualFailMessage == null) {
+                        actualFailMessage = () -> this.message.get() + " was terminated earlier due to fail fast";
+                    }
+                    fail(actualFailMessage);
+                }
             } catch (RuntimeException ex) {
-                return false;
             }
         }
-        return false;
     }
 
     private Duration calculatePoll(Duration time) {
@@ -112,12 +125,11 @@ public class WaitFor {
         var end = currentTimeMillis() + time.toMillis();
         while (end > currentTimeMillis()) {
             var start = currentTimeMillis();
+            checkFailed();
             if (action.getAsBoolean()) {
                 return true;
             }
-            if (alreadyFailed()) {
-                fail(message.get() + " was terminated by failFast predicate");
-            }
+            checkFailed();
             var stop = currentTimeMillis();
             var remaining = poll.toMillis() - (stop - start);
             if (remaining > 0) {
