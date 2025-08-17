@@ -28,20 +28,20 @@ package engineering.swat.watch;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.awaitility.Awaitility.await;
+import static engineering.swat.watch.util.WaitFor.await;
 
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import engineering.swat.watch.util.WaitFor;
 
 class ParallelWatches {
     private TestDirectory testDir;
@@ -60,7 +60,7 @@ class ParallelWatches {
 
     @BeforeAll
     static void setupEverything() {
-        Awaitility.setDefaultTimeout(TestHelper.NORMAL_WAIT);
+        WaitFor.setDefaultTimeout(TestHelper.NORMAL_WAIT);
     }
 
     @Test
@@ -73,9 +73,9 @@ class ParallelWatches {
             try (var fileWatch = watch(file, WatchScope.PATH_ONLY, fileTriggered))  {
                 Files.write(file, "test".getBytes());
                 await("Directory should have picked up the file")
-                    .untilTrue(dirTriggered);
+                    .until(dirTriggered);
                 await("File should have picked up the file")
-                    .untilTrue(fileTriggered);
+                    .until(fileTriggered);
             }
         }
     }
@@ -92,10 +92,10 @@ class ParallelWatches {
             try (var fileWatch = watch(file, WatchScope.PATH_ONLY, fileTriggered))  {
                 Files.write(file2, "test2".getBytes());
                 await("Directory should have picked up the file")
-                    .untilTrue(dirTriggered);
+                    .until(dirTriggered);
                 await("File should not have picked up the file")
-                    .pollDelay(TestHelper.NORMAL_WAIT.minus(Duration.ofMillis(100)))
-                    .untilFalse(fileTriggered);
+                    .time(TestHelper.SHORT_WAIT)
+                    .holdsFalse(fileTriggered);
             }
         }
     }
@@ -111,9 +111,9 @@ class ParallelWatches {
             try (var nestedDirWatch = watch(dir2, WatchScope.PATH_AND_CHILDREN, nestedDirTriggered))  {
                 Files.write(dir2.resolve("a2.txt"), "test2".getBytes());
                 await("Directory should have picked up nested file")
-                    .untilTrue(dirTriggered);
+                    .until(dirTriggered);
                 await("Nested directory should have picked up the file")
-                    .untilTrue(nestedDirTriggered);
+                    .until(nestedDirTriggered);
             }
         }
     }
@@ -129,10 +129,10 @@ class ParallelWatches {
             try (var nestedDirWatch = watch(dir2, WatchScope.PATH_AND_CHILDREN, nestedDirTriggered))  {
                 Files.write(dir1.resolve("a1.txt"), "1".getBytes());
                 await("Directory should have picked up the file")
-                    .untilTrue(dirTriggered);
+                    .until(dirTriggered);
                 await("Nested dir should not have picked up the file")
-                    .pollDelay(TestHelper.NORMAL_WAIT.minus(Duration.ofMillis(100)))
-                    .untilFalse(nestedDirTriggered);
+                    .time(TestHelper.SHORT_WAIT)
+                    .holdsFalse(nestedDirTriggered);
             }
         }
     }
@@ -153,9 +153,9 @@ class ParallelWatches {
                 Files.write(dir.resolve("a1.txt"), "1".getBytes());
 
                 await("Watch 1 should have triggered")
-                    .untilTrue(trig1);
+                    .until(trig1);
                 await("Directory should have picked up the file")
-                    .untilTrue(trig2);
+                    .until(trig2);
             }
         }
     }
