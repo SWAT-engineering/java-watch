@@ -29,6 +29,7 @@ package engineering.swat.watch;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 
 import java.io.IOException;
+import java.nio.file.FileSystemException;
 import java.nio.file.Files;
 
 import org.awaitility.Awaitility;
@@ -70,9 +71,11 @@ class APIErrorsTests {
 
     @Test
     void onlyDirectoryWatchingOnDirectories() {
-        assertThrowsExactly(IllegalArgumentException.class, () ->
+        assertThrowsExactly(FileSystemException.class, () ->
             Watch
                 .build(testDir.getTestFiles().get(0), WatchScope.PATH_AND_CHILDREN)
+                .on(e -> {})
+                .start()
         );
     }
 
@@ -92,17 +95,14 @@ class APIErrorsTests {
         assertThrowsExactly(IllegalArgumentException.class, () ->
             Watch
                 .build(relativePath, WatchScope.PATH_AND_CHILDREN)
-                .start()
         );
     }
 
     @Test
     void nonExistingDirectory() throws IOException {
-        var nonExistingDir = testDir.getTestDirectory().resolve("testd1");
-        Files.createDirectory(nonExistingDir);
-        var w = Watch.build(nonExistingDir, WatchScope.PATH_AND_CHILDREN);
-        Files.delete(nonExistingDir);
-        assertThrowsExactly(IllegalStateException.class, w::start);
+        var nonExistingDir = testDir.getTestDirectory().resolve("test-not-existing");
+        var w = Watch.build(nonExistingDir, WatchScope.PATH_AND_CHILDREN).on(e -> {});
+        assertThrowsExactly(FileSystemException.class, w::start);
     }
 
 
