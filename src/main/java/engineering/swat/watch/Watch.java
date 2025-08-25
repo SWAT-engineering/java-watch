@@ -184,7 +184,7 @@ public class Watch {
 
     private void validateOptions() throws IOException {
         if (this.eventHandler == EMPTY_HANDLER) {
-            throw new IllegalStateException("There is no onEvent handler defined");
+            throw new IllegalStateException("There is no `on` handler defined");
         }
         if (!Files.exists(path)) {
             throw new FileSystemException(path.toString(), null, "Cannot open a watch on a non-existing path");
