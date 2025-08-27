@@ -187,7 +187,7 @@ public class Watch {
             throw new IllegalStateException("There is no `on` handler defined");
         }
         if (!Files.exists(path)) {
-            throw new FileSystemException(path.toString(), null, "Cannot open a watch on a non-existing path");
+            throw new NoSuchFileException(path.toString(), null, "Cannot open a watch on a non-existing path");
         }
         switch (scope) {
             case PATH_AND_CHILDREN: // intended fallthrough
