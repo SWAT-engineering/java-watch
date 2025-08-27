@@ -30,7 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 
 import java.io.IOException;
 import java.nio.file.FileSystemException;
-import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
@@ -102,7 +102,7 @@ class APIErrorsTests {
     void nonExistingDirectory() throws IOException {
         var nonExistingDir = testDir.getTestDirectory().resolve("test-not-existing");
         var w = Watch.build(nonExistingDir, WatchScope.PATH_AND_CHILDREN).on(e -> {});
-        assertThrowsExactly(FileSystemException.class, w::start);
+        assertThrowsExactly(NoSuchFileException.class, w::start);
     }
 
 
