@@ -12,3 +12,8 @@ public interface WatchService {
 public interface WatchEvent<T> {
     @Nullable T context();
 }
+
+public class NoSuchFileException extends FileSystemException {
+    public NoSuchFileException(String file, @Nullable String other, String reason);
+}
+
