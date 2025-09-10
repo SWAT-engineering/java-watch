@@ -49,7 +49,7 @@ public class DaemonThreadPool {
         if (maxThreads <= 0) {
             throw new IllegalArgumentException("maxThreads should be higher than 0");
         }
-        var pool = new ThreadPoolExecutor(1, maxThreads,
+        var pool = new ThreadPoolExecutor(maxThreads, maxThreads,
             60, TimeUnit.SECONDS,
             new LinkedBlockingQueue<>(),
             buildFactory(name)
