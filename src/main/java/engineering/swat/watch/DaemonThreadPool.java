@@ -46,11 +46,16 @@ public class DaemonThreadPool {
      * @return an exectutor with deamon threads and constainted to a certain maximum
      */
     public static ExecutorService buildConstrainedCached(String name, int maxThreads) {
-        return new ThreadPoolExecutor(0, maxThreads,
+        if (maxThreads <= 0) {
+            throw new IllegalArgumentException("maxThreads should be higher than 0");
+        }
+        var pool = new ThreadPoolExecutor(1, maxThreads,
             60, TimeUnit.SECONDS,
             new LinkedBlockingQueue<>(),
             buildFactory(name)
         );
+        pool.allowCoreThreadTimeOut(true);
+        return pool;
     }
 
     private static ThreadFactory buildFactory(String name) {
