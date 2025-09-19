@@ -21,7 +21,7 @@ jobs:
             mac-backend: jdk
           - image: macos-latest
             mac-backend: fsevents
-          - image: macos-13
+          - image: macos-15-intel
             mac-backend: fsevents
           - image: windows-latest
         jdk: [11, 21]
