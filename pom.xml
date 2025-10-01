@@ -92,7 +92,7 @@
       <plugin> <!-- configure java compiler -->
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
-        <version>3.14.0</version>
+        <version>3.14.1</version>
         <configuration>
           <release>11</release>
           <compilerArgument>-parameters</compilerArgument>
@@ -112,7 +112,7 @@
       <plugin> <!-- unit test integration -->
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
-        <version>3.5.3</version>
+        <version>3.5.4</version>
         <configuration>
           <argLine>@{argLine} -Dengineering.swat.java-watch.mac=${watch.mac.backend}</argLine>
         </configuration>
@@ -278,7 +278,7 @@
           <plugin> <!-- generate java-doc -->
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-javadoc-plugin</artifactId>
-            <version>3.11.3</version>
+            <version>3.12.0</version>
             <executions>
               <execution>
                 <id>attach-javadocs</id>
@@ -329,7 +329,7 @@
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-compiler-plugin</artifactId>
-            <version>3.14.0</version>
+            <version>3.14.1</version>
             <configuration>
               <fork>true</fork>
               <release>11</release>
