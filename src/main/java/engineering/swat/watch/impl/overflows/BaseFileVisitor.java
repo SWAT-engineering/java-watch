@@ -65,7 +65,7 @@ public class BaseFileVisitor extends SimpleFileVisitor<Path> {
         try {
             Files.walkFileTree(path, options, maxDepth, this);
         } catch (IOException e) {
-            logger.error("Could not walk: {} ({})", path, e);
+            logger.debug("Overflow rescanner could not walk: {} ({})", path, e);
         }
     }
 
@@ -73,14 +73,14 @@ public class BaseFileVisitor extends SimpleFileVisitor<Path> {
 
     @Override
     public FileVisitResult visitFileFailed(Path file, IOException exc) throws IOException {
-        logger.error("Could not walk regular file: {} ({})", file, exc);
+        logger.debug("Overflow rescanner could not walk regular file: {} ({})", file, exc);
         return FileVisitResult.CONTINUE;
     }
 
     @Override
     public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
         if (exc != null) {
-            logger.error("Could not walk directory: {} ({})", dir, exc);
+            logger.debug("Overflow rescanner could not walk directory: {} ({})", dir, exc);
         }
         return FileVisitResult.CONTINUE;
     }
