@@ -9,7 +9,7 @@ jobs:
   publish:
     runs-on: macos-latest # for now build on macos for the jni
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       # build jni libs on osx
       - run: ./update-rust-jni-libs.sh -r
