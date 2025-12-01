@@ -169,7 +169,7 @@
       <plugin> <!-- enforce editor config on the files -->
         <groupId>org.ec4j.maven</groupId>
         <artifactId>editorconfig-maven-plugin</artifactId>
-        <version>0.1.3</version>
+        <version>0.1.17</version>
         <!-- run mvn editorconfig:format to fix errors reported-->
         <executions>
           <execution>
