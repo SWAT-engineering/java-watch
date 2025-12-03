@@ -1,4 +1,7 @@
 name: Build and Test
+permissions:
+  contents: read
+  pull-requests: write
 on:
   push:
     branches:
@@ -18,20 +21,24 @@ jobs:
             mac-backend: jdk
           - image: macos-latest
             mac-backend: fsevents
+          - image: macos-15-intel
+            mac-backend: fsevents
           - image: windows-latest
-        jdk: [11, 17, 21]
+        jdk: [11, 21]
 
       fail-fast: false
     runs-on: ${{ matrix.os.image }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - run: echo " " >> pom.xml # make sure the cache is slightly different for these runners
       - name: Set up JDK
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           java-version: ${{ matrix.jdk }}
           distribution: 'temurin'
           cache: 'maven'
+      - run: ./update-rust-jni-libs.sh -r
+        if: startsWith(matrix.os.image, 'macos-')
 
       - name: test
         run: mvn -B clean test "-Dwatch.mac.backend=${{ matrix.os.mac-backend }}"
@@ -46,10 +53,10 @@ jobs:
   checker-framework:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - run: echo "  " >> pom.xml # make sure the cache is slightly different for the checker framework
       - name: Set up JDK 11
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           java-version: 11
           distribution: 'temurin'
@@ -60,9 +67,9 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Set up JDK 11
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           java-version: 11
           distribution: 'temurin'

@@ -26,11 +26,15 @@
  */
 package engineering.swat.watch;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.nio.file.FileSystemException;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.LinkOption;
+import java.nio.file.NoSuchFileException;
+import java.nio.file.NotDirectoryException;
 import java.nio.file.Path;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -38,6 +42,7 @@ import java.util.function.Predicate;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 
 import engineering.swat.watch.impl.EventHandlingWatch;
 import engineering.swat.watch.impl.jdk.JDKDirectoryWatch;
@@ -58,7 +63,9 @@ public class Watch {
     private final Path path;
     private final WatchScope scope;
     private volatile Approximation approximateOnOverflow = Approximation.ALL;
-    private volatile Executor executor = CompletableFuture::runAsync;
+
+    private static final Executor FALLBACK_EXECUTOR = DaemonThreadPool.buildConstrainedCached("JavaWatch-internal-handler",Runtime.getRuntime().availableProcessors());
+    private volatile @MonotonicNonNull Executor executor = null;
 
     private static final BiConsumer<EventHandlingWatch, WatchEvent> EMPTY_HANDLER = (w, e) -> {};
     private volatile BiConsumer<EventHandlingWatch, WatchEvent> eventHandler = EMPTY_HANDLER;
@@ -74,27 +81,12 @@ public class Watch {
      * Watch a path for updates, optionally also get events for its children/descendants
      * @param path which absolute path to monitor, can be a file or a directory, but has to be absolute
      * @param scope for directories you can also choose to monitor it's direct children or all it's descendants
-     * @throws IllegalArgumentException in case a path is not supported (in relation to the scope)
+     * @throws IllegalArgumentException in case a path is not supported
      * @return watch builder that can be further configured and then started
      */
     public static Watch build(Path path, WatchScope scope) {
         if (!path.isAbsolute()) {
             throw new IllegalArgumentException("We can only watch absolute paths");
-        }
-        switch (scope) {
-            case PATH_AND_CHILDREN: // intended fallthrough
-            case PATH_AND_ALL_DESCENDANTS:
-                if (!Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
-                    throw new IllegalArgumentException("Only directories are supported for this scope: " + scope);
-                }
-                break;
-            case PATH_ONLY:
-                if (Files.isSymbolicLink(path)) {
-                    throw new IllegalArgumentException("Symlinks are not supported");
-                }
-                break;
-            default:
-                throw new IllegalArgumentException("Unsupported scope: " + scope);
         }
         return new Watch(path, scope);
     }
@@ -162,11 +154,14 @@ public class Watch {
 
     /**
      * Optionally configure the executor in which the {@link #on(Consumer)} callbacks are scheduled.
-     * If not defined, every task will be scheduled on the {@link java.util.concurrent.ForkJoinPool#commonPool()}.
+     * Make sure to consider the termination of the threadpool, it should be after the close of the active watch.
      * @param callbackHandler worker pool to use
      * @return this for optional method chaining
      */
     public Watch withExecutor(Executor callbackHandler) {
+        if (callbackHandler == null) {
+            throw new IllegalArgumentException("null is allowed");
+        }
         this.executor = callbackHandler;
         return this;
     }
@@ -187,18 +182,44 @@ public class Watch {
         return this;
     }
 
+    private void validateOptions() throws IOException {
+        if (this.eventHandler == EMPTY_HANDLER) {
+            throw new IllegalStateException("There is no `on` handler defined");
+        }
+        if (!Files.exists(path)) {
+            throw new NoSuchFileException(path.toString(), null, "Cannot open a watch on a non-existing path");
+        }
+        switch (scope) {
+            case PATH_AND_CHILDREN: // intended fallthrough
+            case PATH_AND_ALL_DESCENDANTS:
+                if (!Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
+                    throw new FileSystemException(path.toString(), null, "Only directories are supported for this scope: " + scope);
+                }
+                break;
+            case PATH_ONLY:
+                if (Files.isSymbolicLink(path)) {
+                    throw new FileSystemException(path.toString(), null, "Symlinks are not supported");
+                }
+                break;
+            default:
+                throw new IllegalArgumentException("Unsupported scope: " + scope);
+        }
+    }
+
     /**
      * Start watch the path for events.
      * @return a subscription for the watch, when closed, new events will stop being registered to the worker pool.
-     * @throws IOException in case the starting of the watcher caused an underlying IO exception
+     * @throws IOException in case the starting of the watcher caused an underlying IO exception or we detect it is an invalid watch
      * @throws IllegalStateException the watchers is not configured correctly (for example, missing {@link #on(Consumer)}, or a watcher is started twice)
      */
     public ActiveWatch start() throws IOException {
-        if (this.eventHandler == EMPTY_HANDLER) {
-            throw new IllegalStateException("There is no onEvent handler defined");
+        validateOptions();
+        var executor = this.executor;
+        if (executor == null) {
+            executor = FALLBACK_EXECUTOR;
         }
 
-        var h = applyApproximateOnOverflow();
+        var h = applyApproximateOnOverflow(executor);
 
         switch (scope) {
             case PATH_AND_CHILDREN: {
@@ -230,7 +251,7 @@ public class Watch {
         }
     }
 
-    private BiConsumer<EventHandlingWatch, WatchEvent> applyApproximateOnOverflow() {
+    private BiConsumer<EventHandlingWatch, WatchEvent> applyApproximateOnOverflow(Executor executor) {
         switch (approximateOnOverflow) {
             case NONE:
                 return eventHandler;

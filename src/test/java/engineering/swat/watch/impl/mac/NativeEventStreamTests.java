@@ -24,21 +24,29 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-package engineering.swat.watch;
+package engineering.swat.watch.impl.mac;
 
-import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
+import static org.awaitility.Awaitility.await;
 
 import java.io.IOException;
-import java.nio.file.FileSystemException;
-import java.nio.file.NoSuchFileException;
+import java.nio.file.Files;
+import java.nio.file.WatchEvent.Kind;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.awaitility.Awaitility;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 
-class APIErrorsTests {
+import engineering.swat.watch.TestDirectory;
+import engineering.swat.watch.TestHelper;
+
+@EnabledOnOs({OS.MAC})
+public class NativeEventStreamTests {
 
     private TestDirectory testDir;
 
@@ -60,50 +68,19 @@ class APIErrorsTests {
     }
 
     @Test
-    void noDuplicateEvents() {
-        assertThrowsExactly(IllegalArgumentException.class, () ->
-            Watch
-                .build(testDir.getTestDirectory(), WatchScope.PATH_AND_CHILDREN)
-                .on(System.out::println)
-                .on(System.err::println)
-        );
+    void signalsAreSent() throws IOException, InterruptedException {
+        var signaled = new AtomicBoolean(false);
+        try (var stream = new NativeEventStream(testDir.getTestDirectory(),
+            new NativeEventHandler() {
+                @Override
+                public <T> void handle(Kind<T> kind, @Nullable T context) {
+                    signaled.set(true);
+                }
+            }
+        )) {
+            stream.open();
+            Files.write(testDir.getTestFiles().get(0), "Hello".getBytes());
+            await("Signal received").untilTrue(signaled);
+        }
     }
-
-    @Test
-    void onlyDirectoryWatchingOnDirectories() {
-        assertThrowsExactly(FileSystemException.class, () ->
-            Watch
-                .build(testDir.getTestFiles().get(0), WatchScope.PATH_AND_CHILDREN)
-                .on(e -> {})
-                .start()
-        );
-    }
-
-    @Test
-    void doNotStartWithoutEventHandler() {
-        assertThrowsExactly(IllegalStateException.class, () ->
-            Watch
-                .build(testDir.getTestDirectory(), WatchScope.PATH_AND_CHILDREN)
-                .start()
-        );
-    }
-
-    @Test
-    void noRelativePaths() {
-        var relativePath = testDir.getTestDirectory().resolve("d1").relativize(testDir.getTestDirectory());
-
-        assertThrowsExactly(IllegalArgumentException.class, () ->
-            Watch
-                .build(relativePath, WatchScope.PATH_AND_CHILDREN)
-        );
-    }
-
-    @Test
-    void nonExistingDirectory() throws IOException {
-        var nonExistingDir = testDir.getTestDirectory().resolve("test-not-existing");
-        var w = Watch.build(nonExistingDir, WatchScope.PATH_AND_CHILDREN).on(e -> {});
-        assertThrowsExactly(NoSuchFileException.class, w::start);
-    }
-
-
 }
