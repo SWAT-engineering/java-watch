@@ -27,15 +27,22 @@
 package engineering.swat.watch;
 
 import static engineering.swat.watch.WatchEvent.Kind.CREATED;
-import static org.awaitility.Awaitility.await;
+import static engineering.swat.watch.util.WaitFor.await;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -49,6 +56,7 @@ import org.junit.jupiter.params.provider.EnumSource;
 
 import engineering.swat.watch.WatchEvent.Kind;
 import engineering.swat.watch.impl.EventHandlingWatch;
+import engineering.swat.watch.util.WaitFor;
 
 class RecursiveWatchTests {
     private final Logger logger = LogManager.getLogger();
@@ -69,7 +77,7 @@ class RecursiveWatchTests {
 
     @BeforeAll
     static void setupEverything() {
-        Awaitility.setDefaultTimeout(TestHelper.NORMAL_WAIT);
+        WaitFor.setDefaultTimeout(TestHelper.NORMAL_WAIT);
     }
 
     @Test
@@ -99,9 +107,9 @@ class RecursiveWatchTests {
             target.set(freshFile);
             logger.debug("Interested in: {}", freshFile);
             Files.writeString(freshFile, "Hello world");
-            await("New files should have been seen").untilTrue(created);
+            await("New files should have been seen").until(created);
             Files.writeString(freshFile, "Hello world 2");
-            await("Fresh file change have been detected").untilTrue(changed);
+            await("Fresh file change have been detected").until(changed);
         }
     }
 
@@ -121,7 +129,7 @@ class RecursiveWatchTests {
             var targetFile = testDir.getTestDirectory().resolve(relative);
             Files.createDirectories(targetFile.getParent());
             Files.writeString(targetFile, "Hello World");
-            await("Nested path is seen").untilTrue(seen);
+            await("Nested path is seen").until(seen);
         }
 
     }
@@ -143,7 +151,7 @@ class RecursiveWatchTests {
         try (var watch = watchConfig.start()) {
             Files.delete(target);
             await("File deletion should generate delete event")
-                .untilTrue(seen);
+                .until(seen);
         }
     }
 
@@ -151,11 +159,11 @@ class RecursiveWatchTests {
     @EnumSource // Repeat test for each `Approximation` value
     void overflowsAreRecoveredFrom(Approximation whichFiles) throws IOException, InterruptedException {
         var parent = testDir.getTestDirectory();
-        var descendants = new Path[] {
+        var descendants = List.of(
             Path.of("foo"),
             Path.of("bar"),
             Path.of("bar", "x", "y", "z")
-        };
+        );
 
         // Configure and start watch
         var dropEvents = new AtomicBoolean(false); // Toggles overflow simulation
@@ -169,28 +177,38 @@ class RecursiveWatchTests {
         try (var watch = (EventHandlingWatch) watchConfig.start()) {
 
             // Define helper functions to test which events have happened
-            Consumer<Path> awaitCreation = p ->
-                await("Creation of `" + p + "` should be observed")
-                    .until(() -> bookkeeper.events().kind(CREATED).rootPath(parent).relativePath(p).any());
-
-            Consumer<Path> awaitNotCreation = p ->
-                await("Creation of `" + p + "` shouldn't be observed: " + bookkeeper)
-                    .pollDelay(TestHelper.TINY_WAIT)
-                    .until(() -> bookkeeper.events().kind(CREATED).rootPath(parent).relativePath(p).none());
+            Consumer<Collection<Path>> awaitCreation = paths ->
+                WaitFor.await("Creation should be observed")
+                    .untilContainsAll(() ->
+                        bookkeeper.events()
+                            .kind(CREATED)
+                            .rootPath(parent)
+                            .relativePath(paths)
+                            .events()
+                            .map(WatchEvent::getRelativePath)
+                            , paths);
 
             // Begin overflow simulation
             dropEvents.set(true);
 
             // Create descendants and files. They *shouldn't* be observed yet.
+            var missedCreates = new ArrayList<Path>();
             var file1 = Path.of("file1.txt");
             for (var descendant : descendants) {
-                Files.createDirectories(parent.resolve(descendant));
-                Files.createFile(parent.resolve(descendant).resolve(file1));
+                var d = parent.resolve(descendant);
+                var f = d.resolve(file1);
+                Files.createDirectories(d);
+                Files.createFile(f);
+                missedCreates.add(descendant);
+                missedCreates.add(descendant.resolve(file1));
             }
-            for (var descendant : descendants) {
-                awaitNotCreation.accept(descendant);
-                awaitNotCreation.accept(descendant.resolve(file1));
-            }
+            WaitFor.await(() -> "We should not have seen any events")
+                .time(TestHelper.TINY_WAIT)
+                .holdsEmpty(() -> bookkeeper.events()
+                    .kind(CREATED)
+                    .rootPath(parent)
+                    .relativePath(missedCreates)
+                    .events());
 
             // End overflow simulation, and generate the `OVERFLOW` event. The
             // previous creation of descendants and files *should* now be
@@ -201,10 +219,7 @@ class RecursiveWatchTests {
             watch.handleEvent(overflow);
 
             if (whichFiles != Approximation.NONE) { // Auto-handler is configured
-                for (var descendant : descendants) {
-                    awaitCreation.accept(descendant);
-                    awaitCreation.accept(descendant.resolve(file1));
-                }
+                awaitCreation.accept(missedCreates);
             } else {
                 // Give the watch some time to process the `OVERFLOW` event and
                 // do internal bookkeeping
@@ -213,13 +228,14 @@ class RecursiveWatchTests {
 
             // Create more files. They *should* be observed (regardless of
             // whether an auto-handler for `OVERFLOW` events is configured).
-            var file2 = Path.of("file2.txt");
-            for (var descendant : descendants) {
-                Files.createFile(parent.resolve(descendant).resolve(file2));
+            var moreFiles = descendants.stream()
+                .map(d -> d.resolve(Path.of("file2.txt")))
+                .collect(Collectors.toList());
+
+            for (var f : moreFiles) {
+                Files.createFile(parent.resolve(f));
             }
-            for (var descendant : descendants) {
-                awaitCreation.accept(descendant.resolve(file2));
-            }
+            awaitCreation.accept(moreFiles);
         }
     }
 }
