@@ -101,7 +101,7 @@
       <plugin> <!-- automate release commits -->
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-release-plugin</artifactId>
-        <version>3.2.0</version>
+        <version>3.3.1</version>
         <configuration>
           <tagNameFormat>v@{project.version}</tagNameFormat>
           <arguments>-DskipTests</arguments> <!-- when doing a local release, don't wait for tests, they're long and slow -->
