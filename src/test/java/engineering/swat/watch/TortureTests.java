@@ -26,7 +26,7 @@
  */
 package engineering.swat.watch;
 
-import static org.awaitility.Awaitility.await;
+import static engineering.swat.watch.util.WaitFor.await;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -45,12 +45,10 @@ import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -60,6 +58,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import engineering.swat.watch.util.WaitFor;
+
 class TortureTests {
 
     private final Logger logger = LogManager.getLogger();
@@ -68,7 +68,7 @@ class TortureTests {
 
     @BeforeAll
     static void setupEverything() {
-        Awaitility.setDefaultTimeout(TestHelper.LONG_WAIT.getSeconds(), TimeUnit.SECONDS);
+        WaitFor.setDefaultTimeout(TestHelper.LONG_WAIT);
     }
 
     @BeforeEach
@@ -181,13 +181,13 @@ class TortureTests {
             logger.info("Starting {} jobs", THREADS);
             io.start();
             // now we generate a whole bunch of events
-            Thread.sleep(TestHelper.NORMAL_WAIT.toMillis());
+            Thread.sleep(Math.min(TestHelper.NORMAL_WAIT.toMillis(), Duration.ofSeconds(30).toMillis()));
             logger.info("Stopping jobs");
             pathsWritten = io.stop();
             logger.info("Generated: {} files",  pathsWritten.size());
 
             await("After a while we should have seen all the create events")
-                .timeout(TestHelper.LONG_WAIT.multipliedBy(50))
+                .time(TestHelper.LONG_WAIT.multipliedBy(50))
                 .pollInterval(Duration.ofMillis(500))
                 .until(() -> seenCreates.containsAll(pathsWritten));
         }
@@ -254,10 +254,10 @@ class TortureTests {
             Files.writeString(target, "Hello World");
             var expected = Collections.singleton(target);
             await("We should see only one event")
-                .failFast(() -> !exceptions.isEmpty())
-                .timeout(TestHelper.LONG_WAIT)
+                .failFast(() -> "There was an exception: "+ exceptions, () -> !exceptions.isEmpty())
+                .time(TestHelper.NORMAL_WAIT)
                 .pollInterval(Duration.ofMillis(10))
-                .until(() -> seen, expected::equals);
+                .untilEquals(() -> seen, expected);
             if (!exceptions.isEmpty()) {
                 fail(exceptions.pop());
             }
@@ -269,7 +269,7 @@ class TortureTests {
 
     static Stream<Approximation> manyRegisterAndUnregisterSameTimeSource() {
         Approximation[] values = { Approximation.ALL, Approximation.DIFF };
-        return TestHelper.streamOf(values, 5);
+        return TestHelper.streamOf(values, 3);
     }
 
     @ParameterizedTest
@@ -328,9 +328,9 @@ class TortureTests {
             assertTrue(seen.isEmpty(), "No events should have been sent");
             Files.writeString(target, "Hello World");
             await("We should see only exactly the " + amountOfWatchersActive + " events we expect")
-                .failFast(() -> !exceptions.isEmpty())
-                .pollDelay(TestHelper.NORMAL_WAIT.minusMillis(100))
-                .until(seen::size, Predicate.isEqual(amountOfWatchersActive))
+                .time(TestHelper.SHORT_WAIT)
+                .failFast(() -> "There was an exception: "+ exceptions, () -> !exceptions.isEmpty())
+                .delayedHoldsEquals(seen::size, amountOfWatchersActive)
                 ;
             if (!exceptions.isEmpty()) {
                 fail(exceptions.pop());

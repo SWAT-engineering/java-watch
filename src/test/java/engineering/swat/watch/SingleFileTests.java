@@ -30,13 +30,15 @@ import static engineering.swat.watch.WatchEvent.Kind.CREATED;
 import static engineering.swat.watch.WatchEvent.Kind.DELETED;
 import static engineering.swat.watch.WatchEvent.Kind.MODIFIED;
 import static engineering.swat.watch.WatchEvent.Kind.OVERFLOW;
-import static org.awaitility.Awaitility.await;
+import static engineering.swat.watch.util.WaitFor.await;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.attribute.FileTime;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
 
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
@@ -45,6 +47,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import engineering.swat.watch.impl.EventHandlingWatch;
+import engineering.swat.watch.util.WaitFor;
 
 class SingleFileTests {
     private TestDirectory testDir;
@@ -63,7 +66,7 @@ class SingleFileTests {
 
     @BeforeAll
     static void setupEverything() {
-        Awaitility.setDefaultTimeout(TestHelper.NORMAL_WAIT);
+        WaitFor.setDefaultTimeout(TestHelper.NORMAL_WAIT);
     }
 
     @Test
@@ -86,12 +89,11 @@ class SingleFileTests {
                     Files.writeString(f, "Hello");
                 }
             }
-            Thread.sleep(TestHelper.SHORT_WAIT.toMillis());
+            Thread.sleep(TestHelper.SMALL_WAIT.toMillis());
             Files.writeString(target, "Hello world");
             await("Single file does trigger")
-                .pollDelay(TestHelper.NORMAL_WAIT.minusMillis(10))
-                .failFast("No others should be notified", others::get)
-                .untilTrue(seen);
+                .failFast("Other files should not trigger", others::get)
+                .until(seen);
         }
     }
 
@@ -115,12 +117,11 @@ class SingleFileTests {
                     Files.writeString(f, "Hello");
                 }
             }
-            Thread.sleep(TestHelper.SHORT_WAIT.toMillis());
+            Thread.sleep(TestHelper.SMALL_WAIT.toMillis());
             Files.setLastModifiedTime(target, FileTime.from(Instant.now()));
             await("Single directory does trigger")
-                .pollDelay(TestHelper.NORMAL_WAIT.minusMillis(10))
                 .failFast("No others should be notified", others::get)
-                .untilTrue(seen);
+                .until(seen);
         }
     }
 
@@ -128,12 +129,13 @@ class SingleFileTests {
     void noRescanOnOverflow() throws IOException, InterruptedException {
         var bookkeeper = new TestHelper.Bookkeeper();
         try (var watch = startWatchAndTriggerOverflow(Approximation.NONE, bookkeeper)) {
-            Thread.sleep(TestHelper.SHORT_WAIT.toMillis());
+            //Thread.sleep(TestHelper.SMALL_WAIT.toMillis());
 
-            await("Overflow shouldn't trigger created, modified, or deleted events: " + bookkeeper)
-                .until(() -> bookkeeper.events().kind(CREATED, MODIFIED, DELETED).none());
             await("Overflow should be visible to user-defined event handler")
                 .until(() -> bookkeeper.events().kind(OVERFLOW).any());
+            await("Overflow shouldn't trigger created, modified, or deleted events: " + bookkeeper)
+                .time(TestHelper.SMALL_WAIT)
+                .holds(() -> bookkeeper.events().kind(CREATED, MODIFIED, DELETED).none());
         }
     }
 
@@ -141,15 +143,24 @@ class SingleFileTests {
     void memorylessRescanOnOverflow() throws IOException, InterruptedException {
         var bookkeeper = new TestHelper.Bookkeeper();
         try (var watch = startWatchAndTriggerOverflow(Approximation.ALL, bookkeeper)) {
-            Thread.sleep(TestHelper.SHORT_WAIT.toMillis());
+            //Thread.sleep(TestHelper.SMALL_WAIT.toMillis());
 
             var path = watch.getPath();
             await("Overflow should trigger created event for `" + path + "`")
                 .until(() -> bookkeeper.events().kind(CREATED).rootPath(path).any());
-            await("Overflow shouldn't trigger created events for other files")
-                .until(() -> bookkeeper.events().kind(CREATED).rootPathNot(path).none());
-            await("Overflow shouldn't trigger modified or deleted events")
-                .until(() -> bookkeeper.events().kind(MODIFIED, DELETED).none());
+            await("No extra events")
+                .time(TestHelper.SMALL_WAIT)
+                .holds(() -> {
+                    assertTrue(
+                        bookkeeper.events().kind(CREATED).rootPathNot(path).none(),
+                        "Overflow shouldn't trigger created events for other files"
+                    );
+                    assertTrue(
+                        bookkeeper.events().kind(MODIFIED, DELETED).none()
+                        ,"Overflow shouldn't trigger modified or deleted events"
+                    );
+                    return true;
+                });
             await("Overflow should be visible to user-defined event handler")
                 .until(() -> bookkeeper.events().kind(OVERFLOW).any());
         }
