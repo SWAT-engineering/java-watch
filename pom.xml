@@ -92,7 +92,7 @@
       <plugin> <!-- configure java compiler -->
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
-        <version>3.14.1</version>
+        <version>3.15.0</version>
         <configuration>
           <release>11</release>
           <compilerArgument>-parameters</compilerArgument>
@@ -112,7 +112,7 @@
       <plugin> <!-- unit test integration -->
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
-        <version>3.5.4</version>
+        <version>3.5.5</version>
         <configuration>
           <argLine>@{argLine} -Dengineering.swat.java-watch.mac=${watch.mac.backend}</argLine>
         </configuration>
@@ -317,7 +317,7 @@
             <!-- This plugin will set properties values using dependency information -->
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-dependency-plugin</artifactId>
-            <version>3.9.0</version>
+            <version>3.10.0</version>
             <executions>
               <execution>
                 <goals>
@@ -329,7 +329,7 @@
           <plugin>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-compiler-plugin</artifactId>
-            <version>3.14.1</version>
+            <version>3.15.0</version>
             <configuration>
               <fork>true</fork>
               <release>11</release>
