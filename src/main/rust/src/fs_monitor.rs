@@ -40,13 +40,9 @@ use std::{
     os::raw::{c_char, c_void},
     sync::atomic::{AtomicBool, Ordering},
 };
-use dispatch2::ffi::{dispatch_object_t, dispatch_queue_t, DISPATCH_QUEUE_SERIAL, dispatch_queue_create};
-use core_foundation::{
-    array::CFArray,
-    base::{kCFAllocatorDefault, TCFType},
-    string::CFString,
-};
-use fsevent_sys::{self as fse};
+use dispatch2::{DispatchQueue, DispatchQueueAttr, DispatchRetained};
+use objc2_core_foundation::{CFArray, CFRetained, CFString};
+use objc2_core_services::{self as fse};
 
 pub enum Kind { // Ordinals need to be consistent with enum `Kind` in Java
     OVERFLOW=0,
@@ -58,8 +54,8 @@ pub enum Kind { // Ordinals need to be consistent with enum `Kind` in Java
 pub struct NativeEventStream {
     since_when: fse::FSEventStreamEventId,
     closed: AtomicBool,
-    path : CFArray<CFString>,
-    queue: dispatch_queue_t,
+    path: CFRetained<CFArray<CFString>>,
+    queue: DispatchRetained<DispatchQueue>,
     stream: Option<fse::FSEventStreamRef>,
     info: *mut ContextInfo,
 }
@@ -69,8 +65,8 @@ impl NativeEventStream {
         Self {
             since_when: unsafe { fse::FSEventsGetCurrentEventId() },
             closed: AtomicBool::new(false),
-            path: CFArray::from_CFTypes(&[CFString::new(&path)]),
-            queue: unsafe { dispatch_queue_create(ptr::null(), DISPATCH_QUEUE_SERIAL) },
+            path: CFArray::from_retained_objects(&[CFString::from_str(&path)]),
+            queue: DispatchQueue::new("java-watch", DispatchQueueAttr::SERIAL),
             stream: None,
             info: Box::into_raw(Box::new(ContextInfo{ handler: Box::new(handler) })),
         }
@@ -79,23 +75,23 @@ impl NativeEventStream {
     pub fn start(&mut self) {
         unsafe {
             let stream = fse::FSEventStreamCreate(
-                kCFAllocatorDefault,
-                callback,
-                &fse::FSEventStreamContext {
+                None,
+                Some(callback),
+                &mut fse::FSEventStreamContext {
                     version: 0,
                     info: self.info as *mut _,
                     retain: None,
                     release: Some(release_context),
-                    copy_description: None
+                    copyDescription: None
                 },
-                self.path.as_concrete_TypeRef(),
+                self.path.as_opaque(),
                 self.since_when,
                 0.15,
                 FLAGS);
 
             self.stream = Some(stream);
 
-            fse::FSEventStreamSetDispatchQueue(stream, self.queue);
+            fse::FSEventStreamSetDispatchQueue(stream, Some(&self.queue));
             fse::FSEventStreamStart(stream);
         };
     }
@@ -107,13 +103,11 @@ impl NativeEventStream {
         match self.stream {
             Some(stream) => unsafe{
                 fse::FSEventStreamStop(stream);
-                fse::FSEventStreamSetDispatchQueue(stream, ptr::null_mut());
+                fse::FSEventStreamSetDispatchQueue(stream, None);
                 fse::FSEventStreamInvalidate(stream);
-                dispatch2::ffi::dispatch_release(self.queue as dispatch_object_t);
                 fse::FSEventStreamRelease(stream);
             }
-            None => unsafe {
-                dispatch2::ffi::dispatch_release(self.queue as dispatch_object_t);
+            None => {
             }
         };
     }
@@ -128,28 +122,28 @@ const FLAGS : fse::FSEventStreamCreateFlags
         | fse::kFSEventStreamCreateFlagWatchRoot
         | fse::kFSEventStreamCreateFlagFileEvents;
 
-extern "C" fn release_context(info: *mut c_void) {
+unsafe extern "C-unwind" fn release_context(info: *const c_void) {
   let ctx_ptr = info as *mut ContextInfo;
   unsafe{ drop(Box::from_raw( ctx_ptr)); }
 }
 
-extern "C" fn callback(
-    _stream_ref: fse::FSEventStreamRef,
+unsafe extern "C-unwind" fn callback(
+    _stream_ref: fse::ConstFSEventStreamRef,
     info: *mut c_void,
     num_events: usize,
-    event_paths: *mut c_void,
-    event_flags: *const fse::FSEventStreamEventFlags,
-    _event_ids: *const fse::FSEventStreamEventId,
+    event_paths: ptr::NonNull<c_void>,
+    event_flags: ptr::NonNull<fse::FSEventStreamEventFlags>,
+    _event_ids: ptr::NonNull<fse::FSEventStreamEventId>,
 ) {
     let info = unsafe{ &mut *(info as *mut ContextInfo) };
     let handler = info.handler.as_ref();
 
-    let event_paths = event_paths as *const *const c_char;
+    let event_paths = event_paths.as_ptr() as *const *const c_char;
     for i in 0..num_events {
         // TODO: We're currently going from C strings to Rust strings to JNI
         // strings. If possible, go directly from C strings to JNI strings.
         let path = unsafe { CStr::from_ptr(*event_paths.add(i)).to_str().unwrap().to_string() };
-        let flags: fse::FSEventStreamEventFlags = unsafe { *event_flags.add(i) };
+        let flags: fse::FSEventStreamEventFlags = unsafe { *event_flags.as_ptr().add(i) };
 
         // Note: Multiple "physical" native events might be coalesced into a
         // single "logical" native event, so the following series of checks
