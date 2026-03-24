@@ -12,9 +12,7 @@ lto = true
 codegen-units = 1
 
 [dependencies]
-# we need this PR as it contains an updated version that targets core-foundation
-fsevent-sys = { git = "https://github.com/octplane/fsevent-rust.git", rev= "refs/pull/44/head"}
-core-foundation = "0.10.1"
-# we need this specific version of dispatch2, that still exposes the native type
-dispatch2 = { version = "0.2.0", default-features = false, features = ["alloc"] }
+objc2-core-services = "0.3.2"
+objc2-core-foundation = "0.3.2"
+dispatch2 = { version = "0.3.1", default-features = false, features = ["alloc"] }
 jni = "0.21.1"
