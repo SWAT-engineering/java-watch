@@ -73,7 +73,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <checkerframework.version>3.52.0</checkerframework.version>
     <junit.version>5.14.4</junit.version>
-    <log4j.version>2.26.0</log4j.version>
+    <log4j.version>2.26.1</log4j.version>
     <maven.compiler.source>11</maven.compiler.source>
     <maven.compiler.target>11</maven.compiler.target>
     <watch.mac.backend>fsevents</watch.mac.backend>
@@ -120,7 +120,7 @@
       <plugin> <!-- code coverage -->
         <groupId>org.jacoco</groupId>
         <artifactId>jacoco-maven-plugin</artifactId>
-        <version>0.8.14</version>
+        <version>0.8.15</version>
         <executions>
           <execution>
             <goals>
@@ -140,7 +140,7 @@
         <groupId>com.mycila</groupId>
         <artifactId>license-maven-plugin</artifactId>
         <!-- mvn license:format adds/updates all license headers -->
-        <version>5.0.0</version>
+        <version>5.1.1</version>
         <configuration>
           <licenseSets>
             <licenseSet>
@@ -254,7 +254,7 @@
           <plugin><!-- uploading to maven central-->
             <groupId>org.sonatype.central</groupId>
             <artifactId>central-publishing-maven-plugin</artifactId>
-            <version>0.10.0</version>
+            <version>0.11.0</version>
             <extensions>true</extensions>
             <configuration>
               <publishingServerId>central</publishingServerId>
