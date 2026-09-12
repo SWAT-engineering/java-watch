@@ -30,7 +30,7 @@ import static engineering.swat.watch.WatchEvent.Kind.CREATED;
 import static engineering.swat.watch.WatchEvent.Kind.DELETED;
 import static engineering.swat.watch.WatchEvent.Kind.MODIFIED;
 import static engineering.swat.watch.WatchEvent.Kind.OVERFLOW;
-import static org.awaitility.Awaitility.await;
+import static engineering.swat.watch.util.WaitFor.await;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -45,6 +45,7 @@ import org.junit.jupiter.api.Test;
 
 import engineering.swat.watch.WatchEvent.Kind;
 import engineering.swat.watch.impl.EventHandlingWatch;
+import engineering.swat.watch.util.WaitFor;
 
 class SingleDirectoryTests {
     private TestDirectory testDir;
@@ -63,7 +64,7 @@ class SingleDirectoryTests {
 
     @BeforeAll
     static void setupEverything() {
-        Awaitility.setDefaultTimeout(TestHelper.NORMAL_WAIT);
+        WaitFor.setDefaultTimeout(TestHelper.NORMAL_WAIT);
     }
 
     @Test
@@ -85,12 +86,12 @@ class SingleDirectoryTests {
             // Delete the file
             Files.delete(target);
             await("File deletion should generate delete event")
-                .untilTrue(seenDelete);
+                .until(seenDelete);
 
             // Re-create it again
             Files.writeString(target, "Hello World");
             await("File creation should generate create event")
-                .untilTrue(seenCreate);
+                .until(seenCreate);
         }
     }
 
@@ -116,12 +117,12 @@ class SingleDirectoryTests {
             // Delete the file
             Files.delete(target);
             await("File deletion should generate delete event")
-                .untilTrue(seenDelete);
+                .until(seenDelete);
 
             // Re-create it again
             Files.writeString(target, "Hello World");
             await("File creation should generate create event")
-                .untilTrue(seenCreate);
+                .until(seenCreate);
         }
     }
 
@@ -181,21 +182,22 @@ class SingleDirectoryTests {
             // Perform some file operations (after a short wait to ensure a new
             // last-modified-time). No events should be observed (because the
             // overflow simulation is running).
-            Thread.sleep(TestHelper.SHORT_WAIT.toMillis());
+            Thread.sleep(100);
             Files.writeString(directory.resolve("a.txt"), "foo");
             Files.writeString(directory.resolve("b.txt"), "bar");
             Files.delete(directory.resolve("c.txt"));
             Files.createFile(directory.resolve("d.txt"));
 
             await("No events should have been triggered")
-                .pollDelay(TestHelper.SHORT_WAIT)
-                .until(() -> bookkeeper.events().none());
+                .time(TestHelper.SMALL_WAIT)
+                .holds(() -> bookkeeper.events().none());
 
             // End overflow simulation, and generate an `OVERFLOW` event.
             // Synthetic events should now be issued and observed.
             dropEvents.set(false);
             var overflow = new WatchEvent(WatchEvent.Kind.OVERFLOW, directory);
             ((EventHandlingWatch) watch).handleEvent(overflow);
+
 
             for (var e : new WatchEvent[] {
                 new WatchEvent(MODIFIED, directory, Path.of("a.txt")),
@@ -211,7 +213,7 @@ class SingleDirectoryTests {
 
             // Perform some more file operations. All events should be observed
             // (because the overflow simulation is no longer running).
-            Thread.sleep(TestHelper.SHORT_WAIT.toMillis());
+            Thread.sleep(500);
             Files.delete(directory.resolve("a.txt"));
             Files.writeString(directory.resolve("b.txt"), "baz");
             Files.createFile(directory.resolve("c.txt"));
@@ -232,8 +234,8 @@ class SingleDirectoryTests {
             ((EventHandlingWatch) watch).handleEvent(overflow);
 
             await("No events should have been triggered")
-                .pollDelay(TestHelper.SHORT_WAIT)
-                .until(() -> bookkeeper.events().kindNot(OVERFLOW).none());
+                .time(TestHelper.SMALL_WAIT)
+                .holds(() -> bookkeeper.events().kindNot(OVERFLOW).none());
         }
     }
 }
