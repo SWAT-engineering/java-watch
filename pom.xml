@@ -112,7 +112,7 @@
       <plugin> <!-- unit test integration -->
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
-        <version>3.6.0</version>
+        <version>3.6.1</version>
         <configuration>
           <argLine>@{argLine} -Dengineering.swat.java-watch.mac=${watch.mac.backend}</argLine>
         </configuration>
@@ -189,7 +189,7 @@
       <plugin> <!-- use a new version of maven  -->
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-enforcer-plugin</artifactId>
-        <version>3.6.3</version>
+        <version>3.7.0</version>
         <executions>
           <execution>
             <id>enforce-maven</id>
